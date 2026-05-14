@@ -405,3 +405,4 @@ async def hybrid_search(
     vector_results, keyword_results = await asyncio.gather(vector_task, keyword_task)
 
     return _rrf_fuse([vector_results, keyword_results], top_k=top_k, k=get_rrf_k())
+
