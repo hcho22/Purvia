@@ -19,7 +19,7 @@ import re
 
 import tiktoken
 
-DEFAULT_CHUNK_SIZE = 500
+DEFAULT_CHUNK_SIZE = 100
 DEFAULT_CHUNK_OVERLAP = 50
 # cl100k_base covers text-embedding-3-* and gpt-4o-*; good enough for a
 # size heuristic regardless of which OpenAI model ends up embedding.
