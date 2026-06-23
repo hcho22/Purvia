@@ -42,7 +42,10 @@ plus the failure indicators:
     was not actually strong, so it never exercised the faithfulness gate) — it
     escalated (safe) but is NOT a false-resolve and NOT correct;
   * the faithfulness floor is inclusive and flips the P3 verdict vs P2;
-  * a run with no P3 rows is NOT a pass (structurally blind false-resolve guard).
+  * a run with no P3 rows is NOT a pass (structurally blind false-resolve guard);
+  * a run whose P3 rows are ALL mislabeled (none exercise the faithfulness gate) is
+    NOT a pass either — the rate reads a vacuous measured 0%, so the positive control
+    requires >=1 EXERCISED row, not merely a non-empty population.
 
 US-055 — consolidated metrics. Covers the PRD validation test:
   * a known mix of P1a/P2/P3 producing one wrong auto-resolve (a P3 false-resolve)
@@ -712,7 +715,9 @@ def test_p3_escalates_at_faithfulness_leg() -> None:
     _check(d.draft_calls == 1 and d.judge_calls == 1, "drafted AND judged before escalating")
     _check(result.false_resolve_rate == 0.0, f"0% false-resolve, got {result.false_resolve_rate}")
     _check(result.false_resolves == [], "no false-resolves on a correctly-escalated P3")
-    _check(result.passed is True, "a non-empty P3 run is structurally valid")
+    _check([x.question_id for x in result.exercised] == ["e7-p3-01"],
+           "a faithfulness-leg escalation exercised the gate")
+    _check(result.passed is True, "a P3 run that exercised the faithfulness gate is structurally valid")
     print("ok: a P3 with an unfaithful draft escalates at the faithfulness gate (the moat), not a false-resolve")
 
 
@@ -736,7 +741,9 @@ def test_p3_auto_resolve_is_false_resolve() -> None:
     _check(d.draft_calls == 1 and d.judge_calls == 1, "drafted + judged")
     _check([x.question_id for x in result.false_resolves] == ["e7-p3-leak"], "the row is tallied as a false-resolve")
     _check(result.false_resolve_rate == 1.0, f"100% false-resolve, got {result.false_resolve_rate}")
-    _check(result.passed is True, "a non-empty P3 run is structurally valid even with a false-resolve (US-055/059 gates the rate)")
+    _check([x.question_id for x in result.exercised] == ["e7-p3-leak"],
+           "an auto-resolve reached a faithfulness verdict, so it exercised the gate")
+    _check(result.passed is True, "a P3 run that exercised the gate is structurally valid even with a false-resolve (US-055/059 gates the rate)")
     print("ok: a P3 that auto-resolves is caught as a false-resolve (the Risk #3 safety failure)")
 
 
@@ -832,6 +839,29 @@ def test_p3_empty_population_is_not_a_pass() -> None:
     _check(result.passed is False, "a P3 run scoring zero should-escalate rows must not pass")
     _check(result.false_resolve_rate is None, "the false-resolve rate over zero questions is undefined (None)")
     print("ok: an empty P3 population is not a pass (structurally-blind false-resolve guard)")
+
+
+def test_p3_all_mislabeled_is_not_a_pass() -> None:
+    """Failure indicator: a NON-empty P3 population whose rows ALL escalate before
+    the faithfulness gate (here: weak retrieval -> all mislabeled) never exercises
+    the gate the ceiling protects. The measured false-resolve rate then reads a
+    vacuous 0% (numerator 0 over a non-zero denominator), NOT None — so the positive
+    control must key off EXERCISED rows, not n_questions, or the ceiling is silently
+    disarmed. `exercised` is empty and `passed` is False, mirroring the empty-P3
+    guard."""
+    a = _p3("e7-p3-weak-a", "A should-escalate question whose gold retrieval is weak.")
+    b = _p3("e7-p3-weak-b", "Another should-escalate question whose retrieval is weak.")
+    result, _, answerer, judge = _run_p3(
+        [a, b], {a["question"]: WEAK, b["question"]: WEAK}
+    )
+    _check(result.n_questions == 2, f"two P3 rows scored, got {result.n_questions}")
+    _check(all(d.mislabeled for d in result.decisions), "both rows escalated at the retrieval gate -> mislabeled")
+    _check(result.exercised == [], "no P3 row reached the faithfulness gate -> exercised is empty")
+    _check(result.false_resolve_rate == 0.0, "an all-mislabeled leg reads a vacuous MEASURED 0% (not None)")
+    _check(answerer.calls == 0 and judge.calls == 0, "the faithfulness gate was never exercised (0 draft/0 judge)")
+    _check(result.passed is False,
+           "an all-mislabeled P3 leg never exercises the gate, so it must NOT pass the positive control")
+    print("ok: an all-mislabeled P3 population is not a pass (the faithfulness gate was never exercised)")
 
 
 def test_p3_to_dict_shape() -> None:
@@ -1173,6 +1203,36 @@ def test_exit_p3_blind_hard_fails() -> None:
     )
     _check(failed is True, "a requested-but-blind P3 leg must hard-fail the run (fail closed)")
     print("ok: a structurally-blind P3 faithfulness leg fails the run closed (US-059 safety guard)")
+
+
+def test_exit_p3_all_mislabeled_hard_fails() -> None:
+    """US-059 (this fix): a NON-empty P3 leg whose rows ALL escalate before the
+    faithfulness gate hard-fails the weekly run, closing the second silent-disarm
+    path the empty-P3 guard misses. With all rows mislabeled (weak retrieval here),
+    `false_resolves == []`, so the ceiling reads a vacuous MEASURED 0% — `breached`
+    is False and `assert_false_resolve_ceiling` is inert. WITHOUT the exercised-row
+    positive control the run would exit 0 having never touched the faithfulness gate
+    the ceiling exists to protect. `E7P3Result.passed` (False when 0 rows exercised)
+    must fail the run closed, exactly like the empty-P3 guard."""
+    p1a = _clean_p1a()
+    a = _p3("m-p3-weak-a", "q-weak-a")
+    b = _p3("m-p3-weak-b", "q-weak-b")
+    p3_mislabeled, _, _, _ = _run_p3(
+        [a, b], {a["question"]: WEAK, b["question"]: WEAK}
+    )
+    _check(p3_mislabeled.n_questions == 2 and p3_mislabeled.passed is False,
+           "a non-empty but all-mislabeled P3 leg never exercises the gate (not a pass)")
+    _check(p3_mislabeled.exercised == [], "no P3 row reached the faithfulness gate")
+    verdict = _verdict_over(p1a, p3_mislabeled, 0.0)
+    _check(verdict.breached is False and verdict.rate == 0.0,
+           "an all-mislabeled P3 reads a vacuous measured 0% (no breach) — the gap this guard closes")
+
+    failed = e7_pinned_invariants_failed(
+        p1a_result=p1a, p1b_result=None, non_disclosure=None,
+        p3_result=p3_mislabeled, ceiling_verdict=verdict,
+    )
+    _check(failed is True, "an all-mislabeled P3 leg must hard-fail the run (fail closed)")
+    print("ok: an all-mislabeled P3 faithfulness leg fails the run closed (US-059 safety guard)")
 
 
 def test_exit_clean_weekly_does_not_fail() -> None:
@@ -1796,6 +1856,7 @@ def main() -> int:
         test_p3_uses_offline_judge_with_reference,
         test_p3_faithfulness_floor_inclusive_and_flips_vs_p2,
         test_p3_empty_population_is_not_a_pass,
+        test_p3_all_mislabeled_is_not_a_pass,
         test_p3_to_dict_shape,
         test_metrics_consolidate_three_rates,
         test_metrics_false_resolve_is_faithfulness_leg_gated,
@@ -1807,6 +1868,7 @@ def main() -> int:
         test_ceiling_inert_on_passing_per_pr_shape,
         test_ceiling_verdict_to_dict_and_render,
         test_exit_p3_blind_hard_fails,
+        test_exit_p3_all_mislabeled_hard_fails,
         test_exit_clean_weekly_does_not_fail,
         test_exit_per_pr_shape_without_p3_does_not_fail,
         test_exit_measured_ceiling_breach_fails,

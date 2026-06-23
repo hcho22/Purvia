@@ -861,6 +861,18 @@ class E7P3Result:
         return [d for d in self.decisions if d.mislabeled]
 
     @property
+    def exercised(self) -> list[P3Decision]:
+        """P3 rows that actually REACHED and were judged by the faithfulness gate:
+        cleared retrieval, produced a non-empty draft, and got a faithfulness
+        verdict (whether the judge scored it below the floor → `correct`, or at/above
+        it → `false_resolve`). The complement of `mislabeled` (rows that escalated at
+        the retrieval/draft leg, never reaching the gate). The false-resolve ceiling
+        is only meaningful over a population with ≥1 exercised row — a population that
+        is empty OR entirely mislabeled never exercises the gate, so its measured rate
+        is vacuous (`None` or a 0/n that proves nothing)."""
+        return [d for d in self.decisions if not d.mislabeled]
+
+    @property
     def false_resolve_rate(self) -> float | None:
         """Wrongly auto-resolved / unanswerable over the P3 population — the
         SAFETY number the false-resolve ceiling governs (US-055/059). `None` over
@@ -879,15 +891,19 @@ class E7P3Result:
 
     @property
     def passed(self) -> bool:
-        """Structural validity only: a non-empty P3 population was scored. An
-        empty population is NOT a pass — a false-resolve rate over zero
-        unanswerable questions is structurally blind (mirrors P1a/P2's guard).
+        """Positive control for the false-resolve ceiling, which is fed SOLELY by
+        this leg (US-059). True iff ≥1 P3 row actually EXERCISED the faithfulness
+        gate (see `exercised`). A population that is empty OR entirely `mislabeled`
+        (every row escalated at the retrieval/draft leg) never reaches the gate, so
+        its measured false-resolve rate is vacuous — `None` over zero rows, or a
+        0/n that proves nothing — and the ceiling is structurally blind. Neither is
+        a clean pass (mirrors P1a/P2's positive control: a zero must be a real zero).
 
-        Deliberately does NOT fail on false-resolves: the false-resolve RATE vs
-        the buyer's ceiling is consolidated and enforced in US-055/059, not
+        Deliberately does NOT fail on false-resolves themselves: the false-resolve
+        RATE vs the buyer's ceiling is consolidated and enforced in US-055/059, not
         per-leg here. This LLM-judged leg only reports; the per-PR hard block is
         the deterministic P1a leg."""
-        return self.n_questions > 0
+        return len(self.exercised) > 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -1761,10 +1777,12 @@ def render_e7_metrics_section(metrics: E7Metrics) -> list[str]:
 # A `None` rate (no unanswerable rows scored) is "not measured", NOT a breach, so
 # this gate fires only on a MEASURED rate that exceeds the ceiling. The
 # structurally-blind failure is owned elsewhere: a per-PR run legitimately has no P3
-# leg, while a requested-but-blind P3 leg (`--include-p3` with a drifted/empty gold)
-# is hard-failed by the P3 positive-control guard in `e7_pinned_invariants_failed`
-# (mirroring the P1a/P1b blindness guards), so a `None` rate can never silently
-# disarm the ceiling.
+# leg, while a requested P3 leg that never EXERCISES the faithfulness gate is
+# hard-failed by the P3 positive-control guard in `e7_pinned_invariants_failed`
+# (mirroring the P1a/P1b blindness guards). That guard covers both disarm paths — an
+# empty P3 leg (rate `None`) AND an entirely-mislabeled one (every row escalates
+# before the gate, so the rate reads a vacuous measured 0%) — so neither can
+# silently disarm the ceiling.
 # ---------------------------------------------------------------------------
 
 
@@ -1817,8 +1835,9 @@ def assert_false_resolve_ceiling(
     rows scored — e.g. a per-PR P1a/P1b-only run) is NOT a breach; this gate fires
     only on a measured rate that strictly exceeds the ceiling. The blind case is
     owned elsewhere: the P3 positive-control guard in `e7_pinned_invariants_failed`
-    hard-fails a requested-but-blind P3 leg, so an unmeasured rate here can never
-    silently disarm the safety ceiling.
+    hard-fails a requested P3 leg that never exercises the faithfulness gate —
+    whether empty (rate `None`) or entirely mislabeled (a vacuous measured 0%) — so
+    neither an unmeasured nor a vacuous rate here can silently disarm the ceiling.
     """
     fr = metrics.false_resolve
     rate = fr.rate
@@ -2296,13 +2315,16 @@ def e7_pinned_invariants_failed(
         zero-tolerance, hard-fails unconditionally regardless of rate;
       * a P1b non-disclosure byte mismatch (a customer output that differs from the
         P1a generic deferral, disclosing restricted content exists);
-      * a structurally-blind positive control on ANY requested leg (0 rows scored) —
-        fail closed, because a blind eval cannot prove the invariant. This now
-        includes the P3 faithfulness leg: the false-resolve ceiling is fed SOLELY by
-        P3, so a blind/empty/mislabeled P3 population (gold drift) would otherwise
-        leave the rate `None` ("not measured", never a breach) and silently disarm
-        the ceiling gate. `E7P3Result.passed` is that positive-control signal (False
-        over an empty P3 population, mirroring P1a/P1b/non-disclosure);
+      * a structurally-blind positive control on ANY requested leg — fail closed,
+        because a blind eval cannot prove the invariant. For P1a/P1b/non-disclosure
+        this means 0 rows scored. For the P3 faithfulness leg the bar is stricter:
+        the false-resolve ceiling is fed SOLELY by P3, so it must verify the gate was
+        actually EXERCISED, not merely that rows exist. `E7P3Result.passed` requires
+        ≥1 row to clear retrieval, draft, and reach a faithfulness verdict, closing
+        BOTH disarm paths — an empty P3 leg (rate `None`, "not measured") AND a
+        non-empty but entirely-mislabeled P3 leg (every row escalates at the
+        retrieval/draft leg, so the rate reads a vacuous measured 0% that never
+        breaches). Either way the gold drifted out from under the ceiling;
       * a MEASURED faithfulness-leg (P3) false-resolve rate above the buyer's ceiling.
 
     A per-PR run carries no P3 leg (p3_result is None), so the P3 guards never trip
@@ -2380,19 +2402,35 @@ def e7_pinned_invariants_failed(
             )
         failed = True
 
-    # US-059: a requested-but-blind P3 faithfulness leg is the positive control for
-    # the false-resolve ceiling, which is now fed SOLELY by P3. A blind P3 population
-    # (gold drift dropping/mislabeling every P3 row) leaves the ceiling rate `None`
-    # → the gate is inert → the safety invariant goes silently unmeasured. Fail
-    # closed, mirroring the P1a/P1b/non-disclosure blindness guards. p3_result is
-    # None on a per-PR run (no P3 leg requested), which never trips this.
+    # US-059: the P3 positive control for the false-resolve ceiling, which is now fed
+    # SOLELY by P3. A P3 leg that never EXERCISES the faithfulness gate leaves the
+    # ceiling unmeasured/vacuous → the gate is inert → the safety invariant goes
+    # silently unmeasured. `E7P3Result.passed` requires ≥1 exercised row, so this one
+    # guard closes BOTH disarm paths: an empty P3 leg (rate `None`) AND a non-empty
+    # but entirely-mislabeled P3 leg (every row escalated at the retrieval/draft leg,
+    # so the rate reads a vacuous measured 0% that never breaches). Fail closed,
+    # mirroring the P1a/P1b/non-disclosure blindness guards. p3_result is None on a
+    # per-PR run (no P3 leg requested), which never trips this.
     if p3_result is not None and not p3_result.passed:
-        log.error(
-            "E7 P3 scored 0 should-escalate questions — the false-resolve safety "
-            "ceiling is fed solely by the P3 faithfulness leg, so a structurally "
-            "blind P3 population leaves it unmeasured. Failing the run closed; check "
-            "that --questions carries P3 rows."
-        )
+        if p3_result.n_questions == 0:
+            log.error(
+                "E7 P3 scored 0 should-escalate questions — the false-resolve safety "
+                "ceiling is fed solely by the P3 faithfulness leg, so a structurally "
+                "blind P3 population leaves it unmeasured. Failing the run closed; "
+                "check that --questions carries P3 rows."
+            )
+        else:
+            log.error(
+                "E7 P3 scored %d should-escalate row(s) but NONE exercised the "
+                "faithfulness gate — every row escalated at the retrieval/draft leg "
+                "(mislabeled), so the false-resolve ceiling reads a vacuous measured "
+                "0%% (never a breach) and the safety invariant is unmeasured. Failing "
+                "the run closed; re-author the P3 gold so retrieval reads strong: %s",
+                p3_result.n_questions,
+                ", ".join(
+                    f"{d.question_id}({d.escalate_leg})" for d in p3_result.mislabeled
+                ),
+            )
         failed = True
 
     # US-059: the false-resolve ceiling is a pinned SAFETY invariant — a MEASURED
@@ -2902,10 +2940,12 @@ async def amain() -> int:
     # ERROR level (louder than a P2 false-escalate warning) — but per US-059 the
     # false-resolve RATE vs the buyer's ceiling is consolidated in US-055 and
     # enforced by the ceiling gate in e7_pinned_invariants_failed below (which also
-    # fails the run closed on a structurally-blind P3 leg), NOT per-leg here. So this
-    # block reports loudly without itself deciding the exit code. Mislabeled rows (a
-    # gold-authoring defect) are surfaced as warnings.
-    if p3_result is not None and p3_result.passed:
+    # fails the run closed on a P3 leg that never exercises the faithfulness gate),
+    # NOT per-leg here. So this block reports loudly without itself deciding the exit
+    # code. Gated on a non-empty population (not on `passed`) so the mislabeled rows
+    # of an all-mislabeled leg — exactly the gold-authoring defect that trips the
+    # positive control — are still surfaced as warnings here.
+    if p3_result is not None and p3_result.n_questions > 0:
         if p3_result.false_resolves:
             log.error(
                 "E7 P3 FALSE-RESOLVE(s) (the Risk #3 safety failure — an "

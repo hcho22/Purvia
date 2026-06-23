@@ -197,8 +197,11 @@ The weekly workflow (`.github/workflows/escalation-eval-weekly.yml`, Sundays 06:
 It publishes a snapshot to `docs/escalation-weekly/<DATE>.{json,md}`.
 A judge wobble must never red-bar an innocent merge, so this **never blocks**; on a red verdict it files one deduped GitHub issue and fails the *scheduled* workflow so a maintainer is paged.
 
-Because the false-resolve ceiling is fed **solely** by the P3 faithfulness leg (see below), the weekly run also **fails closed on a structurally-blind P3 leg**: if gold drift drops or mislabels every P3 row, the P3 positive control fails (a rate over zero unanswerable questions is unmeasured, never a breach), and the runner exits non-zero rather than reporting green with the pinned safety invariant silently unmeasured.
-This mirrors the P1a/P1b/non-disclosure blindness guards, so the safety ceiling can never be disarmed by an empty population. The exit-code decision lives in `e7_pinned_invariants_failed` (a pure function over the scored legs, unit-tested directly).
+Because the false-resolve ceiling is fed **solely** by the P3 faithfulness leg (see below), the weekly run also **fails closed on a P3 leg that never exercises the faithfulness gate**.
+The P3 positive control (`E7P3Result.passed`) requires at least one P3 row to actually reach a faithfulness verdict — clear retrieval, draft a non-empty answer, and get judged — not merely to exist.
+That closes **both** ways gold drift could silently disarm the ceiling: an **empty** P3 leg (the rate is `None`, unmeasured, never a breach) **and** a non-empty but **entirely-mislabeled** P3 leg (every row escalates at the retrieval/draft leg, so the rate reads a vacuous measured 0% that never breaches).
+In either case the runner exits non-zero rather than reporting green with the pinned safety invariant silently unmeasured.
+This mirrors the P1a/P1b/non-disclosure blindness guards, so the safety ceiling can never be disarmed by a P3 population that drifts out from under it. The exit-code decision lives in `e7_pinned_invariants_failed` (a pure function over the scored legs, unit-tested directly).
 
 ### The two metric classes
 
