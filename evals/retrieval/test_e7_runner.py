@@ -145,6 +145,7 @@ from evals.retrieval.e7_runner import (  # noqa: E402
     assert_false_resolve_ceiling,
     assert_p1b_non_disclosure,
     compute_e7_metrics,
+    e7_pinned_invariants_failed,
     render_e7_false_resolve_ceiling_section,
     render_e7_p1b_non_disclosure_section,
     run_e7_p1a,
@@ -1133,6 +1134,122 @@ def test_ceiling_verdict_to_dict_and_render() -> None:
     print("ok: the ceiling verdict to_dict + render carry the audited fields")
 
 
+# --- US-059 runner exit-code decision fixtures + tests --------------------
+
+
+def _clean_p1a() -> E7P1aResult:
+    """A passing P1a leg: two weak no-context rows that both correctly escalate
+    (0 cleared the gate), so the deterministic per-PR invariant is green."""
+    return _p1a_result(
+        {"q-a": WEAK, "q-b": WEAK},
+        [_p1a("m-p1a-a", "q-a"), _p1a("m-p1a-b", "q-b")],
+    )
+
+
+def _verdict_over(p1a: E7P1aResult, p3: E7P3Result | None, ceiling: float):
+    """The ceiling verdict the runner folds into its exit code, built from the real
+    consolidated metric over the given legs (no P2/P1b)."""
+    return assert_false_resolve_ceiling(compute_e7_metrics(p1a, None, p3), ceiling)
+
+
+def test_exit_p3_blind_hard_fails() -> None:
+    """US-059 (this fix): a requested-but-blind P3 faithfulness leg HARD-FAILS the
+    weekly run. The ceiling is now fed SOLELY by P3, so a blind P3 population (gold
+    drift) leaves the rate None — `assert_false_resolve_ceiling` is inert (no
+    breach) — and WITHOUT this guard the run would exit 0 with the pinned safety
+    invariant silently unmeasured. The P3 positive control (passed=False over 0 rows)
+    must fail the run closed, mirroring the P1a/P1b/non-disclosure blindness guards."""
+    p1a = _clean_p1a()
+    p3_blind, _, _, _ = _run_p3([], {})
+    _check(p3_blind.n_questions == 0 and p3_blind.passed is False,
+           "the P3 leg is structurally blind (0 rows, not a pass)")
+    verdict = _verdict_over(p1a, p3_blind, 0.0)
+    _check(verdict.breached is False and verdict.rate is None,
+           "a blind P3 leaves the ceiling unmeasured (no breach) — the gap this guard closes")
+
+    failed = e7_pinned_invariants_failed(
+        p1a_result=p1a, p1b_result=None, non_disclosure=None,
+        p3_result=p3_blind, ceiling_verdict=verdict,
+    )
+    _check(failed is True, "a requested-but-blind P3 leg must hard-fail the run (fail closed)")
+    print("ok: a structurally-blind P3 faithfulness leg fails the run closed (US-059 safety guard)")
+
+
+def test_exit_clean_weekly_does_not_fail() -> None:
+    """Control: a clean weekly shape — passing P1a, a non-empty P3 that correctly
+    escalates (no false-resolve), ceiling not breached — exits 0. The new P3
+    positive-control guard only fires on a BLIND P3, never on a healthy one."""
+    p1a = _clean_p1a()
+    q = _p3("m-p3-e", "q-e")
+    p3, _, _, _ = _run_p3(
+        [q], {q["question"]: STRONG},
+        scores_by_question={q["question"]: {"faithfulness": 2, "helpfulness": 2}},
+    )
+    _check(p3.passed is True and p3.false_resolves == [],
+           "the P3 leg scored a row and correctly escalated (no false-resolve)")
+    verdict = _verdict_over(p1a, p3, 0.05)
+    _check(verdict.breached is False, "0% measured false-resolve does not breach a 5% ceiling")
+
+    failed = e7_pinned_invariants_failed(
+        p1a_result=p1a, p1b_result=None, non_disclosure=None,
+        p3_result=p3, ceiling_verdict=verdict,
+    )
+    _check(failed is False, "a clean weekly run (passing P1a + healthy P3, no breach) exits 0")
+    print("ok: a clean weekly run does not fail on the P3 positive-control guard")
+
+
+def test_exit_per_pr_shape_without_p3_does_not_fail() -> None:
+    """The per-PR tripwire shape (P1a/P1b only, no P3 leg requested) must NOT trip
+    the P3 positive-control guard — p3_result is None, so a healthy deterministic run
+    still exits 0. The guard fires only on a REQUESTED-but-blind P3 leg, never on its
+    legitimate absence per-PR."""
+    p1a = _clean_p1a()
+    verdict = _verdict_over(p1a, None, 0.0)
+    _check(verdict.rate is None and verdict.breached is False,
+           "no P3 leg -> unmeasured rate, inert ceiling (the per-PR shape)")
+
+    failed = e7_pinned_invariants_failed(
+        p1a_result=p1a, p1b_result=None, non_disclosure=None,
+        p3_result=None, ceiling_verdict=verdict,
+    )
+    _check(failed is False, "a per-PR run with no P3 leg must not fail on the P3 guard")
+    print("ok: a per-PR run (no P3 leg) does not trip the P3 positive-control guard")
+
+
+def test_exit_measured_ceiling_breach_fails() -> None:
+    """Regression through the extracted decision: a MEASURED faithfulness-leg
+    false-resolve rate above the ceiling still hard-fails the run."""
+    p1a, p2, p3 = _mixed_results()  # gated false-resolve 1/2 = 50%
+    verdict = assert_false_resolve_ceiling(compute_e7_metrics(p1a, p2, p3), 0.05)
+    _check(verdict.breached is True, "50% measured false-resolve breaches a 5% ceiling")
+
+    failed = e7_pinned_invariants_failed(
+        p1a_result=p1a, p1b_result=None, non_disclosure=None,
+        p3_result=p3, ceiling_verdict=verdict,
+    )
+    _check(failed is True, "a measured false-resolve rate above the ceiling fails the run")
+    print("ok: a measured false-resolve ceiling breach fails the run")
+
+
+def test_exit_p1a_gate_clear_fails() -> None:
+    """Regression through the extracted decision: a P1a no-context row that clears
+    the retrieval gate (a retrieval-leg false-resolve) still hard-fails the run
+    unconditionally, independent of the P3 ceiling."""
+    p1a = _p1a_result(
+        {"q-ok": WEAK, "q-leak": STRONG},
+        [_p1a("m-ok", "q-ok"), _p1a("m-leak", "q-leak")],
+    )
+    _check(p1a.passed is False and len(p1a.cleared_gate) == 1, "one P1a row cleared the gate")
+    verdict = _verdict_over(p1a, None, 0.0)  # no P3 leg -> ceiling inert
+
+    failed = e7_pinned_invariants_failed(
+        p1a_result=p1a, p1b_result=None, non_disclosure=None,
+        p3_result=None, ceiling_verdict=verdict,
+    )
+    _check(failed is True, "a P1a gate clear hard-fails the run regardless of the P3 ceiling")
+    print("ok: a P1a retrieval-gate clear still hard-fails through the extracted decision")
+
+
 # --- US-056 knob sweep + knee fixtures + tests ----------------------------
 
 
@@ -1689,6 +1806,11 @@ def main() -> int:
         test_ceiling_blind_rate_is_not_a_breach,
         test_ceiling_inert_on_passing_per_pr_shape,
         test_ceiling_verdict_to_dict_and_render,
+        test_exit_p3_blind_hard_fails,
+        test_exit_clean_weekly_does_not_fail,
+        test_exit_per_pr_shape_without_p3_does_not_fail,
+        test_exit_measured_ceiling_breach_fails,
+        test_exit_p1a_gate_clear_fails,
         test_sweep_curve_and_knee,
         test_sweep_memoizes_llm_calls_per_question,
         test_sweep_no_point_under_ceiling_is_reported,

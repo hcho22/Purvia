@@ -197,6 +197,9 @@ The weekly workflow (`.github/workflows/escalation-eval-weekly.yml`, Sundays 06:
 It publishes a snapshot to `docs/escalation-weekly/<DATE>.{json,md}`.
 A judge wobble must never red-bar an innocent merge, so this **never blocks**; on a red verdict it files one deduped GitHub issue and fails the *scheduled* workflow so a maintainer is paged.
 
+Because the false-resolve ceiling is fed **solely** by the P3 faithfulness leg (see below), the weekly run also **fails closed on a structurally-blind P3 leg**: if gold drift drops or mislabels every P3 row, the P3 positive control fails (a rate over zero unanswerable questions is unmeasured, never a breach), and the runner exits non-zero rather than reporting green with the pinned safety invariant silently unmeasured.
+This mirrors the P1a/P1b/non-disclosure blindness guards, so the safety ceiling can never be disarmed by an empty population. The exit-code decision lives in `e7_pinned_invariants_failed` (a pure function over the scored legs, unit-tested directly).
+
 ### The two metric classes
 
 The consolidated metrics (US-055) divide into two classes the gate treats differently (US-059 AC3):

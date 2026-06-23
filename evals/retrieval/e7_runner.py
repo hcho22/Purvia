@@ -1758,9 +1758,13 @@ def render_e7_metrics_section(metrics: E7Metrics) -> list[str]:
 # false-resolve is what this ceiling actually catches — at an accepted up-to-a-week
 # detection latency (docs/evals.md "E7 CI placement"; F3/P5).
 #
-# A `None` rate (no unanswerable rows scored) is "not measured", NOT a breach:
-# the per-leg P1a/P3 blindness guards own the structurally-blind failure, so this
-# gate fires only on a MEASURED rate that exceeds the ceiling.
+# A `None` rate (no unanswerable rows scored) is "not measured", NOT a breach, so
+# this gate fires only on a MEASURED rate that exceeds the ceiling. The
+# structurally-blind failure is owned elsewhere: a per-PR run legitimately has no P3
+# leg, while a requested-but-blind P3 leg (`--include-p3` with a drifted/empty gold)
+# is hard-failed by the P3 positive-control guard in `e7_pinned_invariants_failed`
+# (mirroring the P1a/P1b blindness guards), so a `None` rate can never silently
+# disarm the ceiling.
 # ---------------------------------------------------------------------------
 
 
@@ -1810,9 +1814,11 @@ def assert_false_resolve_ceiling(
     rate is the FAITHFULNESS-LEG (P3) false-resolve — the retrieval-leg P1a/P1b
     false-resolves are a zero-tolerance invariant the P1a/P1b gate checks hard-fail
     unconditionally, not folded into this rate. A `None` rate (no P3 faithfulness-leg
-    rows scored — e.g. a per-PR P1a/P1b-only run) is NOT a breach: the per-leg
-    blindness guards and the retrieval-leg gates own that case; this gate fires only
-    on a measured rate that strictly exceeds the ceiling.
+    rows scored — e.g. a per-PR P1a/P1b-only run) is NOT a breach; this gate fires
+    only on a measured rate that strictly exceeds the ceiling. The blind case is
+    owned elsewhere: the P3 positive-control guard in `e7_pinned_invariants_failed`
+    hard-fails a requested-but-blind P3 leg, so an unmeasured rate here can never
+    silently disarm the safety ceiling.
     """
     fr = metrics.false_resolve
     rate = fr.rate
@@ -2266,6 +2272,148 @@ def render_e7_sweep_section(sweep: E7Sweep) -> list[str]:
             "cannot recommend an operating point. Add P2 rows and re-sweep."
         )
     return lines
+
+
+def e7_pinned_invariants_failed(
+    *,
+    p1a_result: E7P1aResult,
+    p1b_result: E7P1bResult | None,
+    non_disclosure: E7P1bNonDisclosure | None,
+    p3_result: E7P3Result | None,
+    ceiling_verdict: FalseResolveCeilingVerdict,
+) -> bool:
+    """US-059: the E7 runner's pinned exit-code decision — pure over the scored
+    legs so the per-PR and weekly fail conditions are unit-testable (amain only
+    wires the live legs into it). Returns True iff a pinned safety invariant fired;
+    each fired invariant logs at ERROR first, so the caller can write the JSON
+    snapshot before exiting and the cause is preserved.
+
+    The pinned invariants (none ever softened to a comment, unlike the tunable
+    deflection/false-escalate metrics the E8 gate governs):
+
+      * a P1a no-context row or a P1b no-access-replay row that CLEARS the retrieval
+        gate — a retrieval-leg false-resolve / a gold leak to a no-access viewer;
+        zero-tolerance, hard-fails unconditionally regardless of rate;
+      * a P1b non-disclosure byte mismatch (a customer output that differs from the
+        P1a generic deferral, disclosing restricted content exists);
+      * a structurally-blind positive control on ANY requested leg (0 rows scored) —
+        fail closed, because a blind eval cannot prove the invariant. This now
+        includes the P3 faithfulness leg: the false-resolve ceiling is fed SOLELY by
+        P3, so a blind/empty/mislabeled P3 population (gold drift) would otherwise
+        leave the rate `None` ("not measured", never a breach) and silently disarm
+        the ceiling gate. `E7P3Result.passed` is that positive-control signal (False
+        over an empty P3 population, mirroring P1a/P1b/non-disclosure);
+      * a MEASURED faithfulness-leg (P3) false-resolve rate above the buyer's ceiling.
+
+    A per-PR run carries no P3 leg (p3_result is None), so the P3 guards never trip
+    it there — only the deterministic P1a/P1b gate + non-disclosure invariants gate a
+    merge. The ceiling gate is likewise inert per-PR (an unmeasured rate is not a
+    breach); it has teeth once the weekly P3 leg feeds the rate.
+    """
+    failed = False
+
+    # Pinned fail: the deterministic gate-only legs. A P1a row that drafts/
+    # auto-resolves is a retrieval-leg false-resolve; a P1b row that clears the gate
+    # leaked the gold to a no-access viewer (a false-resolve AND a disclosure risk).
+    if not p1a_result.passed:
+        if p1a_result.cleared_gate:
+            log.error(
+                "E7 P1a FALSE-RESOLVE RISK — %d no-context row(s) cleared the "
+                "retrieval gate (would draft):",
+                len(p1a_result.cleared_gate),
+            )
+            for d in p1a_result.cleared_gate:
+                log.error(
+                    "  %s top1_cosine=%s n_cleared=%d (%s)",
+                    d.question_id,
+                    "None" if d.top1_cosine is None else f"{d.top1_cosine:.4f}",
+                    d.n_cleared,
+                    d.gate_reason,
+                )
+        else:
+            log.error(
+                "E7 P1a scored 0 questions — the eval is structurally blind. "
+                "Failing the run."
+            )
+        failed = True
+
+    if p1b_result is not None and not p1b_result.passed:
+        if p1b_result.cleared_gate:
+            log.error(
+                "E7 P1b LEAK — %d no-access-replay row(s) cleared the retrieval "
+                "gate; the gold leaked to a no-access viewer (isolation/disclosure "
+                "failure):",
+                len(p1b_result.cleared_gate),
+            )
+            for leak in p1b_result.cleared_gate:
+                log.error(
+                    "  %s top1_cosine=%s n_cleared=%d (%s)",
+                    leak.question_id,
+                    "None" if leak.top1_cosine is None else f"{leak.top1_cosine:.4f}",
+                    leak.n_cleared,
+                    leak.gate_reason,
+                )
+        else:
+            log.error(
+                "E7 P1b scored 0 questions — no P2 rows to replay, so the "
+                "access-filtered case is structurally blind. Failing the run."
+            )
+        failed = True
+
+    # US-058: the P1b non-disclosure byte-equality assertion is a pinned leak
+    # invariant — a P1b customer output that differs from the P1a generic deferral
+    # discloses that restricted content exists.
+    if non_disclosure is not None and not non_disclosure.passed:
+        if non_disclosure.leaks:
+            log.error(
+                "E7 P1b NON-DISCLOSURE LEAK — %d P1b row(s) show the customer a "
+                "DIFFERENT output than the P1a generic deferral (restricted-content "
+                "existence disclosed):",
+                len(non_disclosure.leaks),
+            )
+            for nd_leak in non_disclosure.leaks:
+                log.error("  %s (%s)", nd_leak.question_id, nd_leak.detail)
+        else:
+            log.error(
+                "E7 P1b non-disclosure assertion scored 0 rows — structurally "
+                "blind. Failing the run."
+            )
+        failed = True
+
+    # US-059: a requested-but-blind P3 faithfulness leg is the positive control for
+    # the false-resolve ceiling, which is now fed SOLELY by P3. A blind P3 population
+    # (gold drift dropping/mislabeling every P3 row) leaves the ceiling rate `None`
+    # → the gate is inert → the safety invariant goes silently unmeasured. Fail
+    # closed, mirroring the P1a/P1b/non-disclosure blindness guards. p3_result is
+    # None on a per-PR run (no P3 leg requested), which never trips this.
+    if p3_result is not None and not p3_result.passed:
+        log.error(
+            "E7 P3 scored 0 should-escalate questions — the false-resolve safety "
+            "ceiling is fed solely by the P3 faithfulness leg, so a structurally "
+            "blind P3 population leaves it unmeasured. Failing the run closed; check "
+            "that --questions carries P3 rows."
+        )
+        failed = True
+
+    # US-059: the false-resolve ceiling is a pinned SAFETY invariant — a MEASURED
+    # faithfulness-leg (P3) false-resolve rate above the buyer's ceiling fails the
+    # run. Inert per-PR (no P3 leg → not measured); the blind-P3 guard above owns the
+    # "requested but unmeasurable" case so a None rate here means genuinely no P3 leg.
+    if ceiling_verdict.breached:
+        log.error(
+            "E7 FALSE-RESOLVE CEILING BREACH — measured faithfulness-leg %.1f%% "
+            "(%d/%d P3) exceeds the buyer's ceiling %.1f%% "
+            "(ESCALATION_FALSE_RESOLVE_CEILING, US-050). The deflection pipeline "
+            "auto-resolved too many unanswerable questions (the Risk #3 safety "
+            "failure).",
+            (ceiling_verdict.rate or 0.0) * 100.0,
+            ceiling_verdict.numerator,
+            ceiling_verdict.denominator,
+            ceiling_verdict.ceiling * 100.0,
+        )
+        failed = True
+
+    return failed
 
 
 # ---------------------------------------------------------------------------
@@ -2753,128 +2901,40 @@ async def amain() -> int:
     # P3 false-resolves are the SAFETY number (Risk #3), so they are surfaced at
     # ERROR level (louder than a P2 false-escalate warning) — but per US-059 the
     # false-resolve RATE vs the buyer's ceiling is consolidated in US-055 and
-    # enforced in CI by US-059, NOT per-leg here, and this leg is LLM-judged
-    # (weekly). So it reports loudly without changing this runner's exit code,
-    # which the deterministic P1a invariant alone decides. Mislabeled rows (a
+    # enforced by the ceiling gate in e7_pinned_invariants_failed below (which also
+    # fails the run closed on a structurally-blind P3 leg), NOT per-leg here. So this
+    # block reports loudly without itself deciding the exit code. Mislabeled rows (a
     # gold-authoring defect) are surfaced as warnings.
-    if p3_result is not None:
-        if not p3_result.passed:
+    if p3_result is not None and p3_result.passed:
+        if p3_result.false_resolves:
             log.error(
-                "E7 P3 scored 0 should-escalate questions — the false-resolve rate "
-                "is structurally blind. Check that --questions carries P3 rows."
+                "E7 P3 FALSE-RESOLVE(s) (the Risk #3 safety failure — an "
+                "unanswerable question auto-resolved; the US-055/059 ceiling "
+                "gate governs this rate): %s",
+                ", ".join(d.question_id for d in p3_result.false_resolves),
             )
-        else:
-            if p3_result.false_resolves:
-                log.error(
-                    "E7 P3 FALSE-RESOLVE(s) (the Risk #3 safety failure — an "
-                    "unanswerable question auto-resolved; the US-055/059 ceiling "
-                    "gate governs this rate): %s",
-                    ", ".join(d.question_id for d in p3_result.false_resolves),
-                )
-            if p3_result.mislabeled:
-                log.warning(
-                    "E7 P3 mislabeled row(s) — escalated before the faithfulness "
-                    "gate, so the gold retrieval was not actually strong; "
-                    "re-author: %s",
-                    ", ".join(
-                        f"{d.question_id}({d.escalate_leg})"
-                        for d in p3_result.mislabeled
-                    ),
-                )
+        if p3_result.mislabeled:
+            log.warning(
+                "E7 P3 mislabeled row(s) — escalated before the faithfulness "
+                "gate, so the gold retrieval was not actually strong; "
+                "re-author: %s",
+                ", ".join(
+                    f"{d.question_id}({d.escalate_leg})"
+                    for d in p3_result.mislabeled
+                ),
+            )
 
-    # Pinned fail (US-059): the deterministic gate-only legs decide this runner's
-    # exit code. A P1a row that drafts/auto-resolves is a retrieval-leg
-    # false-resolve; a P1b row that clears the gate leaked the gold to a no-access
-    # viewer (a false-resolve AND a disclosure risk). Non-zero exit AFTER the JSON
-    # is written, so the detail is preserved — same shape as E6's leak gate.
-    failed = False
-    if not p1a_result.passed:
-        if p1a_result.cleared_gate:
-            log.error(
-                "E7 P1a FALSE-RESOLVE RISK — %d no-context row(s) cleared the "
-                "retrieval gate (would draft):",
-                len(p1a_result.cleared_gate),
-            )
-            for d in p1a_result.cleared_gate:
-                log.error(
-                    "  %s top1_cosine=%s n_cleared=%d (%s)",
-                    d.question_id,
-                    "None" if d.top1_cosine is None else f"{d.top1_cosine:.4f}",
-                    d.n_cleared,
-                    d.gate_reason,
-                )
-        else:
-            log.error(
-                "E7 P1a scored 0 questions — the eval is structurally blind. "
-                "Failing the run."
-            )
-        failed = True
-
-    if p1b_result is not None and not p1b_result.passed:
-        if p1b_result.cleared_gate:
-            log.error(
-                "E7 P1b LEAK — %d no-access-replay row(s) cleared the retrieval "
-                "gate; the gold leaked to a no-access viewer (isolation/disclosure "
-                "failure):",
-                len(p1b_result.cleared_gate),
-            )
-            for leak in p1b_result.cleared_gate:
-                log.error(
-                    "  %s top1_cosine=%s n_cleared=%d (%s)",
-                    leak.question_id,
-                    "None" if leak.top1_cosine is None else f"{leak.top1_cosine:.4f}",
-                    leak.n_cleared,
-                    leak.gate_reason,
-                )
-        else:
-            log.error(
-                "E7 P1b scored 0 questions — no P2 rows to replay, so the "
-                "access-filtered case is structurally blind. Failing the run."
-            )
-        failed = True
-
-    # US-058: the P1b non-disclosure byte-equality assertion is a pinned leak
-    # invariant — a P1b customer output that differs from the P1a generic deferral
-    # discloses that restricted content exists. Deterministic, so it joins the
-    # per-PR tripwire (US-059) and fails the run AFTER the JSON is written.
-    if non_disclosure is not None and not non_disclosure.passed:
-        if non_disclosure.leaks:
-            log.error(
-                "E7 P1b NON-DISCLOSURE LEAK — %d P1b row(s) show the customer a "
-                "DIFFERENT output than the P1a generic deferral (restricted-content "
-                "existence disclosed):",
-                len(non_disclosure.leaks),
-            )
-            for nd_leak in non_disclosure.leaks:
-                log.error("  %s (%s)", nd_leak.question_id, nd_leak.detail)
-        else:
-            log.error(
-                "E7 P1b non-disclosure assertion scored 0 rows — structurally "
-                "blind. Failing the run."
-            )
-        failed = True
-
-    # US-059: the false-resolve ceiling is a pinned SAFETY invariant — a MEASURED
-    # faithfulness-leg (P3) false-resolve rate above the buyer's ceiling fails the
-    # run, like the P1a/P1b gate + non-disclosure invariants (never softened to a
-    # comment, unlike the tunable deflection/false-escalate metrics the E8 gate
-    # governs). Inert per-PR (no P3 leg → not measured; the retrieval-leg P1a/P1b
-    # false-resolves are pinned above); it catches the LLM-judged faithfulness-leg
-    # false-resolve in the weekly run.
-    if ceiling_verdict.breached:
-        log.error(
-            "E7 FALSE-RESOLVE CEILING BREACH — measured faithfulness-leg %.1f%% "
-            "(%d/%d P3) exceeds the buyer's ceiling %.1f%% "
-            "(ESCALATION_FALSE_RESOLVE_CEILING, US-050). The deflection pipeline "
-            "auto-resolved too many unanswerable questions (the Risk #3 safety "
-            "failure).",
-            (ceiling_verdict.rate or 0.0) * 100.0,
-            ceiling_verdict.numerator,
-            ceiling_verdict.denominator,
-            ceiling_verdict.ceiling * 100.0,
-        )
-        failed = True
-
+    # Pinned fail (US-059): the deterministic gate-only legs + the P3 positive
+    # control + the weekly ceiling decide this runner's exit code. Non-zero exit
+    # AFTER the JSON is written, so the detail is preserved — same shape as E6's leak
+    # gate. The decision is a pure function of the scored legs (unit-tested directly).
+    failed = e7_pinned_invariants_failed(
+        p1a_result=p1a_result,
+        p1b_result=p1b_result,
+        non_disclosure=non_disclosure,
+        p3_result=p3_result,
+        ceiling_verdict=ceiling_verdict,
+    )
     return 1 if failed else 0
 
 

@@ -17,6 +17,11 @@
 #     an accepted up-to-a-week detection latency (documented in docs/evals.md "E7 CI
 #     placement"; mitigated by the per-PR retrieval-leg tripwire, which hard-fails
 #     unconditionally on any P1a/P1b retrieval-leg false-resolve immediately).
+#     Because that ceiling is fed SOLELY by P3, a structurally-blind P3 leg (gold
+#     drift dropping/mislabeling every P3 row) ALSO exits the runner non-zero: the
+#     P3 positive control fails closed so a blind population can never leave the
+#     safety invariant silently unmeasured (mirrors the P1a/P1b/non-disclosure
+#     blindness guards; the exit-code decision is e7_pinned_invariants_failed).
 #   * The tunable quality metrics (deflection / false-escalate) are reported in the
 #     snapshot but do NOT fail the run — the configurable E8 gate (Area F) governs
 #     comment-vs-fail on those; until E8 lands they are advisory here.
@@ -220,6 +225,7 @@ jobs:
         if: always() && steps.e7.outputs.exit_code == '1'
         run: |
           echo "E7 runner exited 1 — a pinned safety invariant fired (false-resolve"
-          echo "ceiling breach, a P1a/P1b gate clear, or a non-disclosure mismatch)."
+          echo "ceiling breach, a structurally-blind P3 leg, a P1a/P1b gate clear, or"
+          echo "a non-disclosure mismatch)."
           echo "The finding has been filed as a GitHub issue; failing the workflow."
           exit 1
