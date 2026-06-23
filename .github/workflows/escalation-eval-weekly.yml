@@ -11,12 +11,12 @@
 # CI placement (US-059 AC3):
 #   * The false-resolve ceiling (the buyer's risk number,
 #     ESCALATION_FALSE_RESOLVE_CEILING) is a PINNED SAFETY invariant: a measured
-#     consolidated false-resolve rate above it exits the runner non-zero, fails
-#     THIS workflow, and files an issue. It is never downgraded to a comment. The
-#     faithfulness-leg contribution to that number is only scored here, so it
-#     carries an accepted up-to-a-week detection latency (documented in
-#     docs/evals.md "E7 CI placement"; mitigated by the per-PR retrieval-leg
-#     tripwire, which catches the retrieval-leg false-resolve immediately).
+#     faithfulness-leg (P3) false-resolve rate above it exits the runner non-zero,
+#     fails THIS workflow, and files an issue. It is never downgraded to a comment.
+#     That faithfulness leg IS the gated rate and is only scored here, so it carries
+#     an accepted up-to-a-week detection latency (documented in docs/evals.md "E7 CI
+#     placement"; mitigated by the per-PR retrieval-leg tripwire, which hard-fails
+#     unconditionally on any P1a/P1b retrieval-leg false-resolve immediately).
 #   * The tunable quality metrics (deflection / false-escalate) are reported in the
 #     snapshot but do NOT fail the run — the configurable E8 gate (Area F) governs
 #     comment-vs-fail on those; until E8 lands they are advisory here.

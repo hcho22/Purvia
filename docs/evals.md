@@ -201,13 +201,15 @@ A judge wobble must never red-bar an innocent merge, so this **never blocks**; o
 
 The consolidated metrics (US-055) divide into two classes the gate treats differently (US-059 AC3):
 
-- **`false-resolve` is the pinned SAFETY number** (the Risk #3 failure: an unanswerable question auto-resolved). The buyer sets one risk knob — `ESCALATION_FALSE_RESOLVE_CEILING` (default 5%) — and a *measured* consolidated false-resolve rate above it fails the run (`assert_false_resolve_ceiling`), never downgraded to a comment. It is enforced in `e7_runner`'s exit code, so the weekly workflow merely reflects it.
+- **`false-resolve` is the pinned SAFETY number** (the Risk #3 failure: an unanswerable question auto-resolved). The buyer sets one risk knob — `ESCALATION_FALSE_RESOLVE_CEILING` (default 5%) — and a *measured* false-resolve rate above it fails the run (`assert_false_resolve_ceiling`), never downgraded to a comment. It is enforced in `e7_runner`'s exit code, so the weekly workflow merely reflects it. The gated rate is the **faithfulness-leg (P3)** false-resolve — the population where a false-resolve can actually occur once a draft clears the retrieval gate. The retrieval-leg P1a/P1b false-resolves are deliberately *excluded* from this rate (see below), so it cannot be diluted by always-escalating true-negatives as the gold set grows.
 - **`deflection` and `false-escalate` are tunable QUALITY metrics.** A regression there is governed by the configurable E8 gate (Area F) — comment-vs-fail — not a hard block. Until E8 lands they are advisory (reported in the weekly snapshot).
 
 ### The accepted detection-latency gap (F3 / P5)
 
-The false-resolve number has two contributors: a **retrieval-leg** part (P1a/P1b rows that clear the gate) and a **faithfulness-leg** part (P3 rows that auto-resolve).
-The retrieval leg is deterministic and caught **per-PR**.
+A false-resolve can arise on two legs, gated **differently**.
+The **retrieval leg** (P1a no-context / P1b no-access rows that *clear the gate*) is a zero-tolerance invariant: any nonzero count is a no-context draft or a gold leak, so the P1a/P1b gate checks hard-fail the run **unconditionally**, regardless of rate, and this is deterministic and caught **per-PR**.
+The **faithfulness leg** (P3 rows that auto-resolve) is the rate the buyer's ceiling governs — and it is what the consolidated `false-resolve` number measures, so a true-negative P1a/P1b row can never dilute it.
 The faithfulness leg is LLM-judged, so it is only scored in the **weekly** sweep — meaning a faithfulness-leg false-resolve regression has an **accepted up-to-a-week detection latency**.
-This is a deliberate trade (a per-PR LLM-judged gate would make merges flaky on judge noise), and it is mitigated by the per-PR retrieval-leg tripwire, which catches the larger and more deterministic class of false-resolve immediately.
+This is a deliberate trade (a per-PR LLM-judged gate would make merges flaky on judge noise), and it is mitigated by the per-PR retrieval-leg tripwire, which catches the deterministic class of false-resolve immediately.
+The retrieval-leg P1a/P1b counts are still surfaced in the consolidated false-resolve breakdown (flagged monitor-only) so a leak remains visible there too, even though the ceiling-gated rate is the faithfulness leg alone.
 This gap is the F3 capability-matrix row + the P5 threat-model line for ADR-0003's CI placement.

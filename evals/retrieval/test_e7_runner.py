@@ -51,10 +51,12 @@ US-055 — consolidated metrics. Covers the PRD validation test:
     includes the wrong auto-resolve;
 plus the failure indicators:
   * the false-resolve number is NOT folded into a generic accuracy score — it
-    carries its own numerator/denominator + per-population breakdown, and combines
-    the P1a retrieval-leg and P3 faithfulness-leg false-resolves;
-  * a rate over an empty population is `None` (blind), never a false 0.0, so an
-    opt-out leg (P2/P3 not run) cannot masquerade as passing;
+    carries its own numerator/denominator + per-population breakdown, and the
+    ceiling-GATED rate is the P3 faithfulness-leg only (the retrieval-leg P1a/P1b
+    false-resolves are surfaced monitor-only, so always-escalating true-negatives
+    never dilute the safety signal);
+  * a rate over an empty rate-bearing population is `None` (blind), never a false
+    0.0, so an opt-out leg (P2/P3 not run) cannot masquerade as passing;
   * only the false-resolve rate is flagged as the pinned safety metric.
 
 US-056 — knob sweep + knee. Covers the PRD validation test:
@@ -81,7 +83,8 @@ plus the failure indicators:
     callable and retrieves exactly once per row (it receives the full question
     dict so the gold can be revoked, never a privileged/owner retrieval);
   * only P2 rows are replayed; an empty P2 population is NOT a pass;
-  * a P1b leak folds into the consolidated false-resolve number (US-055).
+  * a P1b leak is surfaced monitor-only in the consolidated false-resolve breakdown
+    and hard-fails unconditionally, but is excluded from the ceiling-gated rate (US-055).
 
 US-058 — P1b non-disclosure byte equality. Covers the PRD validation test:
   * a P1a row and a P1b row (a P2 question under a no-access viewer) carrying
@@ -96,14 +99,15 @@ plus the failure indicators:
   * an empty P1b population is NOT a pass (structurally-blind guard).
 
 US-059 — false-resolve ceiling gate. Covers the PRD core + failure indicators:
-  * a measured consolidated false-resolve rate ABOVE the buyer's ceiling is a
-    breach that fails the run (the pinned safety invariant the E8 gate enforces);
+  * a measured faithfulness-leg (P3) false-resolve rate ABOVE the buyer's ceiling is
+    a breach that fails the run (the pinned safety invariant the E8 gate enforces);
   * equality is feasible (rate == ceiling does NOT breach), matching the knee's
     `false_resolve <= ceiling`, and a rate strictly below passes;
-  * a None rate (no unanswerable rows scored) is "not measured", never a breach —
-    the per-leg blindness guards own structural blindness;
-  * the gate is INERT on a passing per-PR (P1a-only) run — a 0% false-resolve can
-    never breach, so it cannot red-bar a merge when the deterministic gates pass;
+  * a None rate (no P3 faithfulness-leg rows scored) is "not measured", never a
+    breach — the per-leg blindness guards own structural blindness;
+  * the gate is INERT on a per-PR (P1a/P1b-only, no P3) run — the gated rate is
+    unmeasured (None) there, so it cannot red-bar a merge when the deterministic
+    gates pass (the retrieval-leg P1a/P1b false-resolves are pinned separately);
   * the verdict to_dict + render carry ceiling/rate/n/d/breached for the weekly
     issue body.
 
@@ -879,7 +883,9 @@ def _mixed_results() -> tuple[E7P1aResult, E7P2Result, E7P3Result]:
         one faithful (auto-resolve -> the single false-resolve).
 
     Hand-computed consolidated rates: deflection 1/2, false-escalate 1/2,
-    false-resolve 1/4 (0 from P1a + 1 from P3, over 2 P1a + 2 P3 unanswerable rows).
+    false-resolve 1/2 (the gated faithfulness leg: 1 P3 auto-resolve over 2 P3 rows;
+    the P1a retrieval-leg contribution is monitor-only, 0 cleared, excluded from the
+    rate).
     """
     p1a = _p1a_result(
         {"q-p1a-a": WEAK, "q-p1a-b": WEAK},
@@ -924,19 +930,22 @@ def test_metrics_consolidate_three_rates() -> None:
     _check(m.false_escalate.rate == 0.5, f"false-escalate rate 0.5 expected, got {m.false_escalate.rate}")
     _check(m.false_escalate.safety is False, "false-escalate is a tunable quality metric")
 
-    _check(m.false_resolve.numerator == 1 and m.false_resolve.denominator == 4,
-           f"false-resolve 1/4 expected (0 P1a + 1 P3 over 2+2), got "
+    _check(m.false_resolve.numerator == 1 and m.false_resolve.denominator == 2,
+           f"false-resolve 1/2 expected (gated faithfulness leg: 1 P3 auto-resolve "
+           f"over 2 P3; P1a monitor-only), got "
            f"{m.false_resolve.numerator}/{m.false_resolve.denominator}")
-    _check(m.false_resolve.rate == 0.25, f"false-resolve rate 0.25 expected, got {m.false_resolve.rate}")
+    _check(m.false_resolve.rate == 0.5, f"false-resolve rate 0.5 expected, got {m.false_resolve.rate}")
     _check(m.false_resolve.safety is True, "false-resolve is the pinned safety metric (US-059)")
     print("ok: the three consolidated rates match the hand-computed numerator/denominator")
 
 
-def test_metrics_false_resolve_combines_p1a_and_p3() -> None:
-    """Failure indicator: the false-resolve number must NOT be a generic accuracy
-    score — it combines the P1a RETRIEVAL-leg false-resolve (a no-context row that
-    cleared the gate) and the P3 FAITHFULNESS-leg false-resolve (an unanswerable
-    row that auto-resolved), each attributable in the per-population breakdown."""
+def test_metrics_false_resolve_is_faithfulness_leg_gated() -> None:
+    """Failure indicator: the ceiling-gated false-resolve number is the
+    FAITHFULNESS-leg (P3) rate — the population where a false-resolve can occur once
+    a draft clears the retrieval gate. A P1a row that CLEARED the gate (a
+    retrieval-leg false-resolve) is carried monitor-only in the breakdown and
+    hard-fails the P1a invariant UNCONDITIONALLY, but it must NOT dilute (nor feed)
+    the gated rate (US-059)."""
     # P1a: one row clears the gate (STRONG -> retrieval-leg false-resolve) + one weak.
     p1a = _p1a_result(
         {"q-clear": STRONG, "q-weak": WEAK},
@@ -953,20 +962,28 @@ def test_metrics_false_resolve_combines_p1a_and_p3() -> None:
     )
     m = compute_e7_metrics(p1a, None, p3)
 
-    _check(m.false_resolve.numerator == 2 and m.false_resolve.denominator == 4,
-           f"false-resolve 2/4 expected (1 P1a + 1 P3), got "
+    # The gated rate is the P3 faithfulness leg alone (1 auto-resolve / 2 P3 rows) —
+    # the P1a leak does NOT inflate the denominator nor the numerator of the rate.
+    _check(m.false_resolve.numerator == 1 and m.false_resolve.denominator == 2,
+           f"gated false-resolve 1/2 expected (P3 only), got "
            f"{m.false_resolve.numerator}/{m.false_resolve.denominator}")
-    _check(m.false_resolve.rate == 0.5, f"false-resolve rate 0.5 expected, got {m.false_resolve.rate}")
-    by_pop = {c.population: (c.numerator, c.denominator) for c in m.false_resolve.by_population}
-    _check(by_pop == {"P1a": (1, 2), "P3": (1, 2)},
-           f"the breakdown must attribute 1/2 to each leg, got {by_pop}")
-    print("ok: false-resolve combines the P1a retrieval-leg and P3 faithfulness-leg, attributably")
+    _check(m.false_resolve.rate == 0.5, f"gated false-resolve rate 0.5 expected, got {m.false_resolve.rate}")
+    by_pop = {c.population: (c.numerator, c.denominator, c.counts_toward_rate)
+              for c in m.false_resolve.by_population}
+    _check(by_pop == {"P1a": (1, 2, False), "P3": (1, 2, True)},
+           f"P1a is surfaced monitor-only and P3 is the gated leg, got {by_pop}")
+    # The retrieval-leg leak still hard-fails unconditionally via the P1a invariant.
+    _check(p1a.passed is False,
+           "a P1a row that cleared the gate fails the P1a invariant regardless of rate")
+    print("ok: the gated false-resolve is the P3 faithfulness leg; the P1a leak is monitor-only + hard-fails separately")
 
 
 def test_metrics_blind_when_leg_absent() -> None:
-    """Failure indicator: a rate over an empty population is None (blind), never a
-    false 0.0 — so an opt-out P2/P3 leg cannot masquerade as a passing 0. P1a always
-    runs, so the safety false-resolve number always carries its P1a contribution."""
+    """Failure indicator: a rate over an empty rate-bearing population is None
+    (blind), never a false 0.0 — so an opt-out P2/P3 leg cannot masquerade as a
+    passing 0. With no P3 faithfulness leg (the per-PR P1a-only shape) the gated
+    false-resolve rate is NOT measured (None); the P1a contribution is carried
+    monitor-only and cannot fabricate a passing 0."""
     # P1a-only run (the per-PR deterministic tripwire shape): no P2, no P3.
     p1a = _p1a_result(
         {"q-a": WEAK, "q-b": WEAK},
@@ -979,14 +996,17 @@ def test_metrics_blind_when_leg_absent() -> None:
            "an absent P2 leg contributes nothing to deflection")
     _check(m.false_escalate.rate is None, f"false-escalate over 0 answerable is None, got {m.false_escalate.rate}")
 
-    # P1a still drives the safety number even with both judged legs absent.
-    _check(m.false_resolve.rate == 0.0, f"P1a-only false-resolve is 0/2 -> 0.0, got {m.false_resolve.rate}")
-    _check(m.false_resolve.numerator == 0 and m.false_resolve.denominator == 2,
-           f"false-resolve 0/2 expected from P1a alone, got "
+    # With no P3 faithfulness leg the gated safety number is not measured (None) —
+    # the P1a contribution is monitor-only, so it does not become a passing 0.
+    _check(m.false_resolve.rate is None,
+           f"a P1a-only run has no gated faithfulness leg -> None, got {m.false_resolve.rate}")
+    _check(m.false_resolve.numerator == 0 and m.false_resolve.denominator == 0,
+           f"the gated n/d excludes the monitor-only P1a, got "
            f"{m.false_resolve.numerator}/{m.false_resolve.denominator}")
-    _check([c.population for c in m.false_resolve.by_population] == ["P1a"],
-           "with no P3 leg the false-resolve breakdown is P1a-only")
-    print("ok: rates over empty populations are None (blind), and P1a alone still yields the safety number")
+    p1a_contrib = [c for c in m.false_resolve.by_population if c.population == "P1a"]
+    _check(len(p1a_contrib) == 1 and p1a_contrib[0].counts_toward_rate is False,
+           "the P1a contribution is surfaced for monitoring but excluded from the rate")
+    print("ok: rates over empty rate-bearing populations are None (blind); P1a is monitor-only")
 
 
 def test_metrics_to_dict_shape() -> None:
@@ -1004,14 +1024,19 @@ def test_metrics_to_dict_shape() -> None:
             _check(key in rate, f"{name} rate dict missing {key!r}")
         _check(rate["name"] == name, f"{name} rate carries its own name, got {rate['name']!r}")
         for c in rate["by_population"]:
-            for key in ("population", "numerator", "denominator"):
+            for key in ("population", "numerator", "denominator", "counts_toward_rate"):
                 _check(key in c, f"{name} by_population entry missing {key!r}")
 
     _check(d["false_resolve"]["safety"] is True, "false-resolve is flagged as the pinned safety metric")
     _check(d["deflection"]["safety"] is False and d["false_escalate"]["safety"] is False,
            "deflection/false-escalate are tunable quality metrics, not safety-pinned")
     fr_pops = {c["population"] for c in d["false_resolve"]["by_population"]}
-    _check(fr_pops == {"P1a", "P3"}, f"false-resolve breakdown spans P1a + P3, got {fr_pops}")
+    _check(fr_pops == {"P1a", "P3"}, f"false-resolve breakdown spans P1a (monitor) + P3 (gated), got {fr_pops}")
+    fr_gated = {c["population"]: c["counts_toward_rate"] for c in d["false_resolve"]["by_population"]}
+    _check(fr_gated == {"P1a": False, "P3": True},
+           f"P1a is monitor-only and P3 is the gated leg, got {fr_gated}")
+    _check(d["false_resolve"]["numerator"] == 1 and d["false_resolve"]["denominator"] == 2,
+           "the gated headline n/d is the P3 leg alone (1/2), excluding the monitor-only P1a")
     print("ok: the consolidated-metrics to_dict exposes n/d, per-population breakdown, and the safety flag")
 
 
@@ -1019,19 +1044,20 @@ def test_metrics_to_dict_shape() -> None:
 
 
 def test_ceiling_breach_when_rate_exceeds_ceiling() -> None:
-    """US-059 PRD core: a measured consolidated false-resolve rate ABOVE the
+    """US-059 PRD core: a measured faithfulness-leg false-resolve rate ABOVE the
     buyer's ceiling is a breach (the gate fails the run). The _mixed_results mix
-    has false-resolve 1/4 = 25%; a 5% ceiling is breached, a 25%+ ceiling is not."""
+    has gated false-resolve 1/2 = 50%; a 5% ceiling is breached, a 50%+ ceiling is
+    not."""
     p1a, p2, p3 = _mixed_results()
     m = compute_e7_metrics(p1a, p2, p3)
-    _check(m.false_resolve.rate == 0.25, f"fixture false-resolve is 25%, got {m.false_resolve.rate}")
+    _check(m.false_resolve.rate == 0.5, f"fixture gated false-resolve is 50% (P3 leg), got {m.false_resolve.rate}")
 
     breach = assert_false_resolve_ceiling(m, 0.05)
-    _check(breach.breached is True, "25% false-resolve breaches a 5% ceiling")
+    _check(breach.breached is True, "50% false-resolve breaches a 5% ceiling")
     _check(breach.passed is False, "a breach does not pass")
-    _check(breach.numerator == 1 and breach.denominator == 4,
-           f"the verdict echoes the metric n/d 1/4, got {breach.numerator}/{breach.denominator}")
-    _check(breach.rate == 0.25 and breach.ceiling == 0.05, "verdict carries the measured rate + ceiling")
+    _check(breach.numerator == 1 and breach.denominator == 2,
+           f"the verdict echoes the gated metric n/d 1/2, got {breach.numerator}/{breach.denominator}")
+    _check(breach.rate == 0.5 and breach.ceiling == 0.05, "verdict carries the measured rate + ceiling")
     print("ok: a false-resolve rate above the ceiling is a breach that fails the run")
 
 
@@ -1039,26 +1065,26 @@ def test_ceiling_within_when_rate_at_or_below_ceiling() -> None:
     """Failure indicator: equality is feasible (rate == ceiling does NOT breach),
     matching the knee's `false_resolve <= ceiling` feasibility — and a rate strictly
     below the ceiling passes."""
-    p1a, p2, p3 = _mixed_results()  # false-resolve 1/4 = 25%
+    p1a, p2, p3 = _mixed_results()  # gated false-resolve 1/2 = 50%
     m = compute_e7_metrics(p1a, p2, p3)
 
-    at = assert_false_resolve_ceiling(m, 0.25)
-    _check(at.breached is False, "rate == ceiling (25% vs 25%) is feasible, not a breach")
+    at = assert_false_resolve_ceiling(m, 0.50)
+    _check(at.breached is False, "rate == ceiling (50% vs 50%) is feasible, not a breach")
     _check(at.passed is True, "at-the-ceiling passes")
 
-    below = assert_false_resolve_ceiling(m, 0.50)
-    _check(below.breached is False and below.passed is True, "25% under a 50% ceiling passes")
+    below = assert_false_resolve_ceiling(m, 0.75)
+    _check(below.breached is False and below.passed is True, "50% under a 75% ceiling passes")
     print("ok: rate at-or-below the ceiling passes (equality is feasible)")
 
 
 def test_ceiling_blind_rate_is_not_a_breach() -> None:
-    """Failure indicator: a None rate (no unanswerable rows scored) is 'not
+    """Failure indicator: a None rate (no P3 faithfulness-leg rows scored) is 'not
     measured', NOT a breach — the per-leg blindness guards own that failure, so the
     ceiling gate must not fabricate a pass-or-fail from an empty denominator."""
-    # A P1a-only run with zero P1a rows -> false-resolve denominator 0 -> rate None.
+    # No P3 faithfulness leg -> gated false-resolve denominator 0 -> rate None.
     p1a = _p1a_result({}, [])
     m = compute_e7_metrics(p1a, None, None)
-    _check(m.false_resolve.rate is None, f"empty unanswerable set yields a None rate, got {m.false_resolve.rate}")
+    _check(m.false_resolve.rate is None, f"no gated faithfulness leg yields a None rate, got {m.false_resolve.rate}")
 
     verdict = assert_false_resolve_ceiling(m, 0.0)
     _check(verdict.breached is False, "a None rate is not a breach even under a 0% ceiling")
@@ -1067,22 +1093,24 @@ def test_ceiling_blind_rate_is_not_a_breach() -> None:
 
 
 def test_ceiling_inert_on_passing_per_pr_shape() -> None:
-    """US-059: the per-PR tripwire shape (P1a/P1b only, all gates passing) yields a
-    0% false-resolve, so the ceiling gate is structurally inert per-PR — it cannot
-    red-bar a merge when the deterministic gates pass (it has teeth only once the
-    weekly P3 faithfulness leg feeds the rate)."""
-    # Two weak P1a rows: both correctly escalate, 0 cleared the gate -> 0/2 = 0%.
+    """US-059: the per-PR tripwire shape (P1a/P1b only, no P3 faithfulness leg)
+    leaves the gated false-resolve rate UNMEASURED (None), so the ceiling gate is
+    structurally inert per-PR — it cannot red-bar a merge when the deterministic
+    gates pass (it has teeth only once the weekly P3 faithfulness leg feeds the
+    rate; the retrieval-leg P1a/P1b false-resolves are pinned separately)."""
+    # Two weak P1a rows: both correctly escalate, 0 cleared the gate; no P3 leg.
     p1a = _p1a_result(
         {"q-a": WEAK, "q-b": WEAK},
         [_p1a("m-p1a-a", "q-a"), _p1a("m-p1a-b", "q-b")],
     )
     m = compute_e7_metrics(p1a, None, None)
-    _check(m.false_resolve.rate == 0.0, f"a passing P1a-only run is 0% false-resolve, got {m.false_resolve.rate}")
+    _check(m.false_resolve.rate is None,
+           f"a P1a-only run has no gated faithfulness leg -> None, got {m.false_resolve.rate}")
 
-    # Even the strictest non-trivial ceiling is satisfied by a 0% rate.
+    # A None (unmeasured) rate is never a breach, even at the strictest 0% ceiling.
     verdict = assert_false_resolve_ceiling(m, 0.0)
-    _check(verdict.breached is False, "0% false-resolve never breaches, even at a 0% ceiling")
-    print("ok: the ceiling gate is inert on a passing per-PR (P1a-only) run")
+    _check(verdict.breached is False, "an unmeasured (None) false-resolve never breaches, even at a 0% ceiling")
+    print("ok: the ceiling gate is inert on a per-PR (P1a-only, no P3) run")
 
 
 def test_ceiling_verdict_to_dict_and_render() -> None:
@@ -1096,7 +1124,7 @@ def test_ceiling_verdict_to_dict_and_render() -> None:
     for key in ("ceiling", "numerator", "denominator", "rate", "breached", "passed"):
         _check(key in d, f"ceiling verdict dict missing {key!r}")
     _check(d["breached"] is True and d["passed"] is False, "to_dict reflects the breach")
-    _check(d["rate"] == 0.25 and d["ceiling"] == 0.05, "to_dict carries the measured rate + ceiling")
+    _check(d["rate"] == 0.5 and d["ceiling"] == 0.05, "to_dict carries the measured rate + ceiling")
 
     lines = render_e7_false_resolve_ceiling_section(verdict)
     body = "\n".join(lines)
@@ -1143,7 +1171,8 @@ def _run_sweep(
 def _sweep_scenario() -> tuple[list[dict], dict, dict]:
     """A labeled subset whose 2×2×2 (τ_sim × N_min × faith) sweep has a KNOWN knee.
 
-      * P1a: 2 rows, WEAK -> never clear the gate (0 false-resolve from P1a).
+      * P1a: 2 rows, WEAK -> never clear the gate (monitor-only, excluded from the
+        gated rate).
       * P2:  2 rows, STRONG (strong at every τ_sim) -> deflection depends ONLY on
         the faithfulness floor: scores 5 + 4, so faith≥4 deflects both (1.0),
         faith≥5 deflects one (0.5).
@@ -1151,7 +1180,8 @@ def _sweep_scenario() -> tuple[list[dict], dict, dict]:
         false-resolve depends ONLY on τ_sim: at 0.40 both auto-resolve (the
         moat-breaking false-resolve), at 0.60 both escalate at the gate (0).
 
-    So consolidated false-resolve = 0.5 at τ_sim 0.40 and 0.0 at τ_sim 0.60, while
+    So the gated faithfulness-leg false-resolve = 1.0 at τ_sim 0.40 (both P3 rows
+    auto-resolve, 2/2) and 0.0 at τ_sim 0.60 (both escalate at the gate, 0/2), while
     deflection = 1.0 at faith≥4 and 0.5 at faith≥5. Under a 0.05 ceiling only the
     τ_sim 0.60 points are feasible; the deflection-max among them is faith≥4, and
     the N_min tie (1 vs 2, both equal) breaks to the lower index -> the knee is
@@ -1259,8 +1289,8 @@ def test_sweep_no_point_under_ceiling_is_reported() -> None:
     sweep reports that EXPLICITLY (knee None, reason no_point_under_ceiling) rather
     than silently picking the least-bad point."""
     # 1 P1a (WEAK) + 1 P3 (STRONG, faithful score 5) -> the P3 auto-resolves at
-    # every grid point (STRONG is strong at all τ_sim), so false-resolve = 1/2 =
-    # 0.5 everywhere, above the 0.05 ceiling.
+    # every grid point (STRONG is strong at all τ_sim), so the gated faithfulness-leg
+    # false-resolve = 1/1 = 1.0 everywhere, above the 0.05 ceiling.
     questions = [_p1a("nb-p1a", "nq-p1a"), _p3("nb-p3", "nq-p3")]
     rows = {"nq-p1a": WEAK, "nq-p3": STRONG}
     scores = {"nq-p3": {"faithfulness": 5, "helpfulness": 5}}
@@ -1282,14 +1312,17 @@ def test_sweep_deflection_blind_is_reported() -> None:
     """When grid points satisfy the ceiling but the P2 answerable population is
     empty, deflection is structurally blind, so the sweep reports deflection_blind
     rather than recommending an operating point off a None deflection."""
-    # P1a only: false-resolve 0/1 = 0.0 (feasible everywhere), but no P2 -> no
-    # deflection to maximize.
-    questions = [_p1a("db-p1a", "dq-p1a")]
-    rows = {"dq-p1a": WEAK}
+    # A P3 row that ESCALATES at the faithfulness gate (score 3 < floor) -> gated
+    # false-resolve 0/1 = 0.0 (measured + feasible everywhere), but no P2 -> no
+    # deflection to maximize. (A P1a-only sweep would leave the gated rate UNMEASURED
+    # -> not feasible -> no_point_under_ceiling, not this branch.)
+    questions = [_p3("db-p3", "dq-p3")]
+    rows = {"dq-p3": STRONG}
+    scores = {"dq-p3": {"faithfulness": 3, "helpfulness": 3}}
     sweep, _, _, _ = _run_sweep(
         questions, rows,
         tau_sims=[0.40, 0.60], n_mins=[1, 2], faithfulness_mins=[4, 5],
-        ceiling=0.05,
+        ceiling=0.05, scores_by_question=scores,
     )
 
     _check(all(p.feasible for p in sweep.points), "every point satisfies the ceiling (false-resolve 0.0)")
@@ -1483,13 +1516,14 @@ def test_p1b_to_dict_shape() -> None:
     print("ok: P1b result/decision to_dict carry the audited fields")
 
 
-def test_metrics_fold_p1b_into_false_resolve() -> None:
-    """US-055 extension: a P1b leak (a no-access row that cleared the gate) folds
-    into the consolidated false-resolve number as its own attributable population,
-    alongside the P1a retrieval-leg contribution."""
-    # P1a: 2 rows, both clean (0 cleared) -> 0/2.
+def test_metrics_p1b_leak_is_monitor_only_not_gated() -> None:
+    """US-055/059: a P1b leak (a no-access row that cleared the gate) is a
+    zero-tolerance retrieval-leg failure — surfaced in the false-resolve breakdown
+    monitor-only and hard-failed UNCONDITIONALLY by the P1b invariant, but EXCLUDED
+    from the ceiling-gated faithfulness-leg rate so it never dilutes (nor feeds) it."""
+    # P1a: 2 rows, both clean (0 cleared) -> monitor-only 0/2.
     p1a, _ = _run([_p1a("m-p1a-a", "qa"), _p1a("m-p1a-b", "qb")], {"qa": WEAK, "qb": WEAK})
-    # P1b: 2 P2 rows replayed under no-access, 1 leak (STRONG) -> 1/2.
+    # P1b: 2 P2 rows replayed under no-access, 1 leak (STRONG) -> monitor-only 1/2.
     p1b, _ = _run_p1b(
         [_p2("m-p2-a", "qp2a"), _p2("m-p2-b", "qp2b")],
         {"m-p2-a": WEAK, "m-p2-b": STRONG},
@@ -1497,14 +1531,20 @@ def test_metrics_fold_p1b_into_false_resolve() -> None:
     m = compute_e7_metrics(p1a, None, None, p1b)
 
     fr = m.false_resolve
-    _check(fr.numerator == 1 and fr.denominator == 4,
-           f"false-resolve 1/4 expected (0 P1a + 1 P1b over 2+2), got {fr.numerator}/{fr.denominator}")
-    _check(fr.rate == 0.25, f"false-resolve rate 0.25 expected, got {fr.rate}")
-    by_pop = {c.population: (c.numerator, c.denominator) for c in fr.by_population}
-    _check(by_pop == {"P1a": (0, 2), "P1b": (1, 2)},
-           f"the breakdown must attribute the leak to P1b, got {by_pop}")
-    _check(fr.safety is True, "false-resolve (incl. the P1b leak) is the pinned safety metric")
-    print("ok: a P1b leak folds into the consolidated false-resolve number, attributably")
+    # No P3 faithfulness leg ran, so the gated rate is not measured (None) — the P1b
+    # leak does NOT become the gated false-resolve number.
+    _check(fr.rate is None, f"gated false-resolve is None with no P3 leg, got {fr.rate}")
+    _check(fr.numerator == 0 and fr.denominator == 0,
+           f"the gated n/d excludes the monitor-only P1a/P1b, got {fr.numerator}/{fr.denominator}")
+    by_pop = {c.population: (c.numerator, c.denominator, c.counts_toward_rate)
+              for c in fr.by_population}
+    _check(by_pop == {"P1a": (0, 2, False), "P1b": (1, 2, False)},
+           f"P1a/P1b are surfaced monitor-only, never gated, got {by_pop}")
+    _check(fr.safety is True, "false-resolve is the pinned safety metric")
+    # The leak still hard-fails unconditionally via the P1b invariant, regardless of rate.
+    _check(p1b.passed is False,
+           "a P1b row that cleared the gate fails the P1b invariant regardless of rate")
+    print("ok: a P1b leak is monitor-only (not gated) and hard-fails the P1b invariant unconditionally")
 
 
 # --- US-058: P1b non-disclosure byte-equality assertion -------------------
@@ -1641,7 +1681,7 @@ def main() -> int:
         test_p3_empty_population_is_not_a_pass,
         test_p3_to_dict_shape,
         test_metrics_consolidate_three_rates,
-        test_metrics_false_resolve_combines_p1a_and_p3,
+        test_metrics_false_resolve_is_faithfulness_leg_gated,
         test_metrics_blind_when_leg_absent,
         test_metrics_to_dict_shape,
         test_ceiling_breach_when_rate_exceeds_ceiling,
@@ -1660,7 +1700,7 @@ def main() -> int:
         test_p1b_replays_only_p2_rows,
         test_p1b_empty_population_is_not_a_pass,
         test_p1b_to_dict_shape,
-        test_metrics_fold_p1b_into_false_resolve,
+        test_metrics_p1b_leak_is_monitor_only_not_gated,
         test_p1b_non_disclosure_pass,
         test_p1b_non_disclosure_injected_reason_fails,
         test_p1b_non_disclosure_drafted_row_is_a_leak,

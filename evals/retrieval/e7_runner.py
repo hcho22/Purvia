@@ -827,9 +827,9 @@ class E7P3Result:
     """Outcome of the E7 P3 leg. `to_dict()` is what lands in the result JSON.
 
     `judge_model` records the OFFLINE Claude judge that scored faithfulness. The
-    `false_resolve_rate` computed here is the P3-local rate; US-055 consolidates
-    it with the P1a retrieval-leg false-resolves into the canonical
-    false-resolve number the buyer's ceiling governs.
+    `false_resolve_rate` computed here is the P3-local rate; US-055 carries it as
+    the gated faithfulness-leg false-resolve number the buyer's ceiling governs (the
+    retrieval-leg P1a/P1b false-resolves are pinned separately, not folded in).
     """
 
     population: str  # "P3"
@@ -1493,11 +1493,17 @@ def render_e7_p1b_non_disclosure_section(nd: E7P1bNonDisclosure) -> list[str]:
 #
 # Populations (from the E7 labels, US-051):
 #   * answerable   = P2 (a faithful grounded answer exists).
-#   * unanswerable = P1a (no context) + P3 (strong retrieval, no faithful answer)
-#     + P1b (US-057 — P2 questions under a no-access viewer, the gold filtered
-#     out). P1b is OPTIONAL: it is folded into the false-resolve number only when
-#     its (DB-backed) leg ran, so the safety number stays complete once P1b exists
-#     without forcing every caller to run the no-access replay.
+#   * the ceiling-gated false-resolve number is the FAITHFULNESS-LEG rate: P3
+#     (strong retrieval, no faithful answer) rows that auto-resolved, over the P3
+#     population — the cases where a false-resolve can actually occur once a draft
+#     clears the retrieval gate. The RETRIEVAL-leg false-resolves (P1a no-context /
+#     P1b no-access rows that clear the gate) are a SEPARATE zero-tolerance
+#     invariant: the P1a/P1b gate checks hard-fail unconditionally on any nonzero
+#     count (a no-context draft / a gold leak is critical regardless of rate), so
+#     they are surfaced in the breakdown for monitoring but EXCLUDED from the gated
+#     rate — folding always-escalating true-negatives into the denominator would
+#     only dilute the safety signal (worse as the gold set grows: each P2 adds a
+#     P1b row).
 #
 # Each rate is emitted with its explicit numerator/denominator AND a
 # per-population breakdown so a regression is attributable to a single leg and the
@@ -1512,17 +1518,25 @@ def render_e7_p1b_non_disclosure_section(nd: E7P1bNonDisclosure) -> list[str]:
 @dataclass
 class PopulationContribution:
     """One population's (numerator, denominator) contribution to a consolidated
-    rate, so a change in the rate is attributable to P1a/P1b/P2/P3 (US-055)."""
+    rate, so a change in the rate is attributable to P1a/P1b/P2/P3 (US-055).
+
+    `counts_toward_rate` is `False` for a contribution that is SURFACED for
+    monitoring but excluded from the headline rate — the retrieval-leg P1a/P1b
+    false-resolves, which are a zero-tolerance invariant the P1a/P1b gate checks
+    hard-fail unconditionally (any nonzero count is critical regardless of rate),
+    not a rate that may dilute the ceiling-gated faithfulness-leg number (US-059)."""
 
     population: str  # "P1a" / "P1b" / "P2" / "P3"
     numerator: int
     denominator: int
+    counts_toward_rate: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "population": self.population,
             "numerator": self.numerator,
             "denominator": self.denominator,
+            "counts_toward_rate": self.counts_toward_rate,
         }
 
 
@@ -1530,12 +1544,16 @@ class PopulationContribution:
 class ConsolidatedRate:
     """A consolidated E7 operating-objective rate (US-055).
 
-    The `numerator` / `denominator` are derived as the sum of the per-population
-    contributions (so the breakdown can never disagree with the headline number),
-    and are exposed explicitly — never a bare float — so US-059's ceiling gate can
-    verify `numerator / denominator <= ceiling` and a regression is attributable
-    to a single leg. `safety` flags the false-resolve rate, the one pinned-invariant
-    number; deflection and false-escalate are tunable quality metrics.
+    The headline `numerator` / `denominator` are the sum of the RATE-BEARING
+    per-population contributions (`counts_toward_rate`), and are exposed explicitly
+    — never a bare float — so US-059's ceiling gate can verify
+    `numerator / denominator <= ceiling` and a regression is attributable to a
+    single leg. A `counts_toward_rate=False` contribution (the retrieval-leg P1a/P1b
+    false-resolves) is carried in `by_population` for monitoring but EXCLUDED from
+    the headline rate: it is a zero-tolerance invariant gated unconditionally
+    elsewhere, never a rate that may dilute the ceiling-governed faithfulness-leg
+    number. `safety` flags the false-resolve rate, the one pinned-invariant number;
+    deflection and false-escalate are tunable quality metrics.
     """
 
     name: Literal["deflection", "false_resolve", "false_escalate"]
@@ -1544,16 +1562,16 @@ class ConsolidatedRate:
 
     @property
     def numerator(self) -> int:
-        return sum(c.numerator for c in self.by_population)
+        return sum(c.numerator for c in self.by_population if c.counts_toward_rate)
 
     @property
     def denominator(self) -> int:
-        return sum(c.denominator for c in self.by_population)
+        return sum(c.denominator for c in self.by_population if c.counts_toward_rate)
 
     @property
     def rate(self) -> float | None:
-        """`None` over an empty population — a rate over zero questions is
-        structurally blind, not 0.0 (mirrors the per-leg `*_rate` guards). A
+        """`None` over an empty rate-bearing population — a rate over zero questions
+        is structurally blind, not 0.0 (mirrors the per-leg `*_rate` guards). A
         consumer must treat `None` as "not measured", never as a passing 0."""
         if self.denominator == 0:
             return None
@@ -1606,23 +1624,31 @@ def compute_e7_metrics(
       * **deflection** = correctly auto-resolved P2 / answerable. Answerable = the
         P2 population (a faithful grounded answer exists); the numerator is the P2
         rows that auto-resolved.
-      * **false-resolve** = wrongly auto-resolved unanswerable / unanswerable — the
-        SAFETY number. Unanswerable = P1a (no context) + P3 (no faithful answer) +
-        P1b (no-access replay of P2, US-057). A P1a *or* P1b row that *cleared the
-        retrieval gate* is a **retrieval-leg** false-resolve (it would have drafted
-        for a no-context / no-access viewer); a P3 row that *auto-resolved* is a
-        **faithfulness-leg** false-resolve. P1a always runs, so this number always
-        carries at least its retrieval-leg contribution.
+      * **false-resolve** = the SAFETY number, the FAITHFULNESS-LEG false-resolve
+        rate: P3 rows (should-escalate, strong retrieval) that *auto-resolved*, over
+        the P3 population — the cases where a false-resolve can actually occur once a
+        draft clears the retrieval gate. This is the rate US-059 gates against the
+        buyer's ceiling. The RETRIEVAL-leg false-resolves — P1a (no context) / P1b
+        (no-access replay of P2, US-057) rows that *cleared the gate* — are carried
+        in the breakdown for monitoring (`counts_toward_rate=False`) but EXCLUDED
+        from this rate: each is a zero-tolerance invariant the P1a/P1b gate checks
+        hard-fail unconditionally (any nonzero count is a no-context draft / a gold
+        leak, critical regardless of rate), so folding always-escalating
+        true-negatives into the denominator would only dilute the ceiling-gated
+        number — worse as the gold set grows (each P2 adds a P1b row).
       * **false-escalate** = wrongly escalated P2 / answerable — the annoyance
         number (the complement of deflection over the P2 population).
 
     P2 / P3 / P1b are opt-in legs (`--include-p2` / `--include-p3` /
-    `--include-p1b`); when a leg was not run its population contributes nothing, so
-    the denominator excludes it (and a rate over an all-empty set is `None` —
-    surfaced as blind rather than a false 0.0). A P3 row that escalated before the
-    faithfulness gate (`mislabeled`) is a *safe* outcome — it stays in the
-    unanswerable denominator but is NOT counted toward the false-resolve numerator.
-    This function only computes the rates; US-059 enforces the ceiling.
+    `--include-p1b`); when a leg was not run its population contributes nothing (and
+    a rate over an all-empty rate-bearing set is `None` — surfaced as blind rather
+    than a false 0.0). Because the gated false-resolve rate is the P3 leg, a per-PR
+    run (P1a/P1b only, no P3) reports it as `None`/not-measured — the ceiling gate
+    is inert there and the retrieval-leg invariants own per-PR safety. A P3 row that
+    escalated before the faithfulness gate (`mislabeled`) is a *safe* outcome — it
+    stays in the P3 (faithfulness-leg) denominator but is NOT counted toward the
+    false-resolve numerator. This function only computes the rates; US-059 enforces
+    the ceiling.
     """
     deflection = ConsolidatedRate(name="deflection", safety=False)
     false_escalate = ConsolidatedRate(name="false_escalate", safety=False)
@@ -1634,21 +1660,31 @@ def compute_e7_metrics(
             PopulationContribution("P2", len(p2.false_escalates), p2.n_questions)
         )
 
-    # false-resolve is the safety metric (the pinned invariant US-059 gates). P1a
-    # always contributes its retrieval-leg false-resolves (rows that cleared the
-    # gate); P1b contributes its no-access-leak false-resolves and P3 its
-    # faithfulness-leg false-resolves when those legs ran.
+    # false-resolve is the safety metric (the pinned invariant US-059 gates). The
+    # GATED rate is the faithfulness leg (P3 rows that auto-resolved, over the P3
+    # population) — the population where a false-resolve can occur once a draft
+    # clears the retrieval gate. The retrieval-leg P1a/P1b false-resolves are carried
+    # for monitoring (counts_toward_rate=False) but EXCLUDED from the rate: each is a
+    # zero-tolerance invariant the P1a/P1b gate checks hard-fail unconditionally, so
+    # folding always-escalating true-negatives into the denominator would only dilute
+    # the ceiling-gated number.
     false_resolve = ConsolidatedRate(name="false_resolve", safety=True)
     false_resolve.by_population.append(
-        PopulationContribution("P1a", len(p1a.cleared_gate), p1a.n_questions)
+        PopulationContribution(
+            "P1a", len(p1a.cleared_gate), p1a.n_questions, counts_toward_rate=False
+        )
     )
     if p1b is not None:
         false_resolve.by_population.append(
-            PopulationContribution("P1b", len(p1b.cleared_gate), p1b.n_questions)
+            PopulationContribution(
+                "P1b", len(p1b.cleared_gate), p1b.n_questions, counts_toward_rate=False
+            )
         )
     if p3 is not None:
         false_resolve.by_population.append(
-            PopulationContribution("P3", len(p3.false_resolves), p3.n_questions)
+            PopulationContribution(
+                "P3", len(p3.false_resolves), p3.n_questions, counts_toward_rate=True
+            )
         )
 
     return E7Metrics(
@@ -1672,8 +1708,11 @@ def render_e7_metrics_section(metrics: E7Metrics) -> list[str]:
         "false-escalate",
         "",
         "Operating objective: **maximize deflection subject to false-resolve ≤ "
-        "ceiling**. Answerable = P2; unanswerable = P1a + P3 (+ P1b when the "
-        "no-access replay ran). Each rate carries its numerator/denominator + "
+        "ceiling**. Answerable = P2; the gated false-resolve rate is the "
+        "faithfulness leg (P3 rows that auto-resolved, over P3). The retrieval-leg "
+        "P1a/P1b false-resolves are shown `[monitor-only]` — a zero-tolerance "
+        "invariant the P1a/P1b gates hard-fail unconditionally, NOT diluting the "
+        "ceiling-gated rate. Each rate carries its numerator/denominator + "
         "per-population breakdown so the false-resolve number is verifiable against "
         "the buyer's ceiling (US-059), not folded into an opaque accuracy score. "
         "Reported here; the ceiling is enforced in US-059.",
@@ -1687,6 +1726,7 @@ def render_e7_metrics_section(metrics: E7Metrics) -> list[str]:
         breakdown = (
             ", ".join(
                 f"{c.population} {c.numerator}/{c.denominator}"
+                + ("" if c.counts_toward_rate else " [monitor-only]")
                 for c in rate.by_population
             )
             or "—"
@@ -1710,13 +1750,13 @@ def render_e7_metrics_section(metrics: E7Metrics) -> list[str]:
 # unlike the tunable deflection / false-escalate quality metrics the E8 gate
 # governs (US-059 AC3).
 #
-# Which legs feed the rate is set by CI placement (US-059): the per-PR tripwire
-# runs only the deterministic P1a/P1b legs, so per-PR the rate carries only the
-# retrieval-leg contribution — already independently pinned by the P1a/P1b gate
-# checks, so this ceiling gate is INERT there. The weekly sweep adds the
-# LLM-judged P3 faithfulness leg, so the faithfulness-leg false-resolve is what
-# this ceiling actually catches — at an accepted up-to-a-week detection latency
-# (docs/evals.md "E7 CI placement"; F3/P5).
+# The gated rate is the faithfulness leg (P3), so the per-PR tripwire (the
+# deterministic P1a/P1b legs only, no P3) reports it as `None`/not-measured — this
+# ceiling gate is INERT there, and the retrieval-leg P1a/P1b false-resolves are
+# independently pinned by the P1a/P1b gate checks (a zero-tolerance invariant). The
+# weekly sweep adds the LLM-judged P3 faithfulness leg, so the faithfulness-leg
+# false-resolve is what this ceiling actually catches — at an accepted up-to-a-week
+# detection latency (docs/evals.md "E7 CI placement"; F3/P5).
 #
 # A `None` rate (no unanswerable rows scored) is "not measured", NOT a breach:
 # the per-leg P1a/P3 blindness guards own the structurally-blind failure, so this
@@ -1766,10 +1806,13 @@ def assert_false_resolve_ceiling(
 
     Reads the explicit numerator/denominator off `metrics.false_resolve` (never a
     bare float) so the verdict is `numerator / denominator <= ceiling` and a breach
-    is attributable to the per-population breakdown the metric already carries. A
-    `None` rate (no unanswerable rows scored) is NOT a breach — the per-leg
-    P1a/P3 blindness guards own that structurally-blind failure; this gate fires
-    only on a measured rate that strictly exceeds the ceiling.
+    is attributable to the per-population breakdown the metric already carries. That
+    rate is the FAITHFULNESS-LEG (P3) false-resolve — the retrieval-leg P1a/P1b
+    false-resolves are a zero-tolerance invariant the P1a/P1b gate checks hard-fail
+    unconditionally, not folded into this rate. A `None` rate (no P3 faithfulness-leg
+    rows scored — e.g. a per-PR P1a/P1b-only run) is NOT a breach: the per-leg
+    blindness guards and the retrieval-leg gates own that case; this gate fires only
+    on a measured rate that strictly exceeds the ceiling.
     """
     fr = metrics.false_resolve
     rate = fr.rate
@@ -1788,7 +1831,7 @@ def render_e7_false_resolve_ceiling_section(
 ) -> list[str]:
     """Markdown lines for the US-059 false-resolve ceiling gate (pinned safety)."""
     if verdict.rate is None:
-        rate_str = "— (blind: no unanswerable rows scored)"
+        rate_str = "— (blind: no P3 faithfulness-leg rows scored)"
         status = "not measured"
     else:
         rate_str = f"{verdict.rate:.0%} ({verdict.numerator}/{verdict.denominator})"
@@ -1799,15 +1842,16 @@ def render_e7_false_resolve_ceiling_section(
         "",
         f"- Buyer ceiling: **{verdict.ceiling:.0%}** "
         "(`ESCALATION_FALSE_RESOLVE_CEILING`, US-050)",
-        f"- Measured false-resolve: **{rate_str}**",
+        f"- Measured false-resolve (faithfulness leg, P3): **{rate_str}**",
         f"- Verdict: **{status}**",
         "",
-        "A measured false-resolve rate above the ceiling fails the run (pinned "
-        "`fail`, never downgraded to a comment — unlike the tunable "
-        "deflection/false-escalate metrics). Per-PR this carries only the "
-        "deterministic retrieval-leg contribution; the LLM-judged faithfulness-leg "
-        "false-resolve is added by the weekly sweep (accepted up-to-a-week "
-        "detection latency).",
+        "A measured faithfulness-leg false-resolve rate above the ceiling fails the "
+        "run (pinned `fail`, never downgraded to a comment — unlike the tunable "
+        "deflection/false-escalate metrics). The LLM-judged P3 leg is scored only in "
+        "the weekly sweep, so per-PR (P1a/P1b only) this rate is not measured and the "
+        "gate is inert (the retrieval-leg P1a/P1b false-resolves are pinned "
+        "separately); the faithfulness-leg false-resolve carries an accepted "
+        "up-to-a-week detection latency.",
     ]
 
 
@@ -2089,7 +2133,10 @@ async def run_e7_sweep(
 
     Selects the knee = the feasible (false-resolve ≤ `ceiling`) point that
     maximizes deflection; if none is feasible it reports that explicitly via
-    `knee_reason` rather than picking the least-bad point. LLM-judged → a
+    `knee_reason` rather than picking the least-bad point. The swept false-resolve
+    is the gated faithfulness-leg (P3) rate — the SAME corrected denominator the
+    enforced ceiling gate (`assert_false_resolve_ceiling`) uses, so a chosen knee
+    satisfies the same gate it will be measured against. LLM-judged → a
     scheduled/weekly artifact, never a per-PR block (US-059).
     """
     mret = _memoize_retrieve(retrieve)
@@ -2616,10 +2663,11 @@ async def amain() -> int:
                 )
 
     # US-055: roll the per-leg outcomes into the consolidated operating-objective
-    # rates (deflection / false-resolve / false-escalate). P1a always runs, so the
-    # safety false-resolve number always carries its retrieval-leg contribution;
-    # P1b (no-access replay, US-057) and P2/P3 contributions are present only when
-    # their opt-in legs ran.
+    # rates (deflection / false-resolve / false-escalate). The gated safety
+    # false-resolve number is the faithfulness leg (P3), present only when that
+    # opt-in leg ran; the retrieval-leg P1a/P1b false-resolves are surfaced for
+    # monitoring but excluded from the gated rate (they are pinned unconditionally by
+    # the P1a/P1b gate checks below).
     metrics = compute_e7_metrics(p1a_result, p2_result, p3_result, p1b_result)
 
     # US-058: the pinned, deterministic P1b non-disclosure assertion — the bytes a
@@ -2632,11 +2680,11 @@ async def amain() -> int:
         non_disclosure = assert_p1b_non_disclosure(p1a_result, p1b_result)
 
     # US-059: enforce the buyer's false-resolve ceiling on the consolidated metric
-    # as a pinned safety invariant. Always computed (the metric always exists). Per-
-    # PR (P1a/P1b only) the rate carries just the retrieval-leg contribution, which
-    # the P1a/P1b gate checks already pin — so the ceiling gate is inert there and
-    # has teeth in the weekly run, where the LLM-judged P3 faithfulness leg feeds
-    # the rate.
+    # as a pinned safety invariant. The gated rate is the faithfulness leg (P3), so
+    # per-PR (P1a/P1b only, no P3) it is not measured and the ceiling gate is inert —
+    # the retrieval-leg P1a/P1b false-resolves are pinned by the P1a/P1b gate checks
+    # below. The ceiling has teeth in the weekly run, where the LLM-judged P3
+    # faithfulness leg feeds the rate.
     ceiling = get_false_resolve_ceiling()
     ceiling_verdict = assert_false_resolve_ceiling(metrics, ceiling)
 
@@ -2807,17 +2855,19 @@ async def amain() -> int:
         failed = True
 
     # US-059: the false-resolve ceiling is a pinned SAFETY invariant — a MEASURED
-    # consolidated false-resolve rate above the buyer's ceiling fails the run, like
-    # the P1a/P1b gate + non-disclosure invariants (never softened to a comment,
-    # unlike the tunable deflection/false-escalate metrics the E8 gate governs).
-    # Inert per-PR (the retrieval-leg contribution is already pinned above); it
-    # catches the LLM-judged faithfulness-leg false-resolve in the weekly run.
+    # faithfulness-leg (P3) false-resolve rate above the buyer's ceiling fails the
+    # run, like the P1a/P1b gate + non-disclosure invariants (never softened to a
+    # comment, unlike the tunable deflection/false-escalate metrics the E8 gate
+    # governs). Inert per-PR (no P3 leg → not measured; the retrieval-leg P1a/P1b
+    # false-resolves are pinned above); it catches the LLM-judged faithfulness-leg
+    # false-resolve in the weekly run.
     if ceiling_verdict.breached:
         log.error(
-            "E7 FALSE-RESOLVE CEILING BREACH — measured %.1f%% (%d/%d) exceeds the "
-            "buyer's ceiling %.1f%% (ESCALATION_FALSE_RESOLVE_CEILING, US-050). The "
-            "deflection pipeline auto-resolved too many unanswerable questions (the "
-            "Risk #3 safety failure).",
+            "E7 FALSE-RESOLVE CEILING BREACH — measured faithfulness-leg %.1f%% "
+            "(%d/%d P3) exceeds the buyer's ceiling %.1f%% "
+            "(ESCALATION_FALSE_RESOLVE_CEILING, US-050). The deflection pipeline "
+            "auto-resolved too many unanswerable questions (the Risk #3 safety "
+            "failure).",
             (ceiling_verdict.rate or 0.0) * 100.0,
             ceiling_verdict.numerator,
             ceiling_verdict.denominator,

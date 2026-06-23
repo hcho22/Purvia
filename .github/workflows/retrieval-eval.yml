@@ -211,8 +211,9 @@ jobs:
           # deterministic, so a real verdict is trustworthy and non-downgradable;
           # the runner writes /tmp/e7-pr.json FIRST, then exits 1, so the detail is
           # never discarded. The consolidated false-resolve ceiling gate (US-059)
-          # also runs here but is structurally INERT per-PR — its only contributor
-          # is the retrieval leg, already pinned above.
+          # also runs here but is structurally INERT per-PR — its gated rate is the
+          # faithfulness leg (P3), which is not scored here, so it is unmeasured and
+          # cannot breach; the retrieval-leg P1a/P1b false-resolves are pinned above.
           #
           # NO --include-p2/--include-p3/--sweep: those draft + call the OFFLINE
           # Claude faithfulness judge, so they are LLM-judged and live in the weekly
