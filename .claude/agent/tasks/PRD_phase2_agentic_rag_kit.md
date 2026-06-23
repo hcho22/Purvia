@@ -2,7 +2,7 @@
 
 **Status:** consolidation of ADRs 0001–0010, SPEC.md, GAP-ANALYSIS.md, and the built Agentic RAG system into one implementable document. This document supersedes SPEC.md as the single source of truth. Terminology is governed by CONTEXT.md.
 
-> **Phase-2 grilling reconciliation (2026-06-16).** Design sessions since this PRD was written produced **on-disk ADRs** in `docs/adr/` — **0002** (workspace tenant isolation), **0003** (escalation signal + deflection pipeline), **0004** (support-conversation state + human-handoff) — plus a resolved **Observability** design in `CONTEXT.md`. These **resolve** several items flagged open below: §11 is ruled (ADR-0003), and S1/S2/E7/S4/O1–O4 now have settled designs (still `TODO` to *build*, no longer `TODO (open)`). **Numbering caveat:** the on-disk `docs/adr/` sequence (0001 ragas, 0002 workspace, 0003 escalation, 0004 conversation) is **distinct from** this PRD's *internal* ADR-0001–0010 references inherited from the original design docs — see the crosswalk in §12.
+> **Phase-2 grilling reconciliation (2026-06-16).** Design sessions since this PRD was written produced the **on-disk ADR 0002** (workspace tenant isolation) in `docs/adr/`, plus **ruled Phase-2 decisions 0003** (escalation signal + deflection pipeline) and **0004** (support-conversation state + human-handoff) whose ADR files are not yet written, plus a resolved **Observability** design in `CONTEXT.md`. These **resolve** several items flagged open below: §11 is ruled (ADR-0003), and S1/S2/E7/S4/O1–O4 now have settled designs (still `TODO` to *build*, no longer `TODO (open)`). **Numbering caveat:** the Phase-2 `docs/adr/` numbering (0001 ragas, 0002 workspace, 0003 escalation, 0004 conversation; 0003/0004 ruled but not yet on disk) is **distinct from** this PRD's *internal* ADR-0001–0010 references inherited from the original design docs - see the crosswalk in §12.
 
 **One-line product:** a production starter kit that agency/freelance developers deploy to ship a client's AI feature on a deadline — permission-aware RAG with isolation and answer quality *proven by evals*, packaged so it can be redeployed per client and demoed as either a knowledge assistant or a B2B support platform.
 
@@ -33,7 +33,7 @@ These reconcile the ADRs against what you actually built. Each was a recommendat
 | A5 | CI gate comment-only vs. fail-build | **Ship both as a config:** `off \| comment \| fail`, per-metric thresholds, default `comment`. | Reconciles ADR-0003 |
 | A6 | Echo extras (sub-agents, text-to-SQL, web search, rerankers) | **Keep as optional modules** with documented deletion paths; quickstart runs without them. | New (D6) |
 
-**~~Still open~~ → RESOLVED (2026-06-16):** the escalation *signal source* is ruled by on-disk **ADR-0003** — signal source = **3+4 as a retrieval-first cascade** (retrieval gate first, faithfulness gate only on strong retrieval). All dependent requirements (S1, S2, E7) are retagged from `TODO (open)` to `TODO` (design settled, not yet built). **A1 and A2 are likewise ruled** by on-disk ADR-0002 (workspace layer + Supabase Auth retained). A3–A6 remain assumed-unless-overruled (low stakes).
+**~~Still open~~ → RESOLVED (2026-06-16):** the escalation *signal source* is ruled by **ADR-0003** (ruled; on-disk ADR file not yet written) - signal source = **3+4 as a retrieval-first cascade** (retrieval gate first, faithfulness gate only on strong retrieval). All dependent requirements (S1, S2, E7) are retagged from `TODO (open)` to `TODO` (design settled, not yet built). **A1 and A2 are likewise ruled** by on-disk ADR-0002 (workspace layer + Supabase Auth retained). A3–A6 remain assumed-unless-overruled (low stakes).
 
 ---
 
@@ -133,10 +133,10 @@ VAPI/voice (future paid add-on) · Convex/any LLM framework · Anthropic/Bedrock
 
 | ID | Requirement | Status | Source |
 |---|---|---|---|
-| S1 | Escalation / auto-resolve decision as a first-class capability | `TODO` (design settled) | **ADR-0003** (disk) |
-| S2 | Escalation signal: **retrieval-grounded (weak retrieval → escalate) + faithfulness-grounded (draft answer unsupported by context → escalate)**, run as a retrieval-first cascade | `TODO` (design settled) | **ADR-0003** (disk), §11 |
+| S1 | Escalation / auto-resolve decision as a first-class capability | `TODO` (design settled) | **ADR-0003** (ruled) |
+| S2 | Escalation signal: **retrieval-grounded (weak retrieval → escalate) + faithfulness-grounded (draft answer unsupported by context → escalate)**, run as a retrieval-first cascade | `TODO` (design settled) | **ADR-0003** (ruled), §11 |
 | S3 | Embeddable chat widget (`<script>` drop-in) honoring per-workspace ACLs | `TODO` (security model settled) | Echo-take; CONTEXT.md *Support widget surface* |
-| S4 | Conversation state model (`active/escalated/resolved`, escalation latches) + human-handoff surface | `TODO` (design settled) | **ADR-0004** (disk) |
+| S4 | Conversation state model (`active/escalated/resolved`, escalation latches) + human-handoff surface | `TODO` (design settled) | **ADR-0004** (ruled) |
 | S5 | Teams within a Workspace (folds into R6) | `TODO` | A1, Echo-take |
 | S6 | BYO model-key per workspace (multi-tenant SaaS clients) | `TODO` (low priority) | Echo-take |
 | S7 | Billing (Stripe/Clerk) | `TODO` (optional flag, behind feature switch) | A6, Echo-take |
@@ -151,7 +151,7 @@ VAPI/voice (future paid add-on) · Convex/any LLM framework · Anthropic/Bedrock
 | E4 | Permission correctness eval: 50×3 viewer-parameterized — security (0 leak) / recall-tradeoff / non-regression | `BUILT` | FR-42 |
 | E5 | Scale benchmark: 10k Wikipedia chunks, ef_search sweep, nightly, recall-floor regression alarm | `BUILT` | FR-43 |
 | E6 | **Workspace-boundary cases added to correctness eval** (no grant crosses a Workspace) | `TODO` | A1, GAP-B3 |
-| E7 | **Escalation Golden Set + runner**: labeled answer-vs-escalate set (P1a/P1b/P2/P3 populations); deflection rate @ false-resolve ceiling; false-escalate rate; P1b non-disclosure assertion | `TODO` (design settled) | **ADR-0003** (disk) |
+| E7 | **Escalation Golden Set + runner**: labeled answer-vs-escalate set (P1a/P1b/P2/P3 populations); deflection rate @ false-resolve ceiling; false-escalate rate; P1b non-disclosure assertion | `TODO` (design settled) | **ADR-0003** (ruled) |
 | E8 | **Configurable CI gate** `off \| comment \| fail` with per-metric thresholds (default comment; flake rationale documented) | `TODO` | A5 |
 | E9 | **Buyer-facing Golden Dataset format + authoring guide** (genericize the project-specific set into methodology) | `TODO` | GAP-E1 |
 | E10 | Generic corpus-seeder template; demo corpora (Acme/CRM/Wikipedia) preserved as worked examples | `TODO` | GAP-E3 |
@@ -237,9 +237,9 @@ The dev process is the distribution engine (30–40% of total effort, not garnis
 
 ---
 
-## 11. Open question — RESOLVED (2026-06-16) by on-disk ADR-0003
+## 11. Open question - RESOLVED (2026-06-16) by the ADR-0003 ruling
 
-> **Ruling:** signal source = **3 + 4 as a retrieval-first cascade** — evaluate the cheap retrieval gate first (escalate with no draft when retrieval is weak), and draft + run the faithfulness gate only on strong retrieval. The OR short-circuit is the cost win. Accepted cost: a strong-retrieval-but-unfaithful query pays for a draft it won't send. See `docs/adr/0003-escalation-signal-and-deflection-pipeline.md`. The options and rationale below are retained as historical context.
+> **Ruling:** signal source = **3 + 4 as a retrieval-first cascade** — evaluate the cheap retrieval gate first (escalate with no draft when retrieval is weak), and draft + run the faithfulness gate only on strong retrieval. The OR short-circuit is the cost win. Accepted cost: a strong-retrieval-but-unfaithful query pays for a draft it won't send. This ruling is captured in this section (§11) and the §12 crosswalk; the on-disk ADR file for it is not yet written. The options and rationale below are retained as historical context.
 
 **Escalation signal source.** ADR-0010 settled *that* escalation is eval-backed; it did not settle *what drives the decision*. Options:
 
@@ -257,17 +257,17 @@ The dev process is the distribution engine (30–40% of total effort, not garnis
 - ADR-0006 superseded by A2 (Supabase Auth, not Clerk).
 - ADR-0007 superseded by A4 (Vite, not Next.js).
 - ADR-0003 reaffirmed; refined by A5 (configurable gate) and A3 (LangSmith optional).
-- ADR-0010 extended by Section 11 — **signal source now RULED → on-disk ADR-0003**.
+- ADR-0010 extended by Section 11 - **signal source now RULED → ADR-0003** (ruling; on-disk ADR file not yet written).
 - All others (0001, 0004, 0005, 0008, 0009) carried forward unchanged.
 
-### ADR numbering crosswalk (internal vs. on-disk)
+### ADR numbering crosswalk (internal vs. Phase-2 `docs/adr/`)
 
-The ADR numbers referenced *above and throughout this PRD* (ADR-0001…0010) are the **internal** numbering inherited from the original design docs. The **on-disk** `docs/adr/` sequence is a **separate, later** numbering produced during Phase-2 grilling. They do **not** correspond by number — e.g. PRD-internal "ADR-0002" = the sharing model, but on-disk `0002` = workspace isolation. Map by topic:
+The ADR numbers referenced *above and throughout this PRD* (ADR-0001…0010) are the **internal** numbering inherited from the original design docs. The **Phase-2** `docs/adr/` numbering is a **separate, later** sequence produced during Phase-2 grilling (0001–0002 written to disk; 0003–0004 ruled, files not yet written). They do **not** correspond by number — e.g. PRD-internal "ADR-0002" = the sharing model, but on-disk `0002` = workspace isolation. Map by topic:
 
-| On-disk ADR (`docs/adr/`) | Topic | Resolves / supersedes (PRD-internal) |
+| Phase-2 ADR (`docs/adr/`) | Topic | Resolves / supersedes (PRD-internal) |
 |---|---|---|
 | 0001 | RAGAS as a parallel eval signal | E3 / ragas PRD |
 | 0002 | Workspace tenant isolation above owner-OR-ACL | A1 (amends internal ADR-0002), A2 (supersedes internal ADR-0006); R6/R7/E6/AU4 |
-| 0003 | Escalation signal source + deterministic deflection pipeline | §11 ruling (extends internal ADR-0010); S1/S2/E7 |
-| 0004 | Support-conversation state + human-handoff surface | S4 |
+| 0003 *(ruled; file not yet written)* | Escalation signal source + deterministic deflection pipeline | §11 ruling (extends internal ADR-0010); S1/S2/E7 |
+| 0004 *(ruled; file not yet written)* | Support-conversation state + human-handoff surface | S4 |
 | *(none yet)* | Observability (O1–O4) — captured in `CONTEXT.md` *Observability & tracing*, ADR deferred | O1–O4 |
