@@ -100,7 +100,7 @@ explanation — the kind of context a code review won't recover:
 | --- | --- |
 | [`docs/permissions-aware-rag.md`](docs/permissions-aware-rag.md) | The post-filter recall problem, the four-table data model, the SQL predicate, the HNSW interaction, the eval tables, deliberate v0 scope cuts (group nesting, write-vs-read tiers). |
 | [`docs/adr/0002-workspace-tenant-isolation.md`](docs/adr/0002-workspace-tenant-isolation.md) | Phase 2 — the Workspace tenant boundary layered above owner-OR-ACL: where the boundary is enforced (membership clause inside the retrieval predicate, never a backend-passed tenant id), how existing data migrates into a Default Workspace, the alternatives rejected, and the **Identity Boundary** (AU3) — what an integrator may swap in the auth stack (federation-edge only) versus the welded Supabase-JWT pass-through floor. |
-| [`docs/evals.md`](docs/evals.md) | Corpus design, the 50-question golden set, what each metric measures and what it *doesn't*, a worked example of CI catching a regression (Δ -0.510 on `recall@5` from a one-line chunk-size change), and a frank list of the eval's limitations. |
+| [`docs/evals.md`](docs/evals.md) | Corpus design, the 50-question golden set, what each metric measures and what it *doesn't*, a worked example of CI catching a regression (Δ -0.510 on `recall@5` from a one-line chunk-size change), a frank list of the eval's limitations, and the **E7 escalation eval** (§6) - the deflection-pipeline golden set, why its deterministic legs gate per-PR while the LLM-judged legs run weekly, and the false-resolve ceiling as a pinned safety invariant. |
 | [`docs/structured-rag.md`](docs/structured-rag.md) | The semantic-layer-aware text-to-SQL compiler, allowlisted schemas, the read-only role boundary. |
 | [`docs/ingestion-parser-adapters.md`](docs/ingestion-parser-adapters.md) | Write your own `DocumentParser` — the load-bearing markdown-string contract, the edits to add one (subclass + `PARSER` validation + `build_parser`), `PARSER` selection, proving the round-trip, and Unstructured.io as the canonical buyer-written adapter. |
 
@@ -119,7 +119,7 @@ python -m docs._embed_eval_summaries      # injects into docs/permissions-aware-
 backend/                FastAPI service (Dockerfile, railway.toml, fly.toml)
 frontend/               React + Vite + Tailwind (vercel.json)
 supabase/               Migrations + local CLI config
-evals/retrieval/        50-question golden set + runner + CI workflow integration
+evals/retrieval/        50-question golden set + E7 escalation golden set + runners + CI workflow integration
 evals/permissions_scale/ Wikipedia 10k corpus benchmark + nightly workflow
 evals/structured_rag/   Text-to-SQL eval
 db_seed/                Deterministic seeders for the eval corpora
@@ -260,6 +260,7 @@ python -m evals.retrieval.runner                      # all three modes
 python -m evals.retrieval.runner --mode vector        # single mode (faster)
 python -m evals.retrieval.runner --include-generation # adds LLM-judge faithfulness/helpfulness (needs ANTHROPIC_API_KEY)
 python -m evals.retrieval.runner --include-e6         # adds the E6 second-workspace zero-leak gate (exits 1 on a cross-workspace leak)
+python -m evals.retrieval.e7_runner --include-p1b     # E7 escalation tripwire - the deterministic per-PR gate (P1a/P1b retrieval gate + non-disclosure byte-equality, no LLM; exits 1 on a gate clear or non-disclosure mismatch). The P1b leg also needs DATABASE_URL set. Add --include-p2 --include-p3 --sweep for the weekly LLM-judged legs (needs ANTHROPIC_API_KEY)
 ```
 
 ## Deploy
