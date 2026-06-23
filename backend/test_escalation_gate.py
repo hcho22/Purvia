@@ -28,7 +28,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
-from escalation import RetrievalGateDecision, retrieval_gate  # noqa: E402
+from escalation import retrieval_gate  # noqa: E402
 from retrieval import SearchDocumentsResult  # noqa: E402
 
 TAU = 0.4
