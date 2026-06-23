@@ -132,6 +132,7 @@ from escalation import (  # noqa: E402
     retrieval_gate,
 )
 from retrieval import (  # noqa: E402
+    DEFAULT_TOP_K,
     SearchDocumentsResult,
     get_similarity_threshold,
 )
@@ -2478,9 +2479,19 @@ async def amain() -> int:
     async with httpx.AsyncClient(timeout=30.0) as http:
 
         async def retrieve(question: str) -> list[SearchDocumentsResult]:
-            # Hybrid = the production deflection-pipeline retrieval mode (US-049).
+            # Hybrid at DEFAULT_TOP_K = the production deflection-pipeline
+            # retrieval (US-049): run_deflection_pipeline retrieves at
+            # DEFAULT_TOP_K (escalation.py), so the retrieval gate's n_cleared
+            # and the swept N_min knee are calibrated at the depth production
+            # applies them at runtime — not the E4/E6 recall-curve depth (10).
             return await r.run_query(
-                "hybrid", openai_client, http, supabase_url, owner_headers, question
+                "hybrid",
+                openai_client,
+                http,
+                supabase_url,
+                owner_headers,
+                question,
+                top_k=DEFAULT_TOP_K,
             )
 
         p1a_result = await run_e7_p1a(
@@ -2527,6 +2538,7 @@ async def amain() -> int:
                         supabase_url,
                         no_access_headers,
                         q["question"],
+                        top_k=DEFAULT_TOP_K,
                     )
 
                 p1b_result = await run_e7_p1b(
