@@ -29,12 +29,12 @@
 create table public.conversations (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references public.workspaces(id),
-  bot_user_id uuid references auth.users(id),
+  bot_user_id uuid references auth.users(id) on delete set null,
   customer_email text,
   status text not null default 'active',
   escalated_at timestamptz,
   channel text not null default 'widget',
-  claimed_by uuid references auth.users(id),
+  claimed_by uuid references auth.users(id) on delete set null,
   claimed_at timestamptz,
   created_at timestamptz not null default now()
 );
