@@ -118,6 +118,21 @@ def test_sub_is_stringified() -> int:
     return 1
 
 
+def test_sub_validation() -> int:
+    # Symmetric with ttl validation: a None/empty/whitespace sub must never mint a
+    # token (it would resolve auth.uid() to a bogus principal). A uuid/str sub with
+    # real content still passes — see test_sub_is_stringified.
+    for bad in (None, "", "   ", "\t\n"):
+        try:
+            mint_supabase_jwt(bad, 60, secret=UNIT_SECRET)  # type: ignore[arg-type]
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"sub={bad!r} should be rejected")
+    print("  unit: sub validation (None / empty / whitespace rejected)")
+    return 1
+
+
 def test_signature_is_bound_to_secret() -> int:
     token = mint_supabase_jwt(str(uuid.uuid4()), 60, secret=UNIT_SECRET)
     # Right secret verifies.
@@ -219,6 +234,7 @@ def run_unit_layer() -> int:
     total = 0
     total += test_claims_shape()
     total += test_sub_is_stringified()
+    total += test_sub_validation()
     total += test_signature_is_bound_to_secret()
     total += test_expired_token_is_rejected()
     total += test_ttl_validation()

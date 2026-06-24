@@ -82,7 +82,8 @@ def mint_supabase_jwt(
 
     Args:
         sub: the `auth.users` id the token authenticates as (e.g. `bot_user_id`).
-            Stringified — `auth.uid()` resolves to this value.
+            Stringified — `auth.uid()` resolves to this value. Must not be None
+            or stringify to empty/whitespace (it would mint a bogus principal).
         ttl_seconds: lifetime in seconds; must be positive. The bot uses ~60s.
         secret: test-only override for the signing secret. Production omits it and
             the secret is read from `SUPABASE_JWT_SECRET`.
@@ -92,9 +93,15 @@ def mint_supabase_jwt(
         `aud='authenticated'`, `iat`, `exp` (= `iat + ttl_seconds`).
 
     Raises:
-        ValueError: `ttl_seconds` is not a positive integer.
+        ValueError: `sub` is None or stringifies to empty/whitespace, or
+            `ttl_seconds` is not a positive integer.
         RuntimeError: `SUPABASE_JWT_SECRET` is unset (and no `secret` override).
     """
+    if sub is None:
+        raise ValueError("sub must not be None")
+    sub_str = str(sub)
+    if not sub_str.strip():
+        raise ValueError("sub must not be empty or whitespace-only")
     if not isinstance(ttl_seconds, int) or isinstance(ttl_seconds, bool):
         raise ValueError("ttl_seconds must be an int")
     if ttl_seconds <= 0:
@@ -103,7 +110,7 @@ def mint_supabase_jwt(
 
     now = int(time.time())
     claims = {
-        "sub": str(sub),
+        "sub": sub_str,
         "role": _AUTHENTICATED,
         "aud": _AUTHENTICATED,
         "iat": now,
