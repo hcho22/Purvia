@@ -1108,13 +1108,24 @@ def render_e7_p3_section(result: E7P3Result) -> list[str]:
 class P1bDecision:
     """One P1b row's scored outcome — pure data for the result JSON.
 
-    Structurally identical to `P1aDecision` (the only correct outcome is to
-    escalate at the retrieval gate, with 0 draft / 0 judge calls), but the
-    `question_id` is the SOURCE P2 question replayed under the no-access viewer.
-    `decision` is ``"escalate"`` when the no-access viewer's (gold-filtered)
-    retrieval was weak — the correct, non-disclosing outcome — or ``"draft"`` when
-    it was strong, meaning the gold LEAKED to a viewer with no access (a defect).
-    `top1_cosine` / `n_cleared` are the no-access viewer's own retrieval scores.
+    The `question_id` is the SOURCE P2 question replayed under the no-access viewer.
+
+    The correctness signal is **identity-based**, NOT gate-based: a P1b row LEAKS
+    iff a gold `stable_id` actually appears in the no-access viewer's retrieved set
+    (`leaked_gold_ids` non-empty). `correct` is therefore "no gold reached the
+    no-access viewer" — the real isolation invariant — and is decoupled from the
+    answerability gate. The gate fields (`decision` / `gate_strong` / `top1_cosine`
+    / `n_cleared` / `gate_reason`) are kept for REPORTING only: a no-access viewer
+    legitimately holds every non-gold corpus chunk (the E4 no-access construction
+    grants all-but-the-gold), so its retrieval can read strong off topic-adjacent
+    NON-gold chunks (e.g. the gold document's sibling chunk) without any gold
+    leaking — `decision == "draft"` with `leaked_gold_ids == []` is correct, not a
+    leak. Conversely a gold chunk returned at a cosine below `tau_sim` (gate weak)
+    is STILL a leak: `leaked_gold_ids` catches it regardless of cosine.
+
+    `returned_stable_ids` is the no-access viewer's retrieved stable ids (mapped
+    from the chunk ids via the corpus `stable_id` map); `gold_stable_ids` is the
+    replayed question's gold; `leaked_gold_ids = gold ∩ returned`.
     """
 
     question_id: str
@@ -1126,6 +1137,9 @@ class P1bDecision:
     n_cleared: int
     gate_reason: str
     n_results: int
+    returned_stable_ids: list[str]
+    gold_stable_ids: list[str]
+    leaked_gold_ids: list[str]
     draft_calls: int
     judge_calls: int
 
@@ -1139,9 +1153,12 @@ class E7P1bResult:
 
     `source_label` records that P1b is the `answerable_faithful` (P2) population
     replayed under a no-access viewer — P1b carries no gold of its own. The
-    pass/fail shape mirrors P1a exactly: every row must escalate at the retrieval
-    gate having made ZERO draft and ZERO judge calls, and an empty population is
-    NOT a pass (a structurally-blind eval, not a clean one).
+    pass/fail shape is the real ISOLATION invariant: no row may return a gold chunk
+    to the no-access viewer (`leaked_gold_ids` empty for every row), with ZERO draft
+    and ZERO judge calls, and an empty population is NOT a pass (a structurally-blind
+    eval, not a clean one). The answerability gate (strong/weak) is NOT the pass
+    criterion — a no-access viewer can legitimately retrieve non-gold corpus chunks
+    it is granted — so a strong gate with no gold leaked is clean.
     """
 
     population: str  # "P1b"
@@ -1154,8 +1171,12 @@ class E7P1bResult:
 
     @property
     def cleared_gate(self) -> list[P1bDecision]:
-        """P1b rows that WRONGLY cleared the retrieval gate — the gold leaked to a
-        no-access viewer (an isolation failure / disclosure risk). Empty == clean."""
+        """P1b rows that LEAKED — a gold `stable_id` actually appeared in the
+        no-access viewer's retrieved set (`leaked_gold_ids` non-empty), an isolation
+        / disclosure failure. Empty == clean. (Named `cleared_gate` for caller
+        continuity; the leak signal is now measured gold disclosure, not a strong
+        gate — a strong gate off legitimately-granted non-gold chunks is NOT a
+        leak, and a gold chunk returned below `tau_sim` IS.)"""
         return [d for d in self.decisions if not d.correct]
 
     @property
@@ -1168,9 +1189,10 @@ class E7P1bResult:
 
     @property
     def passed(self) -> bool:
-        """Every P1b row must escalate at the retrieval gate with ZERO draft/judge
-        calls. A run with no P1b rows is NOT a pass — there were no P2 questions to
-        replay, so the access-filtered case is structurally blind (mirrors P1a)."""
+        """No P1b row may leak gold to the no-access viewer (`cleared_gate` empty),
+        with ZERO draft/judge calls. A run with no P1b rows is NOT a pass — there
+        were no P2 questions to replay, so the access-filtered case is structurally
+        blind (mirrors P1a)."""
         return (
             self.n_questions > 0
             and not self.cleared_gate
@@ -1200,6 +1222,7 @@ async def run_e7_p1b(
     retrieve_no_access: RetrieveNoAccess,
     config: EscalationConfig,
     match_threshold: float,
+    stable_id_by_chunk_id: dict[str, str],
 ) -> E7P1bResult:
     """Score the P1b population — P2 questions replayed under a no-access viewer
     (US-057).
@@ -1207,15 +1230,25 @@ async def run_e7_p1b(
     For each `answerable_faithful` (P2) row, retrieve via `retrieve_no_access` —
     the production path revokes that question's gold from the no-access viewer
     (the E4 `reset_viewer_acls` machinery) and then retrieves under the viewer's
-    own JWT, so the gold is filtered out by RLS + the membership clause. The
-    (gold-filtered) results go through the SAME real `escalation.retrieval_gate`
-    (US-047) P1a uses: a weak gate escalates the row with ZERO draft and ZERO
-    judge calls (this leg has no answerer/judge client). A row that clears the gate
-    means the gold leaked to a no-access viewer (`correct=False`) and fails the run.
+    own JWT, so the gold is filtered out by RLS + the membership clause.
+
+    The leak verdict is **identity-based**: each returned chunk id is mapped to its
+    corpus `stable_id` (via `stable_id_by_chunk_id`) and a row LEAKS iff a gold
+    stable id actually appears in the no-access viewer's retrieved set
+    (`leaked_gold_ids = gold ∩ returned`). That — not the answerability gate — is
+    the real isolation invariant: a no-access viewer legitimately holds every
+    non-gold corpus chunk (the E4 no-access construction grants all-but-the-gold),
+    so its retrieval can read STRONG off topic-adjacent non-gold chunks (e.g. the
+    gold document's sibling chunk) with no gold leaked — that is correct, not a
+    leak. Conversely a gold chunk returned below `tau_sim` (gate weak) is STILL a
+    leak. A row whose `leaked_gold_ids` is non-empty is `correct=False` and fails
+    the run. The gate decision is still recorded (for reporting + the US-058
+    escalation-path non-disclosure check), but it no longer decides pass/fail. This
+    leg makes ZERO draft and ZERO judge calls (it has no answerer/judge client).
 
     There is NO privileged second pass: the leg is given only the no-access
-    retrieval callable, so P1b is decided exactly as P1a is — purely from the
-    no-access viewer's own retrieval (US-057/058). Non-P2 rows are ignored.
+    retrieval callable, so P1b is decided purely from the no-access viewer's own
+    retrieval (US-057/058). Non-P2 rows are ignored.
     """
     p2 = [q for q in questions if q.get("escalation") == P2_LABEL]
     result = E7P1bResult(
@@ -1232,17 +1265,29 @@ async def run_e7_p1b(
         decision: Literal["escalate", "draft"] = (
             "escalate" if not gate.strong else "draft"
         )
+        # Map the no-access viewer's retrieved chunk ids to corpus stable ids, then
+        # measure the actual leak: gold stable ids present in the retrieved set.
+        returned_stable_ids = [
+            stable_id_by_chunk_id[r.id]
+            for r in rows
+            if r.id in stable_id_by_chunk_id
+        ]
+        gold_stable_ids = list(q.get("gold_stable_ids") or [])
+        leaked_gold_ids = sorted(set(gold_stable_ids) & set(returned_stable_ids))
         result.decisions.append(
             P1bDecision(
                 question_id=q["id"],
                 decision=decision,
                 expected="escalate",
-                correct=(decision == "escalate"),
+                correct=(not leaked_gold_ids),
                 gate_strong=gate.strong,
                 top1_cosine=gate.top1_cosine,
                 n_cleared=gate.n_cleared,
                 gate_reason=gate.reason,
                 n_results=len(rows),
+                returned_stable_ids=returned_stable_ids,
+                gold_stable_ids=gold_stable_ids,
+                leaked_gold_ids=leaked_gold_ids,
                 draft_calls=0,
                 judge_calls=0,
             )
@@ -1254,15 +1299,18 @@ def render_e7_p1b_section(result: E7P1bResult) -> list[str]:
     """Markdown lines for the E7 P1b block (no-access replay, deterministic gate)."""
     if result.passed:
         verdict = (
-            f"PASS — all {result.n_questions} P1b rows (P2 questions under a "
-            "no-access viewer) escalated at the retrieval gate (0 draft / 0 judge)."
+            f"PASS — none of the {result.n_questions} P1b rows (P2 questions under a "
+            "no-access viewer) returned a gold chunk; no gold leaked (0 draft / 0 "
+            "judge)."
         )
     elif result.cleared_gate:
         verdict = (
-            f"FAIL — {len(result.cleared_gate)} P1b row(s) CLEARED the retrieval "
-            "gate: the gold leaked to a no-access viewer (isolation/disclosure "
-            "failure): "
-            + ", ".join(f"`{d.question_id}`" for d in result.cleared_gate)
+            f"FAIL — {len(result.cleared_gate)} P1b row(s) RETURNED the gold to a "
+            "no-access viewer (isolation/disclosure failure): "
+            + ", ".join(
+                f"`{d.question_id}` (leaked {', '.join(d.leaked_gold_ids)})"
+                for d in result.cleared_gate
+            )
             + "."
         )
     else:
@@ -1273,24 +1321,27 @@ def render_e7_p1b_section(result: E7P1bResult) -> list[str]:
 
     lines = [
         "",
-        "### E7 P1b (US-057) — no-access replay of P2 (retrieval gate)",
+        "### E7 P1b (US-057) — no-access replay of P2 (gold-exclusion check)",
         "",
         f"τ_sim={result.tau_sim} · N_min={result.n_min} · "
         f"match_threshold={result.match_threshold}. Each P1b row is a P2 "
         "(`answerable_faithful`) question replayed under a **no-access viewer** "
-        "(its gold ACL-revoked), so the gold is invisible and the row must escalate "
-        "at the retrieval gate — the same output as P1a, with no privileged second "
-        "pass (US-057/058).",
+        "(its gold ACL-revoked). The invariant is **isolation**: no gold "
+        "`stable_id` may appear in the no-access viewer's retrieved set. The "
+        "answerability gate is reported but does NOT decide pass/fail — a viewer "
+        "legitimately retrieving non-gold corpus chunks it is granted is not a "
+        "leak; only a returned gold chunk is. No privileged second pass (US-057/058).",
         "",
-        "| Question (P2 source) | Decision | top1_cosine | n_cleared | gate reason |",
+        "| Question (P2 source) | Decision | top1_cosine | n_cleared | leaked gold |",
         "|---|---|---|---|---|",
     ]
     for d in result.decisions:
         cosine = "—" if d.top1_cosine is None else f"{d.top1_cosine:.4f}"
         flag = "" if d.correct else " ⚠️ leak"
+        leaked = ", ".join(d.leaked_gold_ids) if d.leaked_gold_ids else "—"
         lines.append(
             f"| `{d.question_id}` | {d.decision}{flag} | {cosine} | "
-            f"{d.n_cleared} | {d.gate_reason} |"
+            f"{d.n_cleared} | {leaked} |"
         )
     lines += ["", f"**Verdict:** {verdict}"]
     return lines
@@ -1299,12 +1350,16 @@ def render_e7_p1b_section(result: E7P1bResult) -> list[str]:
 # ---------------------------------------------------------------------------
 # US-058: P1b non-disclosure assertion (pinned security invariant).
 #
-# US-057 proves a P1b row (a P2 question replayed under a no-access viewer)
-# DECIDES the same as P1a — escalate at the retrieval gate. US-058 pins the
-# stronger, customer-visible invariant: the BYTES the customer sees on a P1b
-# escalation are byte-for-byte identical to the P1a generic-deferral bytes, so
-# escalating a no-access viewer never discloses that restricted content exists —
-# no `reason`, no `restricted-to`, no existence bit echoed to the customer.
+# US-057 proves the ISOLATION invariant — no gold chunk reaches the no-access
+# viewer (`E7P1bResult.cleared_gate`, identity-based). US-058 pins the orthogonal,
+# customer-visible invariant on the ESCALATION PATH: when a no-access row DOES
+# escalate (its retrieval is weak), the BYTES the customer sees are byte-for-byte
+# identical to the P1a generic-deferral bytes, so escalating never discloses that
+# restricted content exists — no `reason`, no `restricted-to`, no existence bit
+# echoed to the customer. US-058 is DECOUPLED from the US-057 leak check: it scores
+# only escalating rows, not draft rows (a no-access viewer drafting from
+# legitimately-granted NON-gold chunks is not a restricted-content disclosure — the
+# gold-leak case is owned entirely by US-057's identity check).
 #
 # It is a binary leak invariant (`assert leak == 0`) in the E8 pinned-`fail`
 # security/correctness class (US-059) — NOT buyer-downgradable to comment/off;
@@ -1417,16 +1472,24 @@ def assert_p1b_non_disclosure(
     *,
     p1b_output_fn: Callable[[P1bDecision], bytes | None] = _row_customer_output,
 ) -> E7P1bNonDisclosure:
-    """Assert every P1b row's customer bytes equal the P1a generic deferral (US-058).
+    """Assert every ESCALATING P1b row's customer bytes equal the P1a generic
+    deferral (US-058).
 
     The reference is the customer output of a real escalated P1a row (or the
     canonical production deferral if none escalated — the P1a leg has already
-    failed), taken through the REAL escalate constructor. Every P1b row is taken
-    through the same path with its OWN gate decision, so the comparison proves the
-    customer bytes are invariant to the per-row internal reason / cosine / access
-    state. A P1b row that drafted (cleared the gate) discloses a drafted answer and
-    is recorded as a leak. Deterministic (byte equality, no LLM) → pinned `fail`,
-    per-PR (US-059).
+    failed), taken through the REAL escalate constructor. Each P1b row that
+    ESCALATES is taken through the same path with its OWN gate decision, so the
+    comparison proves the customer bytes are invariant to the per-row internal
+    reason / cosine / access state. Deterministic (byte equality, no LLM) → pinned
+    `fail`, per-PR (US-059).
+
+    Scoped to the escalation path and DECOUPLED from the US-057 leak check: a P1b
+    row that DRAFTS (its no-access retrieval read strong) is skipped here — a
+    no-access viewer drafting from legitimately-granted NON-gold chunks is not a
+    restricted-content disclosure, and the gold-leak case is owned entirely by
+    US-057's identity check (`E7P1bResult.cleared_gate`). The positive control still
+    requires `n_p1b > 0` (some P2 row was replayed); the conditional non-disclosure
+    invariant holds vacuously when no row escalates.
 
     `p1b_output_fn` is the per-row customer-output deriver, injected so a test can
     simulate a regression that leaks an access-aware reason into the P1b output (the
@@ -1443,6 +1506,10 @@ def assert_p1b_non_disclosure(
 
     leaks: list[P1bLeak] = []
     for pb in p1b.decisions:
+        # US-058 guards the escalation path only; a drafting row's disclosure risk
+        # (if any) is a gold leak, owned by the US-057 identity check.
+        if pb.decision != "escalate":
+            continue
         output = p1b_output_fn(pb)
         if output is None:
             leaks.append(P1bLeak(pb.question_id, "drafted_answer_disclosed"))
@@ -2310,9 +2377,11 @@ def e7_pinned_invariants_failed(
     The pinned invariants (none ever softened to a comment, unlike the tunable
     deflection/false-escalate metrics the E8 gate governs):
 
-      * a P1a no-context row or a P1b no-access-replay row that CLEARS the retrieval
-        gate — a retrieval-leg false-resolve / a gold leak to a no-access viewer;
-        zero-tolerance, hard-fails unconditionally regardless of rate;
+      * a P1a no-context row that CLEARS the retrieval gate (a retrieval-leg
+        false-resolve), or a P1b no-access-replay row that RETURNED a gold chunk to
+        the no-access viewer (an isolation/disclosure failure, identity-measured —
+        independent of the answerability gate); zero-tolerance, hard-fails
+        unconditionally regardless of rate;
       * a P1b non-disclosure byte mismatch (a customer output that differs from the
         P1a generic deferral, disclosing restricted content exists);
       * a structurally-blind positive control on ANY requested leg — fail closed,
@@ -2362,15 +2431,16 @@ def e7_pinned_invariants_failed(
     if p1b_result is not None and not p1b_result.passed:
         if p1b_result.cleared_gate:
             log.error(
-                "E7 P1b LEAK — %d no-access-replay row(s) cleared the retrieval "
-                "gate; the gold leaked to a no-access viewer (isolation/disclosure "
-                "failure):",
+                "E7 P1b LEAK — %d no-access-replay row(s) RETURNED a gold chunk to "
+                "the no-access viewer (isolation/disclosure failure; identity-"
+                "measured, independent of the answerability gate):",
                 len(p1b_result.cleared_gate),
             )
             for leak in p1b_result.cleared_gate:
                 log.error(
-                    "  %s top1_cosine=%s n_cleared=%d (%s)",
+                    "  %s leaked_gold=%s top1_cosine=%s n_cleared=%d (%s)",
                     leak.question_id,
+                    ",".join(leak.leaked_gold_ids) or "?",
                     "None" if leak.top1_cosine is None else f"{leak.top1_cosine:.4f}",
                     leak.n_cleared,
                     leak.gate_reason,
@@ -2779,6 +2849,9 @@ async def amain() -> int:
                     retrieve_no_access=retrieve_no_access,
                     config=config,
                     match_threshold=match_threshold,
+                    # chunk_id -> stable_id, so the leg can measure whether any GOLD
+                    # stable id actually reached the no-access viewer (US-057).
+                    stable_id_by_chunk_id=stable_id_map,
                 )
             finally:
                 await db_conn.close()

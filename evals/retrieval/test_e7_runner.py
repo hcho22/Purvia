@@ -76,12 +76,16 @@ plus the failure indicators:
   * the grid memoizes per question, so an 8-point sweep drafts/judges each
     question at most once (the curve reflects knobs, not LLM re-sampling).
 
-US-057 — P1b no-access replay. Covers the PRD validation test:
-  * a P2 question replayed under a no-access viewer (gold filtered out) escalates
-    at the retrieval gate — the SAME outcome as P1a, with 0 draft / 0 judge calls;
+US-057 — P1b no-access replay (identity-based isolation check). Covers the PRD
+validation test:
+  * a P2 question replayed under a no-access viewer (gold filtered out) returns NO
+    gold chunk, so the row is clean — with 0 draft / 0 judge calls — whether the
+    answerability gate reads weak OR strong off legitimately-granted non-gold;
 plus the failure indicators:
-  * a P1b row that CLEARS the gate (the gold leaked to a no-access viewer) is
-    flagged `correct=False` and fails the run (an isolation/disclosure failure);
+  * a P1b row whose no-access retrieval RETURNS a gold chunk (`leaked_gold_ids`
+    non-empty) is flagged `correct=False` and fails the run (isolation/disclosure);
+  * the leak check is decoupled from the gate: a strong gate off NON-gold is NOT a
+    leak, and a gold chunk returned BELOW tau_sim (gate weak) IS still a leak;
   * NO privileged second pass: the leg is given only the no-access retrieval
     callable and retrieves exactly once per row (it receives the full question
     dict so the gold can be revoked, never a privileged/owner retrieval);
@@ -89,16 +93,19 @@ plus the failure indicators:
   * a P1b leak is surfaced monitor-only in the consolidated false-resolve breakdown
     and hard-fails unconditionally, but is excluded from the ceiling-gated rate (US-055).
 
-US-058 — P1b non-disclosure byte equality. Covers the PRD validation test:
-  * a P1a row and a P1b row (a P2 question under a no-access viewer) carrying
-    DIFFERENT internal gate reasons both show the customer the byte-for-byte SAME
-    generic deferral — derived through the REAL `escalation._escalated` /
-    `GENERIC_DEFERRAL` path — so a no-access escalation discloses no existence bit;
+US-058 — P1b non-disclosure byte equality (escalation path only). Covers the PRD
+validation test:
+  * a P1a row and a P1b row (a P2 question under a no-access viewer) that BOTH
+    escalate, carrying DIFFERENT internal gate reasons, both show the customer the
+    byte-for-byte SAME generic deferral — derived through the REAL
+    `escalation._escalated` / `GENERIC_DEFERRAL` path — so a no-access escalation
+    discloses no existence bit;
 plus the failure indicators:
   * injecting an access-denied reason into the P1b customer output makes the
     assertion FAIL loudly (it really pins the invariant, not a trivial pass);
-  * a P1b row that cleared the gate (the gold leaked → a drafted answer) is a
-    non-disclosure leak too (defense in depth with the US-057 gate-clear check);
+  * US-058 is DECOUPLED from the US-057 identity leak check: a legitimate non-gold
+    draft (gate strong, no gold returned) is NOT flagged here — the gold-leak case
+    is owned entirely by the US-057 identity check;
   * an empty P1b population is NOT a pass (structurally-blind guard).
 
 US-059 — false-resolve ceiling gate. Covers the PRD core + failure indicators:
@@ -205,6 +212,17 @@ NEAR_MISS = [_row("a", 0.39)]  # top1 0.39 just below tau 0.40; clears thresh ->
 # top1 0.50, 2 rows clear thresh 0.3: strong at tau_sim 0.40, weak at tau_sim 0.60
 # -> the τ_sim sweep lever flips MID's gate (US-056 sweep fixtures).
 MID = [_row("a", 0.50), _row("b", 0.32)]
+
+# US-057 (identity-based leak): a no-access retrieval that RETURNED the gold chunk.
+# `_p2`/`_p3` gold is "warranty-terms:0", and the default `_run_p1b` chunk-id→
+# stable-id map is identity over the row ids, so a row whose id IS the gold stable id
+# is a measured leak. WEAK/STRONG (ids "a"/"b") are NON-gold, so a strong gate off
+# them is NOT a leak. GOLD_LEAK_STRONG leaks the gold AND clears the gate;
+# GOLD_LEAK_WEAK returns the gold at a low cosine (gate WEAK) — still a leak, proving
+# the identity check is decoupled from the answerability gate.
+GOLD = "warranty-terms:0"
+GOLD_LEAK_STRONG = [_row(GOLD, 0.70), _row("b", 0.60)]
+GOLD_LEAK_WEAK = [_row(GOLD, 0.20)]
 
 
 class _FakeRetriever:
@@ -1565,23 +1583,33 @@ class _FakeNoAccessRetriever:
 def _run_p1b(
     questions: list[dict],
     rows_by_id: dict[str, list[SearchDocumentsResult]],
+    *,
+    stable_id_by_chunk_id: dict[str, str] | None = None,
 ) -> tuple[E7P1bResult, _FakeNoAccessRetriever]:
     retriever = _FakeNoAccessRetriever(rows_by_id)
+    # Default: identity map (chunk id == stable id) over every fixture row, so a row
+    # whose id is the gold stable id ("warranty-terms:0") leaks and any other id does
+    # not. Production passes the real `runner.fetch_stable_id_map` (chunk_id→stable_id).
+    if stable_id_by_chunk_id is None:
+        stable_id_by_chunk_id = {
+            r.id: r.id for rows in rows_by_id.values() for r in rows
+        }
     result = asyncio.run(
         run_e7_p1b(
             questions=questions,
             retrieve_no_access=retriever,
             config=CONFIG,
             match_threshold=THRESH,
+            stable_id_by_chunk_id=stable_id_by_chunk_id,
         )
     )
     return result, retriever
 
 
-def test_p1b_escalates_under_no_access() -> None:
-    """PRD core: a P2 question replayed under a no-access viewer (gold filtered out)
-    has weak retrieval, so it escalates at the retrieval gate — the SAME outcome as
-    P1a, with 0 draft / 0 judge calls."""
+def test_p1b_no_gold_in_result_passes() -> None:
+    """PRD core: a P2 question replayed under a no-access viewer whose gold is filtered
+    out returns NO gold chunk, so the row is clean (no leak) with 0 draft / 0 judge
+    calls — whether the gate read weak OR strong off legitimately-granted non-gold."""
     questions = [
         _p2("e7-p2-a", "How long is the electronics warranty?"),
         _p2("e7-p2-b", "What is the return window?"),
@@ -1595,36 +1623,72 @@ def test_p1b_escalates_under_no_access() -> None:
     _check(result.n_questions == 2, f"both P2 rows replayed, got {result.n_questions}")
     _check(retriever.calls == 2, f"exactly one no-access retrieval per row, got {retriever.calls}")
     _check(result.total_draft_calls == 0 and result.total_judge_calls == 0, "P1b makes 0 draft/0 judge calls (like P1a)")
-    _check(result.cleared_gate == [], "no P1b row should clear the gate (no leak)")
-    _check(result.passed is True, "all-escalate, no-draft/judge P1b run must pass")
+    _check(result.cleared_gate == [], "no P1b row leaked gold")
+    _check(result.passed is True, "a no-leak, no-draft/judge P1b run must pass")
     for d in result.decisions:
-        _check(d.decision == "escalate", f"{d.question_id}: a no-access replay must escalate, got {d.decision}")
-        _check(d.expected == "escalate", "P1b's expected outcome is escalate (same as P1a)")
-        _check(d.correct is True, f"{d.question_id}: escalate is the correct P1b outcome")
+        _check(d.decision == "escalate", f"{d.question_id}: weak non-gold retrieval reads escalate, got {d.decision}")
+        _check(d.leaked_gold_ids == [], f"{d.question_id}: no gold leaked, got {d.leaked_gold_ids}")
+        _check(d.correct is True, f"{d.question_id}: no gold in the result is the correct P1b outcome")
         _check(d.draft_calls == 0 and d.judge_calls == 0, "per-row 0 draft/0 judge")
-    print("ok: a P2 question replayed under a no-access viewer escalates at the retrieval gate (like P1a)")
+    print("ok: a P2 question replayed under a no-access viewer returns no gold (clean, no leak)")
 
 
-def test_p1b_clearing_gate_is_a_leak() -> None:
-    """Failure indicator: a P1b row whose no-access retrieval is (wrongly) STRONG
-    means the gold leaked to a no-access viewer — an isolation/disclosure failure.
-    It is flagged correct=False and fails the run, exactly like a P1a cleared gate."""
+def test_p1b_nongold_strong_is_not_a_leak() -> None:
+    """REGRESSION (the false positive this fix removes): a no-access viewer whose gold
+    is revoked still holds every NON-gold corpus chunk, so its retrieval can read
+    STRONG off topic-adjacent non-gold (e.g. the gold doc's sibling). A strong gate
+    with NO gold in the result is NOT a leak — the row is clean and the run passes."""
+    questions = [_p2("e7-p2-strong-nongold", "How long is the electronics warranty?")]
+    rows = {"e7-p2-strong-nongold": STRONG}  # ids a/b are non-gold; gate reads strong
+    result, _ = _run_p1b(questions, rows)
+
+    d = result.decisions[0]
+    _check(d.gate_strong is True, "the gate reads strong off the non-gold chunks")
+    _check(d.decision == "draft", f"a strong gate reports 'draft', got {d.decision}")
+    _check(d.leaked_gold_ids == [], f"no gold stable id in the result, got {d.leaked_gold_ids}")
+    _check(d.correct is True, "a strong gate off legitimately-granted non-gold is NOT a leak")
+    _check(result.cleared_gate == [], "no row leaked gold")
+    _check(result.passed is True, "a non-gold strong retrieval must not fail the P1b leg")
+    print("ok: a strong gate off legitimately-granted non-gold chunks is not a P1b leak")
+
+
+def test_p1b_gold_in_result_is_a_leak() -> None:
+    """Failure indicator: a P1b row whose no-access retrieval RETURNS a gold chunk
+    means the gold leaked to a no-access viewer — an isolation/disclosure failure. It
+    is flagged correct=False (identity-measured) and fails the run."""
     questions = [
         _p2("e7-p2-ok", "A question whose gold is correctly filtered."),
         _p2("e7-p2-leak", "A question whose gold leaked to the no-access viewer."),
     ]
-    rows = {"e7-p2-ok": WEAK, "e7-p2-leak": STRONG}
+    rows = {"e7-p2-ok": WEAK, "e7-p2-leak": GOLD_LEAK_STRONG}
     result, _ = _run_p1b(questions, rows)
 
-    _check(result.passed is False, "a P1b row clearing the gate (a leak) must fail the run")
+    _check(result.passed is False, "a P1b row that returned the gold (a leak) must fail the run")
     leaked = result.cleared_gate
     _check([d.question_id for d in leaked] == ["e7-p2-leak"], f"the leaked row must be flagged, got {leaked}")
     bad = leaked[0]
-    _check(bad.decision == "draft", f"a cleared P1b row would draft, got {bad.decision}")
+    _check(bad.leaked_gold_ids == [GOLD], f"the leaked gold stable id is recorded, got {bad.leaked_gold_ids}")
     _check(bad.correct is False, "a P1b row that retrieved the gold is incorrect (a leak)")
-    _check(bad.gate_strong is True, "the gate called the no-access retrieval strong on the leaked row")
     _check(result.total_draft_calls == 0 and result.total_judge_calls == 0, "still 0 draft/0 judge (the leg never drafts)")
-    print("ok: a P1b row that clears the gate is flagged as a no-access leak and fails the run")
+    print("ok: a P1b row that returns a gold chunk is flagged as a no-access leak and fails the run")
+
+
+def test_p1b_gold_below_tau_is_still_a_leak() -> None:
+    """The identity leak check is DECOUPLED from the answerability gate: a gold chunk
+    returned to the no-access viewer at a cosine BELOW tau_sim (so the gate reads
+    WEAK) is STILL a leak. This is the false NEGATIVE the old gate-based check would
+    have missed — a real RLS regression that surfaces the gold quietly must flip red."""
+    questions = [_p2("e7-p2-quiet-leak", "A question whose gold leaked at a low cosine.")]
+    rows = {"e7-p2-quiet-leak": GOLD_LEAK_WEAK}  # gold present, but cosine 0.20 < tau 0.40
+    result, _ = _run_p1b(questions, rows)
+
+    d = result.decisions[0]
+    _check(d.gate_strong is False, "the gate reads WEAK (the gold cosine is below tau_sim)")
+    _check(d.decision == "escalate", f"a weak gate reports 'escalate', got {d.decision}")
+    _check(d.leaked_gold_ids == [GOLD], f"the gold is still in the result, got {d.leaked_gold_ids}")
+    _check(d.correct is False, "a returned gold chunk is a leak regardless of cosine")
+    _check(result.passed is False, "a quiet (sub-threshold) gold leak must still fail the run")
+    print("ok: a gold chunk returned below tau_sim (gate weak) is still caught as a P1b leak")
 
 
 def test_p1b_no_privileged_second_pass() -> None:
@@ -1687,23 +1751,26 @@ def test_p1b_to_dict_shape() -> None:
     dec = d["decisions"][0]
     for key in ("question_id", "decision", "expected", "correct", "gate_strong",
                 "top1_cosine", "n_cleared", "gate_reason", "n_results",
+                "returned_stable_ids", "gold_stable_ids", "leaked_gold_ids",
                 "draft_calls", "judge_calls"):
         _check(key in dec, f"P1b decision dict missing {key!r}")
+    _check(dec["gold_stable_ids"] == [GOLD], f"the replayed gold is recorded, got {dec['gold_stable_ids']}")
+    _check(dec["leaked_gold_ids"] == [], f"a clean row leaks no gold, got {dec['leaked_gold_ids']}")
     _check(isinstance(result.decisions[0], P1bDecision), "decisions are P1bDecision instances")
     print("ok: P1b result/decision to_dict carry the audited fields")
 
 
 def test_metrics_p1b_leak_is_monitor_only_not_gated() -> None:
-    """US-055/059: a P1b leak (a no-access row that cleared the gate) is a
+    """US-055/059: a P1b leak (a no-access row that RETURNED the gold) is a
     zero-tolerance retrieval-leg failure — surfaced in the false-resolve breakdown
     monitor-only and hard-failed UNCONDITIONALLY by the P1b invariant, but EXCLUDED
     from the ceiling-gated faithfulness-leg rate so it never dilutes (nor feeds) it."""
     # P1a: 2 rows, both clean (0 cleared) -> monitor-only 0/2.
     p1a, _ = _run([_p1a("m-p1a-a", "qa"), _p1a("m-p1a-b", "qb")], {"qa": WEAK, "qb": WEAK})
-    # P1b: 2 P2 rows replayed under no-access, 1 leak (STRONG) -> monitor-only 1/2.
+    # P1b: 2 P2 rows replayed under no-access, 1 leak (gold returned) -> monitor-only 1/2.
     p1b, _ = _run_p1b(
         [_p2("m-p2-a", "qp2a"), _p2("m-p2-b", "qp2b")],
-        {"m-p2-a": WEAK, "m-p2-b": STRONG},
+        {"m-p2-a": WEAK, "m-p2-b": GOLD_LEAK_STRONG},
     )
     m = compute_e7_metrics(p1a, None, None, p1b)
 
@@ -1720,7 +1787,7 @@ def test_metrics_p1b_leak_is_monitor_only_not_gated() -> None:
     _check(fr.safety is True, "false-resolve is the pinned safety metric")
     # The leak still hard-fails unconditionally via the P1b invariant, regardless of rate.
     _check(p1b.passed is False,
-           "a P1b row that cleared the gate fails the P1b invariant regardless of rate")
+           "a P1b row that returned the gold fails the P1b invariant regardless of rate")
     print("ok: a P1b leak is monitor-only (not gated) and hard-fails the P1b invariant unconditionally")
 
 
@@ -1778,23 +1845,26 @@ def test_p1b_non_disclosure_injected_reason_fails() -> None:
     print("ok: an injected access-denied reason in the P1b output fails the assertion (it really pins the invariant)")
 
 
-def test_p1b_non_disclosure_drafted_row_is_a_leak() -> None:
-    """A P1b row that CLEARED the gate (the gold leaked) would have drafted an answer
-    — content disclosure, not the generic deferral — so US-058 flags it as a
-    non-disclosure leak too (defense in depth with the US-057 gate-clear check)."""
+def test_p1b_non_disclosure_ignores_legit_nongold_draft() -> None:
+    """US-058 is DECOUPLED from the US-057 identity leak check: it guards the
+    escalation path only. A no-access row that drafts from legitimately-granted
+    NON-gold chunks (gate strong, no gold returned) is not a restricted-content
+    disclosure, so US-058 does NOT flag it — the gold-leak case is owned entirely by
+    the US-057 identity check (`E7P1bResult.cleared_gate`)."""
     p1a, _ = _run([_p1a("nd-p1a", "absent q")], {"absent q": WEAK})
     p1b, _ = _run_p1b(
-        [_p2("nd-ok", "filtered q"), _p2("nd-leak", "leaked q")],
-        {"nd-ok": WEAK, "nd-leak": STRONG},  # nd-leak's no-access retrieval is (wrongly) strong
+        [_p2("nd-draft", "answerable-from-nongold q")],
+        {"nd-draft": STRONG},  # gate strong off non-gold ids; NO gold returned
     )
+    _check(p1b.decisions[0].decision == "draft", "the non-gold-strong row drafts (gate strong)")
+    _check(p1b.decisions[0].leaked_gold_ids == [], "no gold leaked (the draft is from non-gold)")
+    _check(p1b.passed is True, "a legitimate non-gold draft does not fail the US-057 leak check")
+
     nd = assert_p1b_non_disclosure(p1a, p1b)
-    _check(nd.passed is False, "a drafted (leaked) P1b row must fail the non-disclosure assertion")
-    _check([leak.question_id for leak in nd.leaks] == ["nd-leak"], f"only the leaked row is flagged, got {nd.leaks}")
-    _check(
-        nd.leaks[0].detail == "drafted_answer_disclosed",
-        f"a cleared-gate row discloses a drafted answer, got {nd.leaks[0].detail}",
-    )
-    print("ok: a P1b row that cleared the gate (would draft an answer) is a non-disclosure leak")
+    _check(nd.passed is True, "US-058 does not flag a legitimate non-gold draft (escalation-path only)")
+    _check(nd.leaks == [], f"no escalation-path bytes to flag, got {nd.leaks}")
+    _check(nd.n_p1b == 1, "the row is still counted toward the positive control")
+    print("ok: US-058 ignores a legitimate non-gold draft (decoupled from the US-057 identity leak check)")
 
 
 def test_p1b_non_disclosure_empty_is_not_a_pass() -> None:
@@ -1878,8 +1948,10 @@ def main() -> int:
         test_sweep_no_point_under_ceiling_is_reported,
         test_sweep_deflection_blind_is_reported,
         test_sweep_to_dict_shape,
-        test_p1b_escalates_under_no_access,
-        test_p1b_clearing_gate_is_a_leak,
+        test_p1b_no_gold_in_result_passes,
+        test_p1b_nongold_strong_is_not_a_leak,
+        test_p1b_gold_in_result_is_a_leak,
+        test_p1b_gold_below_tau_is_still_a_leak,
         test_p1b_no_privileged_second_pass,
         test_p1b_replays_only_p2_rows,
         test_p1b_empty_population_is_not_a_pass,
@@ -1887,7 +1959,7 @@ def main() -> int:
         test_metrics_p1b_leak_is_monitor_only_not_gated,
         test_p1b_non_disclosure_pass,
         test_p1b_non_disclosure_injected_reason_fails,
-        test_p1b_non_disclosure_drafted_row_is_a_leak,
+        test_p1b_non_disclosure_ignores_legit_nongold_draft,
         test_p1b_non_disclosure_empty_is_not_a_pass,
         test_p1b_non_disclosure_to_dict_and_render,
     ]
