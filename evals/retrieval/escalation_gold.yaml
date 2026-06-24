@@ -50,13 +50,26 @@ questions:
   # ── no_context / P1a (genuinely off-topic — no gold chunk) ───────────────
   - id: e7-p1a-01
     escalation: no_context
-    question: What is Acme Co's stock ticker symbol?
-    notes: investor-relations topic; the support corpus has no equities/IR content.
+    question: How many moons does Jupiter have?
+    notes: >-
+      Astronomy — maximally off-topic for an e-commerce support corpus (no brand cue,
+      no shipping/warranty/refund/returns/product vocabulary at all). Re-authored from
+      "What is Acme Co's stock ticker symbol?" which scored top1_cosine 0.4023 — just
+      above τ_sim=0.40 on text-embedding-3-small's baseline-similarity floor for
+      Acme-branded support-register text — so the genuinely-no-context row wrongly read
+      "strong" at the retrieval gate. A maximally-distant topic reads weak (well below
+      0.40, like e7-p1a-03's 0.3879). Still a genuine no-context question.
 
   - id: e7-p1a-02
     escalation: no_context
-    question: What is the parental leave policy for Acme Co employees?
-    notes: internal HR policy; absent from a customer-facing support corpus.
+    question: How are sedimentary rocks formed?
+    notes: >-
+      Geology — maximally off-topic for an e-commerce support corpus (no brand cue, no
+      corpus-register vocabulary). Re-authored from "What is the parental leave policy
+      for Acme Co employees?" which scored top1_cosine 0.4377 (the word "policy"
+      lexically resonated with refund-policy / warranty terms, the highest baseline of
+      the three) so the no-context row wrongly read "strong". A maximally-distant topic
+      reads weak (well below 0.40). Still a genuine no-context question.
 
   - id: e7-p1a-03
     escalation: no_context
