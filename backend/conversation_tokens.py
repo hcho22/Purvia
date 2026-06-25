@@ -22,7 +22,7 @@ server-side customer-identity table. On every reload the iframe presents the raw
 token to the backend, which hashes it and calls the `resume_conversation` RPC
 (service-role only) to revalidate (`not expired AND status != 'resolved'`) and
 slide the 24h window. Resolve invalidates the token (the RPC's status gate plus
-the purge-on-resolve trigger). See `supabase/migrations/20260623140000_conversation_tokens.sql`.
+the purge-on-resolve trigger). See `supabase/migrations/20260624160000_conversation_tokens.sql`.
 
 These primitives are pure (no DB, no secrets) so they are always unit-testable;
 the DB issue/resume plumbing lives in `main.py` (the widget endpoints) and is

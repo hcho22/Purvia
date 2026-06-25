@@ -107,7 +107,7 @@ The raw token is returned in the clear **exactly once** at conversation creation
 Continuity comes solely from the iframe-origin-stored raw token - there is **NO** server-side customer-identity table.
 
 This is a **THIRD trust boundary** beside the two above, and it is narrower: backend-mediated only.
-`20260623140000_conversation_tokens.sql` adds `conversation_tokens(token_hash pk, conversation_id fk, expires_at, created_at)` with **RLS enabled and ZERO policies** (anon/authenticated denied wholesale), plus a `resume_conversation(p_token_hash)` SECURITY DEFINER RPC granted to `service_role` **only**.
+`20260624160000_conversation_tokens.sql` adds `conversation_tokens(token_hash pk, conversation_id fk, expires_at, created_at)` with **RLS enabled and ZERO policies** (anon/authenticated denied wholesale), plus a `resume_conversation(p_token_hash)` SECURITY DEFINER RPC granted to `service_role` **only**.
 The customer presents the raw token to the backend over HTTP (the `X-Conversation-Token` header, deliberately not `Authorization`); the backend hashes it and calls the RPC as the service role.
 The RPC is the single authoritative read path: it resolves the hash to its bound conversation iff `expires_at > now() AND status <> 'resolved'`, slides the 24h window (activity refresh), and returns the **one** conversation - no caller-supplied id reaches it, so a token for X structurally cannot read Y.
 `workspace_membership.role` appears nowhere here (ADR-0002 intact).

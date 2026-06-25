@@ -2316,6 +2316,7 @@ async def widget_conversation_transcript(
             f"{SUPABASE_URL}/rest/v1/conversation_messages",
             params={
                 "conversation_id": f"eq.{conversation_id}",
+                "role": "in.(user,assistant)",
                 "select": "id,role,content,created_at",
                 "order": "created_at.asc",
             },

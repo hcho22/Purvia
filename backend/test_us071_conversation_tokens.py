@@ -11,7 +11,7 @@ Two layers, in the style of `test_supabase_jwt.py`:
     the PRD US-071 "Validation Test" encoded as the leak invariant, mirroring
     `test_us066_conversations_rls.py`. The boundary under test is the
     `resume_conversation` RPC + the purge-on-resolve trigger installed by
-    `supabase/migrations/20260623140000_conversation_tokens.sql`, exercised
+    `supabase/migrations/20260624160000_conversation_tokens.sql`, exercised
     directly against Postgres (the authoritative read path the backend invokes):
 
       Setup: conversation X (token Tx) in workspace WX, Y (token Ty) in WY.
