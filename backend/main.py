@@ -530,6 +530,21 @@ def _service_role_headers() -> dict[str, str] | None:
     }
 
 
+def _require_service_role_headers() -> dict[str, str]:
+    """Service-role headers, or a 503 when the support widget is unconfigured.
+
+    The backend-mediated conversation-token surface (US-071) writes/reads under
+    the service role; without `SUPABASE_SERVICE_ROLE_KEY` there is no path, so
+    fail closed with a clear 503 instead of proceeding unauthenticated."""
+    headers = _service_role_headers()
+    if headers is None:
+        raise HTTPException(
+            status_code=503,
+            detail="support widget is not configured (SUPABASE_SERVICE_ROLE_KEY unset)",
+        )
+    return headers
+
+
 def _supabase_headers(user: AuthedUser) -> dict[str, str]:
     return {
         "apikey": SUPABASE_ANON_KEY,
@@ -2205,12 +2220,7 @@ async def _issue_conversation_token(
     or echoed again. The token table is backend-mediated (RLS deny-all), so this
     writes under the service role.
     """
-    headers = _service_role_headers()
-    if headers is None:
-        raise HTTPException(
-            status_code=503,
-            detail="support widget is not configured (SUPABASE_SERVICE_ROLE_KEY unset)",
-        )
+    headers = _require_service_role_headers()
     raw_token = generate_conversation_token()
     expires_at = (
         datetime.now(timezone.utc)
@@ -2230,29 +2240,28 @@ async def _issue_conversation_token(
 
 
 async def _resume_conversation_by_token(
-    http: httpx.AsyncClient, raw_token: str
+    http: httpx.AsyncClient, raw_token: str, *, slide: bool = True
 ) -> dict | None:
     """Revalidate an opaque customer token and return its bound conversation row.
 
     Hashes the raw token and calls the service-role-only `resume_conversation`
-    RPC, which atomically checks (not expired AND status != 'resolved'), slides
-    the 24h window (activity refresh), and returns the ONE conversation the token
-    is bound to. No caller-supplied conversation id reaches the RPC, so a token
-    for X structurally cannot resolve to any other conversation. Returns None on a
-    miss (missing/expired/resolved) — the iframe's cue to start a fresh
-    conversation. Returns the full RPC row (incl. workspace_id) for server-side
-    use; endpoints curate it via `_public_conversation_view`.
+    RPC, which atomically checks (not expired AND status != 'resolved') and
+    returns the ONE conversation the token is bound to. No caller-supplied
+    conversation id reaches the RPC, so a token for X structurally cannot resolve
+    to any other conversation. Returns None on a miss (missing/expired/resolved) —
+    the iframe's cue to start a fresh conversation. Returns the full RPC row (incl.
+    workspace_id) for server-side use; endpoints curate it via
+    `_public_conversation_view`.
+
+    `slide` controls the activity refresh: the POST /resume path leaves it True so
+    a resume slides the 24h window; the read-only GET transcript path passes False
+    so a nominally-safe/idempotent GET never extends the token's lifetime.
     """
-    headers = _service_role_headers()
-    if headers is None:
-        raise HTTPException(
-            status_code=503,
-            detail="support widget is not configured (SUPABASE_SERVICE_ROLE_KEY unset)",
-        )
+    headers = _require_service_role_headers()
     r = await http.post(
         f"{SUPABASE_URL}/rest/v1/rpc/resume_conversation",
         headers=headers,
-        json={"p_token_hash": hash_conversation_token(raw_token)},
+        json={"p_token_hash": hash_conversation_token(raw_token), "p_slide": slide},
     )
     r.raise_for_status()
     rows = r.json()
@@ -2297,11 +2306,18 @@ async def widget_conversation_transcript(
     the path `conversation_id` MUST match it, so a token for X can never read Y's
     transcript. The same RPC re-checks not-expired AND not-resolved, so an
     expired/resolved token is rejected here too.
+
+    A GET is nominally safe/idempotent, so the binding check is resolved with
+    `slide=False`: reading a transcript (browser prefetch, link-preview crawler,
+    transparent retry) must never extend the token's 24h window. Only POST /resume
+    counts as activity.
     """
     if not x_conversation_token:
         raise HTTPException(status_code=401, detail="missing conversation token")
     async with httpx.AsyncClient(timeout=10.0) as http:
-        conv = await _resume_conversation_by_token(http, x_conversation_token)
+        conv = await _resume_conversation_by_token(
+            http, x_conversation_token, slide=False
+        )
         if conv is None or conv["id"] != conversation_id:
             # Token invalid/expired/resolved, OR bound to a different conversation
             # (a token for X requesting Y). Both collapse to "not authorized for
@@ -2310,8 +2326,7 @@ async def widget_conversation_transcript(
                 status_code=401,
                 detail="invalid conversation token for this conversation",
             )
-        headers = _service_role_headers()
-        assert headers is not None  # _resume_* already 503s if unconfigured
+        headers = _require_service_role_headers()
         r = await http.get(
             f"{SUPABASE_URL}/rest/v1/conversation_messages",
             params={

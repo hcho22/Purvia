@@ -48,17 +48,26 @@ alter table public.conversation_tokens enable row level security;
 --   * the token row exists,
 --   * it is not expired (DB clock, not the app's),
 --   * its conversation is not resolved (resolved invalidates the token, US-067).
--- On success it ALSO slides the 24h expiry — every resume is "activity" — and
--- returns the one conversation the token is bound to. It can never return any
+-- It returns the one conversation the token is bound to. It can never return any
 -- other conversation: there is no caller-supplied conversation_id, so a token
 -- for X structurally cannot read Y. A miss (missing / expired / resolved) returns
 -- zero rows, which the caller reads as "start a fresh conversation".
+--
+-- p_slide controls the activity refresh: when true (the default), a successful
+-- resolution ALSO slides the 24h expiry — every POST /resume is "activity". The
+-- read-only GET transcript path passes p_slide=false so a safe/idempotent GET
+-- (browser prefetch, link-preview crawler, transparent retry) can never extend a
+-- token's lifetime as a side effect of a binding check. The gating/resolution is
+-- identical either way; only the UPDATE is conditional.
 --
 -- SECURITY DEFINER so it reads past `conversations` RLS (the anonymous customer
 -- has no JWT), but it is granted to `service_role` ONLY — revoked from PUBLIC so
 -- anon/authenticated cannot call it. Token resolution is therefore strictly
 -- backend-mediated; combined with 256-bit token entropy the hash is unguessable.
-create or replace function public.resume_conversation(p_token_hash text)
+create or replace function public.resume_conversation(
+  p_token_hash text,
+  p_slide boolean default true
+)
 returns table (
   id uuid,
   workspace_id uuid,
@@ -91,10 +100,14 @@ begin
     return;  -- missing / expired / resolved -> caller starts a fresh conversation
   end if;
 
-  -- Activity refresh: slide the 24h window on the exact token presented.
-  update public.conversation_tokens
-     set expires_at = now() + interval '24 hours'
-   where token_hash = p_token_hash;
+  -- Activity refresh: slide the 24h window on the exact token presented. Skipped
+  -- when p_slide is false (the read-only GET transcript path) so a nominally-safe
+  -- GET never mutates the token's lifetime.
+  if p_slide then
+    update public.conversation_tokens
+       set expires_at = now() + interval '24 hours'
+     where token_hash = p_token_hash;
+  end if;
 
   return query
     select c.id, c.workspace_id, c.status, c.created_at
@@ -108,8 +121,8 @@ $$;
 -- and authenticated DIRECTLY (not via PUBLIC), so those grants must be revoked by
 -- name as well as PUBLIC — otherwise the anonymous customer's role could call the
 -- token-resolution RPC straight against PostgREST.
-revoke execute on function public.resume_conversation(text) from public, anon, authenticated;
-grant execute on function public.resume_conversation(text) to service_role;
+revoke execute on function public.resume_conversation(text, boolean) from public, anon, authenticated;
+grant execute on function public.resume_conversation(text, boolean) to service_role;
 
 -- Invalidate-on-resolve, made literal: when a conversation transitions into
 -- 'resolved', delete its tokens so the hash is gone, not merely gated. This both

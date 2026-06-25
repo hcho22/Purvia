@@ -185,12 +185,19 @@ async def _cleanup(conn: asyncpg.Connection, fx: Fixture) -> None:
     )
 
 
-async def _resume(conn: asyncpg.Connection, raw_token: str) -> list[asyncpg.Record]:
+async def _resume(
+    conn: asyncpg.Connection, raw_token: str, *, slide: bool = True
+) -> list[asyncpg.Record]:
     """Call the authoritative read path the backend invokes (service-role RPC),
-    here as the postgres superuser so the function body is exercised directly."""
+    here as the postgres superuser so the function body is exercised directly.
+
+    `slide` maps to the RPC's `p_slide`: True is the POST /resume activity refresh
+    (default); False is the read-only GET transcript binding check, which must
+    resolve+gate identically but never slide the 24h window."""
     return await conn.fetch(
-        "select id, workspace_id, status from public.resume_conversation($1)",
+        "select id, workspace_id, status from public.resume_conversation($1, $2)",
         hash_conversation_token(raw_token),
+        slide,
     )
 
 
@@ -216,7 +223,7 @@ async def _assert_schema(conn: asyncpg.Connection) -> int:
     # under a customer-facing Postgres role.)
     for role, expected in (("anon", False), ("authenticated", False), ("service_role", True)):
         granted = await conn.fetchval(
-            "select has_function_privilege($1, 'public.resume_conversation(text)', 'EXECUTE')",
+            "select has_function_privilege($1, 'public.resume_conversation(text, boolean)', 'EXECUTE')",
             role,
         )
         assert granted is expected, (
@@ -326,19 +333,37 @@ async def _run_integration() -> int:
             total += 1
             print("  step 2b: anon RPC denied (non-200); service-role RPC → X (backend path)")
 
-            # Activity refresh: resuming slides the 24h window forward.
+            # Activity refresh contract: POST /resume (slide=True) slides the 24h
+            # window forward, but the read-only GET transcript path (slide=False)
+            # must NOT — a nominally-safe/idempotent GET can never extend a token's
+            # lifetime. Both still resolve+gate identically.
             before = await conn.fetchval(
                 "select expires_at from public.conversation_tokens where token_hash=$1",
                 hash_conversation_token(fx.ty),
             )
-            await _resume(conn, fx.ty)
+            # GET transcript binding check: slide=False resolves Y but leaves expiry.
+            ry_noslide = await _resume(conn, fx.ty, slide=False)
+            assert len(ry_noslide) == 1 and str(ry_noslide[0]["id"]) == fx.y, (
+                "slide=False must still resolve+return Y (read-only binding check)"
+            )
+            unchanged = await conn.fetchval(
+                "select expires_at from public.conversation_tokens where token_hash=$1",
+                hash_conversation_token(fx.ty),
+            )
+            assert unchanged == before, (
+                f"GET transcript (slide=False) must NOT slide expiry: {before} -> {unchanged}"
+            )
+            # POST /resume (slide=True): expiry moves strictly forward.
+            await _resume(conn, fx.ty, slide=True)
             after = await conn.fetchval(
                 "select expires_at from public.conversation_tokens where token_hash=$1",
                 hash_conversation_token(fx.ty),
             )
-            assert after >= before, f"resume must not shrink expiry: {before} -> {after}"
+            assert after > before, (
+                f"POST resume (slide=True) must slide expiry forward: {before} -> {after}"
+            )
             total += 1
-            print("  refresh: resume slides the 24h expiry forward (activity refresh)")
+            print("  refresh: POST resume slides the 24h expiry; GET transcript (slide=False) does not")
 
             # Expiry: an expired token is rejected (and is NOT refreshed).
             stale = generate_conversation_token()
