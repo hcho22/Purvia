@@ -192,10 +192,11 @@ async def _insert_bot_membership(
 ) -> bool:
     """Insert the bot's membership row. Return True if inserted, False on conflict.
 
-    A conflict (409 / unique-violation) means another provision won the race for
-    this workspace's single bot slot (the partial unique index) — a normal,
-    expected outcome the caller resolves by returning the winner. Any other
-    non-2xx is a real failure and raises.
+    A unique-violation conflict (SQLSTATE 23505) means another provision won the
+    race for this workspace's single bot slot (the partial unique index) — a
+    normal, expected outcome the caller resolves by returning the winner. Any
+    other non-2xx (including a 409 that is NOT a 23505 — e.g. a 23503 FK violation
+    from a nonexistent workspace) is a real failure and raises.
     """
     r = await http.post(
         f"{base_url}/rest/v1/workspace_membership",
@@ -209,9 +210,11 @@ async def _insert_bot_membership(
     )
     if r.status_code in (200, 201, 204):
         return True
-    # PostgREST surfaces a unique violation as 409 (SQLSTATE 23505). Treat that as
-    # "another provision already created the one bot" rather than a hard error.
-    if r.status_code == 409 or '"23505"' in (r.text or "") or "23505" in (r.text or ""):
+    # Only a 23505 unique violation is a one-bot-per-workspace race loss. PostgREST
+    # also returns 409 for other constraint failures (e.g. a 23503 FK violation
+    # when the workspace does not exist), so gate on the SQLSTATE marker — never the
+    # bare 409 — and let everything else surface as a clear provisioning error.
+    if "23505" in (r.text or ""):
         return False
     raise _provisioning_error("membership insert", r)
 
@@ -227,9 +230,10 @@ async def _delete_bot_user(
     harmless and the next provision uses the row that actually has membership.
     """
     try:
-        await http.delete(
+        r = await http.delete(
             f"{base_url}/auth/v1/admin/users/{bot_id}", headers=headers
         )
+        r.raise_for_status()
     except httpx.HTTPError:
         log.warning("support-bot orphan cleanup failed for user %s (harmless)", bot_id)
 
