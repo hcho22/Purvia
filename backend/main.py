@@ -2452,7 +2452,17 @@ async def _resolve_widget_key(
         },
         headers=headers,
     )
-    r.raise_for_status()
+    try:
+        r.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        # An upstream failure must surface as 502, never collapse into the
+        # not-found/revoked (None → 404) case the empty result encodes.
+        if e.response.status_code >= 500:
+            raise HTTPException(
+                status_code=502,
+                detail="could not resolve widget key (upstream error)",
+            )
+        raise
     rows = r.json()
     return rows[0] if rows else None
 
@@ -2532,7 +2542,17 @@ async def list_widget_keys(
             },
             headers=_supabase_headers(user),
         )
-        r.raise_for_status()
+        try:
+            r.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            status = e.response.status_code
+            if status >= 500:
+                raise HTTPException(
+                    status_code=502,
+                    detail="could not list widget keys (upstream error)",
+                )
+            # A malformed non-UUID workspace_id → PostgREST 400/22P02.
+            raise HTTPException(status_code=400, detail="invalid workspace id")
     return {"widget_keys": r.json()}
 
 
@@ -2555,7 +2575,17 @@ async def revoke_widget_key(
             headers=_supabase_headers(user),
             json={"revoked_at": datetime.now(timezone.utc).isoformat()},
         )
-        r.raise_for_status()
+        try:
+            r.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            status = e.response.status_code
+            if status >= 500:
+                raise HTTPException(
+                    status_code=502,
+                    detail="could not revoke widget key (upstream error)",
+                )
+            # A malformed non-UUID key_id → PostgREST 400/22P02.
+            raise HTTPException(status_code=400, detail="invalid widget key id")
         rows = r.json()
     if not rows:
         # Not the caller's to manage (RLS-hidden), nonexistent, or already revoked —
