@@ -27,9 +27,13 @@ Two layers, in the style of `test_us071_conversation_tokens.py`:
       3. Revoking Kr NEVER terminates the live conversation: after Kr is revoked,
          C still exists and its opaque token Tc still resumes (US-071) — the token
          is independent of the key once minted.
+      4. Revocation is a one-way DB-enforced latch: once revoked_at is set, even a
+         superuser UPDATE cannot clear it to NULL or move it (the BEFORE-UPDATE
+         `widget_keys_revoke_guard` trigger rejects it), so Kr stays revoked.
 
     Failure indicator: a revoked key resolves (mints), a non-admin reads/writes
-    keys, or revoking a key kills an in-flight conversation.
+    keys, revoking a key kills an in-flight conversation, or a revoked key can be
+    un-revoked behind the admin policy.
 
 asyncpg connects as the `postgres` superuser for setup/teardown and DB-authoritative
 gate checks (RLS is not bypassed for the PostgREST calls, which carry minted JWTs /
@@ -502,6 +506,41 @@ async def _run_integration() -> int:
             )
             total += 1
             print("  step 3: revoking Kr leaves C live and Tc still resumes (key-independent)")
+
+            # --- Step 4: revocation is a one-way DB-enforced latch ---
+            # "Never un-revoked" is pinned by the BEFORE-UPDATE trigger, not just
+            # avoided by the endpoint. Even the postgres superuser (asyncpg, which
+            # bypasses RLS) cannot clear Kr's revoked_at back to NULL nor move it to
+            # a different timestamp — the trigger rejects any mutation of an
+            # already-set revoked_at, so the audit record "Kr is revoked" is
+            # terminal. A direct PostgREST PATCH behind the admin policy is rejected
+            # the same way (the trigger fires for every writer).
+            for stmt, label in (
+                (
+                    "update public.widget_keys set revoked_at = null where id = $1::uuid",
+                    "clear to NULL (un-revoke)",
+                ),
+                (
+                    "update public.widget_keys set revoked_at = now() + interval '1 day' "
+                    "where id = $1::uuid",
+                    "move to a different timestamp",
+                ),
+            ):
+                latch_held = False
+                try:
+                    await conn.execute(stmt, fx.k_revoked)
+                except asyncpg.PostgresError:
+                    latch_held = True
+                assert latch_held, (
+                    f"revoke latch must reject {label} on an already-revoked key"
+                )
+            still_revoked = await conn.fetchval(
+                "select revoked_at is not null from public.widget_keys where id=$1::uuid",
+                fx.k_revoked,
+            )
+            assert still_revoked, "Kr must stay revoked after the rejected un-revoke attempts"
+            total += 1
+            print("  step 4: revoke is a one-way DB latch (un-revoke + re-time rejected; Kr stays revoked)")
 
         finally:
             await _cleanup(conn, fx)

@@ -107,3 +107,33 @@ create policy widget_keys_update_admin on public.widget_keys
 -- delete, so a revoked key is retained for audit and to keep already-embedded
 -- loaders resolvable-as-revoked. DELETE is therefore deny-by-default to every
 -- Postgres role (only the backend service role, bypassing RLS, could prune).
+
+-- One-way revoke latch, enforced in the DB (not just avoided by the endpoint),
+-- mirroring the US-067 conversation status machine's "enforced in the DB, not
+-- just the service layer" stance. The admin UPDATE policy above intentionally
+-- lets an admin freely edit label/allowed_origins, but it does NOT restrict
+-- columns — so without this guard a direct PostgREST PATCH could clear
+-- `revoked_at` back to NULL and re-activate a key the audit trail records as
+-- revoked. This BEFORE-UPDATE trigger makes "never un-revoked" a DB-enforced
+-- latch: once `revoked_at` is non-null it is terminal — it can neither be
+-- cleared to NULL nor changed to a different timestamp. NULL -> timestamp (the
+-- revoke action) and NULL -> NULL (label/origin edits on an active key) stay
+-- allowed; only mutating an already-set `revoked_at` is rejected.
+create or replace function public._widget_keys_revoke_guard()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  if old.revoked_at is not null
+     and new.revoked_at is distinct from old.revoked_at then
+    raise exception
+      'illegal widget_keys revoke change: revoked_at is terminal (cannot be cleared or moved once set)';
+  end if;
+  return new;
+end;
+$$;
+
+create or replace trigger widget_keys_revoke_guard
+  before update on public.widget_keys
+  for each row execute function public._widget_keys_revoke_guard();
