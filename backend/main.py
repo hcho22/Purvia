@@ -2441,12 +2441,7 @@ async def _resolve_widget_key(
     Reads under the service role because the anonymous widget holds no Postgres
     role; the admin RLS on widget_keys gates only the authenticated admin path.
     """
-    headers = _service_role_headers()
-    if headers is None:
-        raise HTTPException(
-            status_code=503,
-            detail="support widget is not configured (SUPABASE_SERVICE_ROLE_KEY unset)",
-        )
+    headers = _require_service_role_headers()
     r = await http.get(
         f"{SUPABASE_URL}/rest/v1/widget_keys",
         params={
@@ -2494,10 +2489,16 @@ async def issue_widget_key(
             )
             r.raise_for_status()
         except httpx.HTTPStatusError as e:
-            if e.response.status_code in (401, 403):
+            status = e.response.status_code
+            if status in (401, 403):
                 raise HTTPException(
                     status_code=403,
                     detail="must be an admin of this workspace to issue a widget key",
+                )
+            if status >= 500:
+                raise HTTPException(
+                    status_code=502,
+                    detail="could not issue widget key (upstream error)",
                 )
             # FK violation (unknown workspace) or any other 4xx → bad request.
             raise HTTPException(
