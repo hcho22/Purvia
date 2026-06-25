@@ -295,43 +295,47 @@ async def _run_integration() -> int:
             supabase_url = _env("SUPABASE_URL", "http://127.0.0.1:54321")
             anon_key = _env("SUPABASE_ANON_KEY", LOCAL_ANON_KEY)
             assert supabase_url and anon_key
-            async with httpx.AsyncClient(timeout=10.0) as http:
-                anon_resp = await http.post(
-                    f"{supabase_url}/rest/v1/rpc/resume_conversation",
-                    headers={
-                        "apikey": anon_key,
-                        "Authorization": f"Bearer {anon_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json={"p_token_hash": hash_conversation_token(fx.tx)},
-                )
-                assert anon_resp.status_code != 200, (
-                    f"anon must NOT execute resume_conversation, got {anon_resp.status_code}"
-                )
-                assert fx.x not in anon_resp.text, "anon RPC response leaked X"
-                # Same call as the service role succeeds → proves the backend path
-                # works (the grant is to service_role, the role the backend uses).
-                svc_key = _env("SUPABASE_SERVICE_ROLE_KEY", LOCAL_SERVICE_ROLE_KEY)
-                assert svc_key
-                svc_resp = await http.post(
-                    f"{supabase_url}/rest/v1/rpc/resume_conversation",
-                    headers={
-                        "apikey": svc_key,
-                        "Authorization": f"Bearer {svc_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json={"p_token_hash": hash_conversation_token(fx.tx)},
-                )
-                assert svc_resp.status_code == 200, (
-                    f"service role must execute resume_conversation, got "
-                    f"{svc_resp.status_code}: {svc_resp.text[:200]}"
-                )
-                svc_rows = svc_resp.json()
-                assert len(svc_rows) == 1 and svc_rows[0]["id"] == fx.x, (
-                    f"service-role resume(Tx) must return X, got {svc_rows}"
-                )
-            total += 1
-            print("  step 2b: anon RPC denied (non-200); service-role RPC → X (backend path)")
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as http:
+                    anon_resp = await http.post(
+                        f"{supabase_url}/rest/v1/rpc/resume_conversation",
+                        headers={
+                            "apikey": anon_key,
+                            "Authorization": f"Bearer {anon_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json={"p_token_hash": hash_conversation_token(fx.tx)},
+                    )
+                    assert anon_resp.status_code != 200, (
+                        f"anon must NOT execute resume_conversation, got {anon_resp.status_code}"
+                    )
+                    assert fx.x not in anon_resp.text, "anon RPC response leaked X"
+                    # Same call as the service role succeeds → proves the backend path
+                    # works (the grant is to service_role, the role the backend uses).
+                    svc_key = _env("SUPABASE_SERVICE_ROLE_KEY", LOCAL_SERVICE_ROLE_KEY)
+                    assert svc_key
+                    svc_resp = await http.post(
+                        f"{supabase_url}/rest/v1/rpc/resume_conversation",
+                        headers={
+                            "apikey": svc_key,
+                            "Authorization": f"Bearer {svc_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json={"p_token_hash": hash_conversation_token(fx.tx)},
+                    )
+                    assert svc_resp.status_code == 200, (
+                        f"service role must execute resume_conversation, got "
+                        f"{svc_resp.status_code}: {svc_resp.text[:200]}"
+                    )
+                    svc_rows = svc_resp.json()
+                    assert len(svc_rows) == 1 and svc_rows[0]["id"] == fx.x, (
+                        f"service-role resume(Tx) must return X, got {svc_rows}"
+                    )
+            except httpx.TransportError as e:
+                print(f"  SKIP step 2b: PostgREST/Kong unreachable ({e})")
+            else:
+                total += 1
+                print("  step 2b: anon RPC denied (non-200); service-role RPC → X (backend path)")
 
             # Activity refresh contract: POST /resume (slide=True) slides the 24h
             # window forward, but the read-only GET transcript path (slide=False)
