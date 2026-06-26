@@ -33,7 +33,7 @@ Algorithm (both backends): a sliding-window counter using two adjacent fixed
 windows — the current bucket's exact count plus the previous bucket weighted by
 the fraction of it still inside the trailing window. This smooths the fixed-window
 edge burst into a proper sliding bound while staying bounded to <=2 live buckets
-per key (no per-hit row/key growth). The Postgres weighting lives in the RPC; the
+per (key, window) (no per-hit row/key growth). The Postgres weighting lives in the RPC; the
 Redis adapter mirrors it in the client (its own clock), a documented approximation
 under cross-instance clock skew — acceptable for any distributed limiter.
 
