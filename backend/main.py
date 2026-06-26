@@ -216,8 +216,11 @@ try:
     )
 except ValueError as e:
     raise ValueError("WIDGET_CORS_ORIGIN_CACHE_TTL must be a number") from e
-if WIDGET_CORS_ORIGIN_CACHE_TTL < 0:
-    raise ValueError("WIDGET_CORS_ORIGIN_CACHE_TTL must be >= 0")
+if WIDGET_CORS_ORIGIN_CACHE_TTL <= 0:
+    # 0 makes `_fresh()` always False (elapsed < 0 is never true), so every
+    # /widget/* request would trigger a serialized service-role DB read — exactly
+    # the per-request-DB-hit DoS lever the cache exists to prevent. Require > 0.
+    raise ValueError("WIDGET_CORS_ORIGIN_CACHE_TTL must be > 0")
 
 # US-025: `ChatMode` and the resolved `DEFAULT_CHAT_MODE` moved below — the
 # default now depends on the answerer provider (responses is OpenAI-only), so it
@@ -531,6 +534,10 @@ class _WidgetOriginSnapshot:
         self._origins: frozenset[str] = frozenset()
         self._wildcard = False
         self._loaded_at: float | None = None
+        # Bumped by every invalidate(); a refresh stamps its result fresh only if the
+        # generation is unchanged across its `await`, so an invalidate that fires
+        # during an in-flight load forces a reload instead of caching stale data.
+        self._generation = 0
         # Created lazily inside a running loop — constructing an asyncio.Lock at
         # import time (no loop yet, py3.9) risks binding to the wrong loop.
         self._lock: asyncio.Lock | None = None
@@ -553,7 +560,14 @@ class _WidgetOriginSnapshot:
         return origin in self._origins
 
     def invalidate(self) -> None:
-        """Force the next `ensure_fresh()` to reload (after a key issue/revoke)."""
+        """Force the next `ensure_fresh()` to reload (after a key issue/revoke).
+
+        Race-safe against an in-flight refresh: bumping `_generation` makes a load
+        already suspended in `_load_active_widget_origins()` (which may have read the
+        pre-mutation DB state) discard its result instead of stamping a stale
+        snapshot fresh, so the next `ensure_fresh()` reloads the post-invalidation
+        state rather than serving stale data for the full TTL."""
+        self._generation += 1
         self._loaded_at = None
 
     async def ensure_fresh(self) -> None:
@@ -567,8 +581,14 @@ class _WidgetOriginSnapshot:
         async with self._lock:
             if self._fresh():
                 return
-            self._origins, self._wildcard = await _load_active_widget_origins()
-            self._loaded_at = time.monotonic()
+            # Capture the generation BEFORE the await; if invalidate() fires during
+            # the load (capturing pre-mutation DB state), commit nothing and leave
+            # `_loaded_at` None so the next call reloads the post-invalidation state.
+            gen = self._generation
+            origins, wildcard = await _load_active_widget_origins()
+            if self._generation == gen:
+                self._origins, self._wildcard = origins, wildcard
+                self._loaded_at = time.monotonic()
 
 
 _WIDGET_ORIGIN_SNAPSHOT = _WidgetOriginSnapshot(WIDGET_CORS_ORIGIN_CACHE_TTL)
