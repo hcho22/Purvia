@@ -14,27 +14,39 @@ Two layers, the same shape as the other support-surface tests
   * an INTEGRATION / SECURITY layer (skips cleanly when the FastAPI app cannot be
     imported), encoding the PRD US-076 "Validation Test" end-to-end through the
     real `POST /widget/keys/resolve` endpoint via a FastAPI TestClient with a fake
-    limiter installed on `main._RATE_LIMITER` and the US-072 resolve gate mocked:
+    limiter installed on `main._RATE_LIMITER` and the US-072 resolve gate mocked.
+    The endpoint charges the two windows with a SHORT-CIRCUIT between them
+    (per-session FIRST, before the DB resolve; per-key only AFTER the resolve
+    proves the key exists — so a non-existent key never mints a per-key counter
+    row, and a session-throttle does no resolve at all):
 
-      Setup: key K with a low per-session limit (3) AND a low per-key limit (4);
+      Setup: key K with a low per-session limit (3) AND a low per-key limit (3);
       one session S (one X-Forwarded-For IP), a fresh session S2 (another IP).
-      1. Send 3 messages from S up to the per-session limit -> all 200.
+      1. Send 3 messages from S up to the per-session limit -> all 200 (key at 3).
       2. Send one more from S                               -> 429 (per-session;
-         the per-key window still has headroom, so the block is the SESSION
-         window enforcing on its own).
-      3. Send from a FRESH session S2 past the per-key window -> 429 (per-key;
-         S2's own session window is fresh, so the block is the KEY window
-         enforcing even from a new session).
-      Plus: a 429 throttle never calls the DB resolve (no retrieval/LLM either)
-      and is DISTINCT from a 200 deferral; `_widget_client_ip` prefers the
-      X-Forwarded-For hop and falls back to the socket peer; and with no limiter
-      configured the enforcement is a clean no-op (support-unconfigured surface,
-      which 503s elsewhere).
+         charged FIRST, so it short-circuits BEFORE the resolve and BEFORE any
+         per-key write — the block is the SESSION window on its own and the
+         per-key counter is untouched).
+      3. Send from a FRESH session S2 under the same key   -> 429 (per-key; S2's
+         own session window is fresh (1 <= 3), and only now does its per-key hit
+         push the key to 4 > 3 — the block is the KEY window enforcing even from
+         a new session).
+      Plus: the per-SESSION throttle never calls the DB resolve (short-circuited);
+      the per-KEY throttle DOES call the cheap resolve existence-check but reaches
+      NO retrieval/LLM / `{active: true}`; a throttle is a 429-with-Retry-After,
+      DISTINCT from a 200 deferral; and a limiter whose `hit()` raises FAILS OPEN
+      (the endpoint returns 200, not 500 — the counter store is not a request-path
+      SPOF). The helper layer covers `_widget_client_ip` (prefers the
+      X-Forwarded-For hop, falls back to the socket peer) and the
+      no-limiter-configured clean no-op (support-unconfigured surface, 503s
+      elsewhere).
 
     Failure indicator (the bug a test MUST catch): no retrieval/LLM/DB call is
-    short-circuited on breach (the throttle still does costly work), or only ONE
-    of the two windows enforces (a fresh session bypasses an exhausted per-key
-    window, or an exhausted session is not refused while the key has headroom).
+    short-circuited on breach (the throttle still does costly work), only ONE of
+    the two windows enforces (a fresh session bypasses an exhausted per-key
+    window, or an exhausted session is not refused while the key has headroom), or
+    a transient limiter-backend error 500s the public widget surface instead of
+    failing open.
 
 Run:
     python -m backend.test_us076_widget_rate_limit
@@ -93,6 +105,26 @@ class _FakeLimiter(RateLimiter):
         return self.counts.get(key, 0)
 
 
+class _RaisingLimiter(RateLimiter):
+    """A limiter whose every `hit()` raises — to prove the endpoint FAILS OPEN.
+
+    The Postgres backend raises on any non-200 counter RPC, and those counters
+    share the same Postgres as the resolve/retrieval path; an isolated glitch must
+    NOT 500 the public widget surface (the limiter is not a request-path SPOF), so
+    the enforcement helpers swallow backend errors and ALLOW the request.
+    """
+
+    name = "raising"
+
+    async def hit(
+        self, key: str, *, limit: int, window_seconds: int, cost: int = 1
+    ) -> RateLimitDecision:
+        raise RuntimeError("counter backend down")
+
+    async def count(self, key: str, *, window_seconds: int) -> int:
+        raise RuntimeError("counter backend down")
+
+
 # --------------------------------------------------------------------------- #
 # Unit layer — the two-window decision logic, always runs. No app import.
 # --------------------------------------------------------------------------- #
@@ -105,8 +137,9 @@ def _run_unit() -> int:
         per_key, per_session, window = 4, 3, 60
 
         async def enforce(public_key: str, session: str) -> bool:
-            """Mirror `main._enforce_widget_rate_limits`'s decision: hit BOTH
-            windows, refuse if EITHER is over. Returns True if allowed."""
+            """Mirror the endpoint's two-window decision (the split helpers
+            `_enforce_widget_session_limit` + `_enforce_widget_key_limit`): hit
+            BOTH windows, refuse if EITHER is over. Returns True if allowed."""
             key_d = await limiter.hit(
                 f"key:{public_key}", limit=per_key, window_seconds=window
             )
@@ -205,11 +238,15 @@ def _run_integration() -> int:
     orig_window = main.WIDGET_RATE_LIMIT_WINDOW_SECONDS
 
     # Low test limits so a few requests exercise the breach path (per the PRD
-    # "Key K with a low test window limit"). per_key (4) > per_session (3) so the
-    # two windows trip on different steps, isolating each.
+    # "Key K with a low test window limit"). per_key == per_session == 3: because
+    # the per-session window is charged FIRST and short-circuits, a session-throttle
+    # does NOT pre-increment the per-key counter — so after 3 ok requests from S the
+    # key sits at exactly 3, the 4th from S 429s on session (key untouched), and a
+    # fresh session S2's first request is the one that pushes the key to 4 > 3 and
+    # trips the per-key window while S2's own session window is still fresh.
     main._resolve_widget_key = _fake_resolve  # type: ignore[assignment]
     main._RATE_LIMITER = fake  # type: ignore[assignment]
-    main.WIDGET_RATE_LIMIT_PER_KEY = 4
+    main.WIDGET_RATE_LIMIT_PER_KEY = 3
     main.WIDGET_RATE_LIMIT_PER_SESSION = 3
     main.WIDGET_RATE_LIMIT_WINDOW_SECONDS = 60
 
@@ -228,37 +265,56 @@ def _run_integration() -> int:
             return r.status_code
 
         # Step 1: 3 messages from session S (IP 1.1.1.1), up to the per-session
-        # limit -> all 200 active.
+        # limit -> all 200 active. Each resolves once and charges the key once, so
+        # the per-key counter ends at exactly 3.
         for i in range(3):
             code = resolve("1.1.1.1")
             assert code == 200, f"request {i + 1} from S must succeed, got {code}"
         assert resolve_calls["n"] == 3, "each allowed request resolves the key once"
+        assert fake.counts["key:" + pk] == 3, "3 allowed requests charge the per-key window to 3"
         total += 1
-        print("  step 1: 3 requests from S within the per-session limit -> 200")
+        print("  step 1: 3 requests from S within the per-session limit -> 200 (key at 3)")
 
-        # Step 2: one more from S -> 429 throttled by the PER-SESSION window. The
-        # per-key window still has headroom (key count is 4 == limit, allowed), so
-        # the block is the session window enforcing on its own.
+        # Step 2: one more from S -> 429 throttled by the PER-SESSION window, which
+        # is charged FIRST and short-circuits: the DB resolve is NOT called and the
+        # per-key counter is NOT touched (still 3). So the block is unambiguously
+        # the session window, and a session-throttle mints no per-key counter row.
         resolve_before = resolve_calls["n"]
+        key_count_before = fake.counts["key:" + pk]
         code = resolve("1.1.1.1")
         assert code == 429, f"the 4th request from S must be throttled (per-session), got {code}"
         assert resolve_calls["n"] == resolve_before, (
-            "a throttled request must NOT resolve the key (no DB / retrieval / LLM)"
+            "a per-session throttle must NOT resolve the key (short-circuit; no DB / retrieval / LLM)"
+        )
+        assert fake.counts["key:" + pk] == key_count_before, (
+            "a per-session throttle must NOT charge the per-key window (no counter amplification)"
         )
         total += 1
-        print("  step 2: 1 more from S -> 429 (per-session); the DB resolve was NOT called")
+        print("  step 2: 1 more from S -> 429 (per-session); no DB resolve, per-key counter untouched")
 
         # Step 3: a FRESH session S2 (IP 2.2.2.2) under the SAME key -> 429
-        # throttled by the PER-KEY window even from a new session. S2's own
-        # session window is fresh (count 1 <= 3), so the ONLY reason it is refused
-        # is the exhausted per-key window (the key count is now 5 > 4).
+        # throttled by the PER-KEY window even from a new session. The per-key
+        # window is charged only AFTER the resolve proves the key real, so this
+        # request DOES resolve once (the cheap existence check) — then its per-key
+        # hit pushes the key to 4 > 3 and trips. S2's own session window is fresh
+        # (count 1 <= 3), so the ONLY reason it is refused is the per-key window,
+        # and the 429 means it never reached retrieval/LLM / the `{active}` reply.
         resolve_before = resolve_calls["n"]
-        code = resolve("2.2.2.2")
-        assert code == 429, (
-            f"a fresh session S2 must be throttled by the per-key window, got {code} "
+        r2 = client.post(
+            "/widget/keys/resolve",
+            json={"public_key": pk},
+            headers={"Origin": LISTED, "X-Forwarded-For": "2.2.2.2"},
+        )
+        assert r2.status_code == 429, (
+            f"a fresh session S2 must be throttled by the per-key window, got {r2.status_code} "
             "(failure indicator: only the per-session window enforces)"
         )
-        assert resolve_calls["n"] == resolve_before, "the per-key throttle also skips the DB resolve"
+        assert r2.json().get("detail", "") != "" and "active" not in r2.json(), (
+            "the per-key throttle reaches no retrieval/LLM and returns no {active: true}"
+        )
+        assert resolve_calls["n"] == resolve_before + 1, (
+            "the per-key path DOES run the cheap resolve existence-check (exactly once) before charging"
+        )
         assert fake.counts["ip:2.2.2.2"] <= main.WIDGET_RATE_LIMIT_PER_SESSION, (
             "S2's session window is NOT exhausted -> the block is the per-key window alone"
         )
@@ -278,6 +334,23 @@ def _run_integration() -> int:
         assert "rate limit" in r.json().get("detail", "").lower()
         total += 1
         print("  extra: throttle is a 429 with Retry-After (distinct from the US-077 200 deferral)")
+
+        # Fail-open: a limiter whose every hit() raises (a transient counter-backend
+        # blip) must NOT 500 the public widget surface. The enforcement helpers
+        # swallow the backend error and ALLOW the request, so a fresh session under
+        # the raising limiter resolves to 200 instead of bubbling a 500.
+        main._RATE_LIMITER = _RaisingLimiter()  # type: ignore[assignment]
+        r = client.post(
+            "/widget/keys/resolve",
+            json={"public_key": pk},
+            headers={"Origin": LISTED, "X-Forwarded-For": "3.3.3.3"},
+        )
+        assert r.status_code == 200, (
+            f"a raising limiter must FAIL OPEN (200), not 500 the widget surface, got {r.status_code}"
+        )
+        assert r.json().get("active") is True, "the failed-open request still resolves active"
+        total += 1
+        print("  extra: a raising limiter FAILS OPEN -> 200, never a 500 (counter store is not a SPOF)")
 
         print(
             f"OK: US-076 integration passed — {total} endpoint assertions; both the "
@@ -331,19 +404,40 @@ def _run_helpers() -> int:
     total += 1
     print("  helper: _widget_client_ip falls back to the socket peer, then 'unknown'")
 
-    # No-op when the limiter is unconfigured (support not enabled): enforcement
-    # returns cleanly without raising and without needing a real limiter — the
-    # widget endpoints 503 elsewhere in that case, so there is nothing to limit.
+    # No-op when the limiter is unconfigured (support not enabled): BOTH split
+    # helpers return cleanly without raising and without needing a real limiter —
+    # the widget endpoints 503 elsewhere in that case, so there is nothing to
+    # limit.
     orig = main._RATE_LIMITER
     main._RATE_LIMITER = None  # type: ignore[assignment]
     try:
         asyncio.run(
-            main._enforce_widget_rate_limits("wk_pk_whatever", _FakeReq({}, client_host="1.2.3.4"))
+            main._enforce_widget_session_limit(_FakeReq({}, client_host="1.2.3.4"))
         )
+        asyncio.run(main._enforce_widget_key_limit("wk_pk_whatever"))
     finally:
         main._RATE_LIMITER = orig  # type: ignore[assignment]
     total += 1
-    print("  helper: _enforce_widget_rate_limits is a clean no-op when the limiter is unconfigured")
+    print(
+        "  helper: _enforce_widget_session_limit / _enforce_widget_key_limit are "
+        "clean no-ops when the limiter is unconfigured"
+    )
+
+    # Fail-open: with a limiter whose hit() raises, BOTH split helpers swallow the
+    # backend error and return (no raise) rather than letting a transient counter
+    # glitch surface as a 500 in the request path.
+    main._RATE_LIMITER = _RaisingLimiter()  # type: ignore[assignment]
+    try:
+        asyncio.run(
+            main._enforce_widget_session_limit(_FakeReq({}, client_host="1.2.3.4"))
+        )
+        asyncio.run(main._enforce_widget_key_limit("wk_pk_whatever"))
+    finally:
+        main._RATE_LIMITER = orig  # type: ignore[assignment]
+    total += 1
+    print(
+        "  helper: both helpers FAIL OPEN (no raise) when the limiter backend errors"
+    )
 
     print(f"OK: US-076 helpers passed — {total} assertions")
     return total

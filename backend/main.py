@@ -2842,26 +2842,21 @@ def _widget_client_ip(request: Request) -> str:
     return client.host if client else "unknown"
 
 
-async def _enforce_widget_rate_limits(
-    public_key: str, request: Request, *, cost: int = 1
+async def _charge_widget_window(
+    bucket_key: str, *, limit: int, scope: str, cost: int
 ) -> None:
-    """US-076: draw down the per-key AND per-session/IP windows; 429 on breach.
+    """Charge ONE sliding window via the US-075 seam; raise 429 on breach.
 
-    The public widget surface drives PAID retrieval + LLM calls, so it is a cost-
-    amplification DoS target. Every customer message / key-resolution request is
-    charged against TWO sliding windows through the US-075 `RateLimiter` seam:
-
-      * `key:<public_key>`  — the PER-KEY window: caps aggregate abuse of one key
-        across EVERY session/IP (so a fresh session under a hammered key is still
-        refused).
-      * `ip:<session>`      — the PER-SESSION/IP window: caps one caller hammering
-        across keys.
+    The shared core of the two public-widget windows (`_enforce_widget_session_limit`
+    / `_enforce_widget_key_limit`). The split into single-window helpers (vs one
+    `asyncio.gather` over both) lets the endpoint short-circuit between them: a
+    session-throttled request 429s WITHOUT charging the per-key window, and the
+    per-key window is charged only for a key that has already resolved (exists) —
+    so a rotating-fake-key attacker can never mint a permanent per-key counter row.
 
     Both are charged on every call (a blocked hit STILL counts — it keeps a
     hammering caller saturated while a backed-off caller recovers as the window
-    slides), evaluated together so the two counters stay accurate regardless of
-    which trips first. On breach we raise a 429 having done NO costly work (caller
-    invokes this BEFORE the DB resolve / retrieval / LLM). This refusal is
+    slides). On breach we raise a 429 having done NO costly work. This refusal is
     DISTINCT from the US-077 circuit breaker, which returns a 200 generic deferral
     — a throttle says "slow down" (retry the same request), a tripped breaker says
     "a human will follow up" (no retry needed).
@@ -2876,38 +2871,41 @@ async def _enforce_widget_rate_limits(
     in that case (a built limiter IS the enforcement; its absence == inert
     surface). App-level limiting is the portable default; an edge/WAF limiter is
     the recommended production complement (P5).
+
+    FAILS OPEN on any limiter-backend error: `rate_limit_counters` live in the
+    SAME Postgres as the resolve/retrieval path, so an isolated counter-RPC glitch
+    must NOT 500 the entire public widget surface — availability wins and the
+    edge/WAF limiter (P5) is the hard bound. Only backend/limiter errors fail open;
+    a genuine over-limit decision still raises the 429 (the HTTPException below is
+    raised outside the try, so it is never swallowed).
     """
     limiter = _RATE_LIMITER
     if limiter is None:
         return
-    session = _widget_client_ip(request)
-    key_decision, session_decision = await asyncio.gather(
-        limiter.hit(
-            f"key:{public_key}",
-            limit=WIDGET_RATE_LIMIT_PER_KEY,
+    try:
+        decision = await limiter.hit(
+            bucket_key,
+            limit=limit,
             window_seconds=WIDGET_RATE_LIMIT_WINDOW_SECONDS,
             cost=cost,
-        ),
-        limiter.hit(
-            f"ip:{session}",
-            limit=WIDGET_RATE_LIMIT_PER_SESSION,
-            window_seconds=WIDGET_RATE_LIMIT_WINDOW_SECONDS,
-            cost=cost,
-        ),
-    )
-    if key_decision.allowed and session_decision.allowed:
+        )
+    except Exception as e:  # noqa: BLE001 - fail OPEN on any backend error
+        # Concise warning, no per-request traceback flood: the counter store is
+        # not a hard dependency / SPOF in front of the widget surface.
+        log.warning(
+            "widget_rate_limit.limiter_error scope=%s — failing open (%s)",
+            scope,
+            e.__class__.__name__,
+        )
         return
-    scope = "key" if not key_decision.allowed else "session"
+    if decision.allowed:
+        return
     log.info(
-        "widget_rate_limit.throttled scope=%s key=%s window=%ds "
-        "key_count=%d/%d session_count=%d/%d",
+        "widget_rate_limit.throttled scope=%s window=%ds count=%d/%d",
         scope,
-        public_key,
         WIDGET_RATE_LIMIT_WINDOW_SECONDS,
-        key_decision.count,
-        key_decision.limit,
-        session_decision.count,
-        session_decision.limit,
+        decision.count,
+        decision.limit,
     )
     # 429 with Retry-After so a well-behaved client backs off. The body is generic
     # (does not echo which window tripped) — the scope is logged for ops, not
@@ -2916,6 +2914,49 @@ async def _enforce_widget_rate_limits(
         status_code=429,
         detail="rate limit exceeded — too many requests, please retry shortly",
         headers={"Retry-After": str(WIDGET_RATE_LIMIT_WINDOW_SECONDS)},
+    )
+
+
+async def _enforce_widget_session_limit(request: Request, *, cost: int = 1) -> None:
+    """US-076: charge the PER-SESSION/IP window (`ip:<session>`); 429 on breach.
+
+    Caps one caller hammering across keys. This is invoked FIRST in
+    `widget_resolve_key` — BEFORE the DB resolve and BEFORE any per-key write — so
+    a session-throttled request 429s having done no resolve and created no per-key
+    counter row. Session identity is best-effort and SPOOFABLE (see
+    `_widget_client_ip`): defense-in-depth, with the per-key window + the edge/WAF
+    limiter (P5) as the harder bounds. The residual unbounded axis is
+    `ip:<spoofed-XFF>` session rows — exactly the off-browser traffic P5 handles;
+    a global TTL/sweeper on `rate_limit_counters` is intentionally left to the
+    US-075 seam (out of US-076 scope).
+    """
+    session = _widget_client_ip(request)
+    await _charge_widget_window(
+        f"ip:{session}",
+        limit=WIDGET_RATE_LIMIT_PER_SESSION,
+        scope="session",
+        cost=cost,
+    )
+
+
+async def _enforce_widget_key_limit(public_key: str, *, cost: int = 1) -> None:
+    """US-076: charge the PER-KEY window (`key:<public_key>`); 429 on breach.
+
+    Caps aggregate abuse of one key across EVERY session/IP (so a fresh session
+    under a hammered key is still refused). Charged ONLY for a key that has already
+    RESOLVED (a real, active key), so a non-existent/unknown key never mints a
+    per-key counter row — only the small, controlled set of keys that actually
+    exist ever get a bucket.
+
+    The cheap resolve open and US-078's expensive message turn share this one
+    per-key budget; whether to split them into separate counters is a US-078
+    decision (the message turn does not exist yet).
+    """
+    await _charge_widget_window(
+        f"key:{public_key}",
+        limit=WIDGET_RATE_LIMIT_PER_KEY,
+        scope="key",
+        cost=cost,
     )
 
 
@@ -3100,19 +3141,29 @@ async def widget_resolve_key(
     rate-limiting US-076's — both layer on top of this gate. These routes do not
     widen the authenticated /api/* CORS posture.
 
-    US-076 rate limit: the per-key + per-session/IP windows are drawn down AFTER
-    the cheap shape guard (a malformed key is a free 404, not worth a counter
-    write) but BEFORE the DB resolve, so a breach refuses with a 429 having touched
-    no DB / retrieval / LLM. US-078's first-message flow re-runs this same check
-    (with a higher `cost`) on the conversation-create path.
+    US-076 rate limit (two single-window helpers, charged with a short-circuit
+    between them so a non-existent key never mints a per-key counter row): the
+    PER-SESSION window is charged FIRST, after the cheap shape guard (a malformed
+    key is a free 404, not worth a counter write) but BEFORE the DB resolve — a
+    session-throttled request 429s having touched no DB / retrieval / LLM and
+    written no per-key row. The PER-KEY window is charged only AFTER the resolve
+    proves the key exists, so a rotating-fake-key attacker can never amplify the
+    counter table through this path. US-078's first-message flow re-runs the same
+    helpers (with a higher `cost`) on the conversation-create path.
     """
     if not is_widget_public_key(req.public_key):
         raise HTTPException(status_code=404, detail="unknown or inactive widget key")
-    await _enforce_widget_rate_limits(req.public_key, request)
+    # Per-SESSION window FIRST: a session-throttle 429s here, before the DB resolve
+    # and before any per-key counter write (storage-amplification guard).
+    await _enforce_widget_session_limit(request)
     async with httpx.AsyncClient(timeout=10.0) as http:
         resolved = await _resolve_widget_key(http, req.public_key)
     if resolved is None:
+        # A fake/unknown key stops here and never reaches the per-key charge below,
+        # so it can never create a permanent `rate_limit_counters` row.
         raise HTTPException(status_code=404, detail="unknown or inactive widget key")
+    # Per-KEY window charged ONLY now that the key has resolved (it is real/active).
+    await _enforce_widget_key_limit(req.public_key)
     # US-073: per-key registered-origin allowlist, fail-closed. Same opaque 404 as
     # revoked/unknown so the response never reveals that the key exists or which
     # origins it permits.
