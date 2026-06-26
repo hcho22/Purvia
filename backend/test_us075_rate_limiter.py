@@ -207,9 +207,9 @@ def test_redis_factory_requires_url_and_package() -> None:
 
 
 def test_decision_shape_and_abc() -> None:
-    d = RateLimitDecision(allowed=False, count=7, limit=5, window_seconds=60.0)
+    d = RateLimitDecision(allowed=False, count=7, limit=5, window_seconds=60)
     assert d.allowed is False and d.count == 7 and d.limit == 5
-    assert d.window_seconds == 60.0
+    assert d.window_seconds == 60
     # The ABC cannot be instantiated (abstract methods unimplemented).
     _expect_raises(lambda: RateLimiter(), TypeError, "instantiate ABC")  # type: ignore[abstract]
     # Both concrete backends expose the SAME protocol — this is what makes the
