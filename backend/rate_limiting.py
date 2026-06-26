@@ -232,6 +232,8 @@ class RedisRateLimiter(RateLimiter):
     async def hit(
         self, key: str, *, limit: int, window_seconds: int, cost: int = 1
     ) -> RateLimitDecision:
+        if cost < 0:
+            raise ValueError("cost must be >= 0")
         cur_key, prev_key, prev_weight = self._buckets(key, window_seconds)
         ttl_ms = int(window_seconds * 2 * 1000)
         cur, prev = await self._redis.eval(  # type: ignore[attr-defined]
