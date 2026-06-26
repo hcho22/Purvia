@@ -70,7 +70,7 @@ class RateLimitDecision(BaseModel):
     allowed: bool
     count: int
     limit: int
-    window_seconds: float
+    window_seconds: int
 
 
 class RateLimiter(ABC):
@@ -87,7 +87,7 @@ class RateLimiter(ABC):
 
     @abstractmethod
     async def hit(
-        self, key: str, *, limit: int, window_seconds: float, cost: int = 1
+        self, key: str, *, limit: int, window_seconds: int, cost: int = 1
     ) -> RateLimitDecision:
         """Record `cost` against `key`'s window; return the post-increment decision.
 
@@ -98,7 +98,7 @@ class RateLimiter(ABC):
         ...
 
     @abstractmethod
-    async def count(self, key: str, *, window_seconds: float) -> int:
+    async def count(self, key: str, *, window_seconds: int) -> int:
         """Read `key`'s current sliding-window estimate WITHOUT recording a hit."""
         ...
 
@@ -151,7 +151,7 @@ class PostgresRateLimiter(RateLimiter):
         )
 
     async def hit(
-        self, key: str, *, limit: int, window_seconds: float, cost: int = 1
+        self, key: str, *, limit: int, window_seconds: int, cost: int = 1
     ) -> RateLimitDecision:
         r = await self._http.post(
             f"{self._base_url}/rest/v1/rpc/rate_limit_hit",
@@ -159,7 +159,7 @@ class PostgresRateLimiter(RateLimiter):
             json={
                 "p_key": key,
                 "p_limit": int(limit),
-                "p_window_seconds": int(window_seconds),
+                "p_window_seconds": window_seconds,
                 "p_cost": int(cost),
             },
         )
@@ -172,14 +172,14 @@ class PostgresRateLimiter(RateLimiter):
             allowed=bool(row["allowed"]),
             count=int(row["current_count"]),
             limit=int(row["limit_value"]),
-            window_seconds=float(row["window_seconds"]),
+            window_seconds=int(row["window_seconds"]),
         )
 
-    async def count(self, key: str, *, window_seconds: float) -> int:
+    async def count(self, key: str, *, window_seconds: int) -> int:
         r = await self._http.post(
             f"{self._base_url}/rest/v1/rpc/rate_limit_count",
             headers=self._headers,
-            json={"p_key": key, "p_window_seconds": int(window_seconds)},
+            json={"p_key": key, "p_window_seconds": window_seconds},
         )
         if r.status_code != 200:
             raise self._error("rate_limit_count", r)
@@ -220,17 +220,17 @@ class RedisRateLimiter(RateLimiter):
         self._redis = client
         self._prefix = key_prefix
 
-    def _buckets(self, key: str, window_seconds: float) -> tuple[str, str, float]:
+    def _buckets(self, key: str, window_seconds: int) -> tuple[str, str, float]:
         """Return (current_bucket_key, previous_bucket_key, prev_weight)."""
         now = time.time()
         idx = math.floor(now / window_seconds)
         cur_start = idx * window_seconds
         prev_weight = (window_seconds - (now - cur_start)) / window_seconds
-        base = f"{self._prefix}:{key}:{int(window_seconds)}"
+        base = f"{self._prefix}:{key}:{window_seconds}"
         return f"{base}:{idx}", f"{base}:{idx - 1}", prev_weight
 
     async def hit(
-        self, key: str, *, limit: int, window_seconds: float, cost: int = 1
+        self, key: str, *, limit: int, window_seconds: int, cost: int = 1
     ) -> RateLimitDecision:
         cur_key, prev_key, prev_weight = self._buckets(key, window_seconds)
         ttl_ms = int(window_seconds * 2 * 1000)
@@ -245,7 +245,7 @@ class RedisRateLimiter(RateLimiter):
             window_seconds=window_seconds,
         )
 
-    async def count(self, key: str, *, window_seconds: float) -> int:
+    async def count(self, key: str, *, window_seconds: int) -> int:
         cur_key, prev_key, prev_weight = self._buckets(key, window_seconds)
         cur = await self._redis.get(cur_key)  # type: ignore[attr-defined]
         prev = await self._redis.get(prev_key)  # type: ignore[attr-defined]
