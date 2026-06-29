@@ -3381,20 +3381,32 @@ async def _load_conversation_bot_user_id(
     read is only for a RESUMED conversation. Keyed by the conversation id the opaque
     token already resolved to — never a caller-supplied id — and read under the
     service role because the anonymous customer holds no Postgres role. Returns None
-    for a botless workspace (provisioning unavailable), which `_run_widget_bot_turn`
-    treats as escalate.
+    for a botless workspace (provisioning unavailable) AND, fail-closed, on a
+    transient service-role read error — both of which `_run_widget_bot_turn` treats
+    as escalate, so a recoverable read glitch degrades to the generic deferral
+    rather than 500-ing the customer surface (mirroring the first-message path's
+    `_ensure_workspace_bot`, which never raises). Never raises on a read failure.
     """
     headers = _require_service_role_headers()
-    r = await http.get(
-        f"{SUPABASE_URL}/rest/v1/conversations",
-        params={
-            "id": f"eq.{conversation_id}",
-            "select": "bot_user_id",
-            "limit": "1",
-        },
-        headers=headers,
-    )
-    r.raise_for_status()
+    try:
+        r = await http.get(
+            f"{SUPABASE_URL}/rest/v1/conversations",
+            params={
+                "id": f"eq.{conversation_id}",
+                "select": "bot_user_id",
+                "limit": "1",
+            },
+            headers=headers,
+        )
+        r.raise_for_status()
+    except httpx.HTTPError:
+        log.warning(
+            "widget_turn.bot_load_failed conversation=%s — escalating "
+            "(treating as botless on a transient read error)",
+            conversation_id,
+            exc_info=True,
+        )
+        return None
     rows = r.json()
     if not rows:
         return None
@@ -3667,6 +3679,14 @@ async def widget_conversation_message(
         if await request.is_disconnected():
             return
         yield _sse("conversation", public_conv)
+
+        # Re-check disconnect before the PAID retrieval+LLM turn: a client that
+        # dropped right after the conversation event should not incur the turn at
+        # all. The per-workspace breaker bounds aggregate cost; this trims the
+        # obvious per-request waste, aligning with the feature's cost-control
+        # purpose. No bot reply is produced or persisted on this early return.
+        if await request.is_disconnected():
+            return
 
         # Run the turn under a fresh client — the outer one closed above. The turn
         # is fail-closed: it never raises, returning the generic deferral on any
