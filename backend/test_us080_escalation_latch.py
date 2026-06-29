@@ -338,6 +338,10 @@ def _run_integration(main) -> int:
         "escalate_calls": 0,
         "next_result": _escalated(),
         "conversation": _fresh_active(),
+        # The status `_load_conversation_status` reports AFTER the turn ran — the
+        # US-080 in-flight race re-read. 'active' unless a scenario simulates a
+        # concurrent escalation latching while the bot was mid-pipeline.
+        "midflight_status": "active",
     }
 
     async def fake_resolve(http, public_key):
@@ -363,6 +367,11 @@ def _run_integration(main) -> int:
     async def fake_load_bot(http, conversation_id):
         return BOT
 
+    async def fake_load_status(http, conversation_id):
+        # The US-080 in-flight re-read: report whatever the scenario set, simulating a
+        # status the conversation reached AFTER the captured entry snapshot.
+        return state["midflight_status"]
+
     async def fake_escalate(http, conversation_id):
         # Simulate the US-067 trigger: stamp escalated_at ONCE, preserve afterward.
         state["escalate_calls"] += 1
@@ -387,6 +396,7 @@ def _run_integration(main) -> int:
         "_persist_conversation_message": main._persist_conversation_message,
         "_resume_conversation_by_token": main._resume_conversation_by_token,
         "_load_conversation_bot_user_id": main._load_conversation_bot_user_id,
+        "_load_conversation_status": main._load_conversation_status,
         "_escalate_conversation": main._escalate_conversation,
         "_load_active_widget_origins": main._load_active_widget_origins,
         "_RATE_LIMITER": main._RATE_LIMITER,
@@ -400,6 +410,7 @@ def _run_integration(main) -> int:
     main._persist_conversation_message = fake_persist    # type: ignore[assignment]
     main._resume_conversation_by_token = fake_resume     # type: ignore[assignment]
     main._load_conversation_bot_user_id = fake_load_bot  # type: ignore[assignment]
+    main._load_conversation_status = fake_load_status     # type: ignore[assignment]
     main._escalate_conversation = fake_escalate          # type: ignore[assignment]
     main._load_active_widget_origins = fake_load_origins  # type: ignore[assignment]
     support_bot.run_bot_deflection_turn = fake_run_pipeline  # type: ignore[assignment]
@@ -509,6 +520,54 @@ def _run_integration(main) -> int:
         assert ("conv-1", "user", "ok I'll wait") in state["persisted"], "the message still queues"
         total += 1
         print("  explicit: a message after the button routed to the queue with no bot answer")
+
+        # ===== IN-FLIGHT race (Risk #3): a concurrent escalation latching WHILE the
+        #       bot is mid-pipeline suppresses the in-flight CONFIDENT answer. The
+        #       entry-snapshot short-circuit cannot catch this (the conversation was
+        #       `active` at entry); the post-turn status re-read closes the window. =====
+        state["conversation"] = _fresh_active()
+        state["persisted"].clear()
+        state["turn_calls"], state["escalate_calls"] = 0, 0
+        state["next_result"] = _answered()       # the bot DID draft a confident answer…
+        state["midflight_status"] = "escalated"  # …but a human took over while it thought.
+
+        r = _first_message("how do I reset my password?")
+        assert r.status_code == 200, f"the turn must still close cleanly, got {r.status_code} {r.text}"
+        events = _events(r.text)
+        assert events == ["conversation", "done"], (
+            "FAILURE INDICATOR: an in-flight confident answer must be SUPPRESSED when a "
+            f"concurrent escalation latched mid-pipeline (events were {events})"
+        )
+        assert "event: delta" not in r.text, "the suppressed answer streams NO delta events"
+        assert ANSWER not in r.text, (
+            "FAILURE INDICATOR: the confident answer must not reach the customer after handoff"
+        )
+        assert state["turn_calls"] == 1, "the turn DID run (the race is post-turn, pre-delivery)"
+        assert not any(role == "assistant" for _, role, _ in state["persisted"]), (
+            "FAILURE INDICATOR: the suppressed bot answer must NOT be persisted as an assistant row"
+        )
+        assert ("conv-1", "user", "how do I reset my password?") in state["persisted"], (
+            "the customer message still queued for the human"
+        )
+        total += 1
+        print("  in-flight: a confident answer is suppressed (no assistant row, no deltas) when escalation latches mid-pipeline")
+
+        # Positive control: the SAME confident answer streams normally when there is NO
+        # concurrent escalation — the guard must not over-suppress a valid answer.
+        state["conversation"] = _fresh_active()
+        state["persisted"].clear()
+        state["turn_calls"] = 0
+        state["next_result"] = _answered()
+        state["midflight_status"] = "active"
+        r = _first_message("how do I reset my password?")
+        assert _collect_deltas(r.text) == ANSWER, (
+            "a confident answer with NO mid-flight escalation must stream normally (no over-suppression)"
+        )
+        assert ("conv-1", "assistant", ANSWER) in state["persisted"], (
+            "the answer is persisted when the conversation is not escalated"
+        )
+        total += 1
+        print("  in-flight: the same answer streams normally with no concurrent escalation (no over-suppression)")
 
         print(
             f"OK: US-080 integration passed — {total} scenarios; the first escalate "

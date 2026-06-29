@@ -43,6 +43,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from chunking import chunk_text, get_chunk_config
 from circuit_breaker import (
+    GENERIC_BREAKER_DEFERRAL,
     BreakerDecision,
     check_workspace_breaker,
     run_breaker_guarded_turn,
@@ -3413,6 +3414,55 @@ async def _load_conversation_bot_user_id(
     return rows[0].get("bot_user_id")
 
 
+async def _load_conversation_status(
+    http: httpx.AsyncClient, conversation_id: str
+) -> str | None:
+    """Service-role read of a conversation's CURRENT `status` (US-080 in-flight race).
+
+    `widget_conversation_message` snapshots `status` at request entry to short-circuit
+    a conversation that was ALREADY escalated (the sequential later-message case). But a
+    concurrent escalation — the explicit "talk to a human" button
+    (`POST /widget/conversations/escalate`) or another message — can latch
+    `status='escalated'` while THIS turn is mid-pipeline (retrieval + draft +
+    faithfulness judge is seconds of LLM work). This re-reads the live status so the
+    generator can suppress an in-flight CONFIDENT answer rather than send it behind a
+    now-engaged human's back (PRD Risk #3 / the US-080 headline guarantee).
+
+    Keyed by the conversation id the caller already resolved — never a caller-supplied
+    id — and read under the service role (the anonymous customer holds no Postgres
+    role). FAIL-OPEN, like `_load_conversation_bot_user_id`: returns None on a missing
+    row, a transient read error, OR an unconfigured service role, and the caller treats
+    None as "proceed and stream" so a recoverable read glitch never silences a valid
+    faithful answer (the next turn is latched anyway). Never raises.
+    """
+    if not SUPABASE_SERVICE_ROLE_KEY:
+        return None
+    headers = _require_service_role_headers()
+    try:
+        r = await http.get(
+            f"{SUPABASE_URL}/rest/v1/conversations",
+            params={
+                "id": f"eq.{conversation_id}",
+                "select": "status",
+                "limit": "1",
+            },
+            headers=headers,
+        )
+        r.raise_for_status()
+    except httpx.HTTPError:
+        log.warning(
+            "widget_turn.status_load_failed conversation=%s — proceeding "
+            "(fail-open on a transient read error)",
+            conversation_id,
+            exc_info=True,
+        )
+        return None
+    rows = r.json()
+    if not rows:
+        return None
+    return rows[0].get("status")
+
+
 async def _escalate_conversation(
     http: httpx.AsyncClient, conversation_id: str
 ) -> dict | None:
@@ -3829,6 +3879,31 @@ async def widget_conversation_message(
                 bot_user_id=bot_user_id,
                 message=message,
             )
+            # US-080 in-flight latch guard (closes the concurrency window the
+            # entry-snapshot short-circuit cannot). The pipeline above took seconds of
+            # LLM work; a concurrent escalation — the explicit "talk to a human" button
+            # or another message — may have latched `status='escalated'` meanwhile. A
+            # CONFIDENT answer must NOT be sent into a thread a human now owns (Risk
+            # #3), so re-read the live status and suppress it (no assistant row, no
+            # deltas — just `done`; the user message already queued for the human).
+            # Deferrals are EXEMPT: they themselves promise a human and may BE this
+            # turn's own latch (the model-mediated escalate / breaker trip), which AC1
+            # requires us to stream — so only a confident answer is guarded. Fail-open:
+            # a None status (read glitch / unconfigured) streams normally, since the
+            # next turn is latched anyway and silencing a faithful answer on a blip
+            # would be worse.
+            if reply not in (GENERIC_DEFERRAL, GENERIC_BREAKER_DEFERRAL):
+                if (
+                    await _load_conversation_status(turn_http, conversation_id)
+                    == "escalated"
+                ):
+                    log.info(
+                        "widget_turn.escalated_midflight conversation=%s — suppressing "
+                        "in-flight bot answer (a human took over mid-pipeline)",
+                        conversation_id,
+                    )
+                    yield _sse("done", {})
+                    return
             # Persist the bot reply (role='assistant', `tool_calls` null — the
             # deterministic pipeline is control flow, not the agentic tool loop)
             # BEFORE streaming, so the transcript reflects it even if the client
