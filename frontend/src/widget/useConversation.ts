@@ -159,6 +159,7 @@ export function useConversation(publicKey: string): ConversationState {
           signal: controller.signal,
           onEvent: (evt) => {
             if (evt.kind === 'message' || evt.kind === 'close') {
+              if (sendingRef.current) return
               void refreshTranscript()
             }
           },

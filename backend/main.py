@@ -2951,13 +2951,27 @@ async def widget_conversation_events(
                         now = time.monotonic()
                         if now - last_revalidate >= WIDGET_SSE_REVALIDATE_SECONDS:
                             last_revalidate = now
-                            still = await _resume_conversation_by_token(
-                                rv_http, token, slide=False
-                            )
-                            if still is None or still.get("id") != conversation_id:
-                                # Token invalidated (resolved/expired) — close the SSE.
-                                yield _sse("close", {"reason": "resolved"})
-                                return
+                            try:
+                                still = await _resume_conversation_by_token(
+                                    rv_http, token, slide=False
+                                )
+                            except Exception as e:  # noqa: BLE001 - fail SOFT
+                                # A transient Supabase/network blip during the periodic
+                                # re-validation must NOT kill a live SSE: log concisely
+                                # and keep the stream open (skip this cycle). Only a
+                                # clean None / id mismatch — a genuinely resolved or
+                                # expired token — closes the stream below.
+                                log.warning(
+                                    "widget_sse.revalidate_error conv=%s — keeping "
+                                    "stream open (%s)",
+                                    conversation_id,
+                                    e.__class__.__name__,
+                                )
+                            else:
+                                if still is None or still.get("id") != conversation_id:
+                                    # Token invalidated (resolved/expired) — close.
+                                    yield _sse("close", {"reason": "resolved"})
+                                    return
             finally:
                 if get_task is not None:
                     get_task.cancel()
