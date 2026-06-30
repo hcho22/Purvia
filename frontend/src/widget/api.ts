@@ -106,25 +106,33 @@ export async function* streamWidgetMessage(opts: {
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-    let sep: number
-    while ((sep = buffer.indexOf('\n\n')) !== -1) {
-      const raw = buffer.slice(0, sep)
-      buffer = buffer.slice(sep + 2)
-      const evt = parseSSE(raw)
-      if (!evt) continue
-      if (evt.event === 'conversation') {
-        yield { kind: 'conversation', conversation: evt.data as unknown as PublicConversation }
-      } else if (evt.event === 'delta' && typeof evt.data.text === 'string') {
-        yield { kind: 'delta', text: evt.data.text }
-      } else if (evt.event === 'done') {
-        yield { kind: 'done' }
-      } else if (evt.event === 'error') {
-        yield { kind: 'error', message: String(evt.data.message ?? 'Unknown error') }
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      let sep: number
+      while ((sep = buffer.indexOf('\n\n')) !== -1) {
+        const raw = buffer.slice(0, sep)
+        buffer = buffer.slice(sep + 2)
+        const evt = parseSSE(raw)
+        if (!evt) continue
+        if (evt.event === 'conversation') {
+          yield { kind: 'conversation', conversation: evt.data as unknown as PublicConversation }
+        } else if (evt.event === 'delta' && typeof evt.data.text === 'string') {
+          yield { kind: 'delta', text: evt.data.text }
+        } else if (evt.event === 'done') {
+          yield { kind: 'done' }
+        } else if (evt.event === 'error') {
+          yield { kind: 'error', message: String(evt.data.message ?? 'Unknown error') }
+        }
       }
+    }
+  } finally {
+    try {
+      await reader.cancel()
+    } catch {
+      /* already closed/errored - nothing to release */
     }
   }
 }

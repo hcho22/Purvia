@@ -12,8 +12,11 @@
 // one page never collide. The conversation token itself is the US-071 opaque
 // per-conversation token (returned once in the US-078 `X-Conversation-Token`
 // response header); US-084 wires the send/resume flow that populates it. The shell
-// persists a stable session id now so the per-session rate-limit identity (US-076)
-// and reconnect are coherent, and so the isolation property is verifiable today.
+// also mints a stable per-(browser, public key) session id now as client
+// continuity/reconnect groundwork, and so the isolation property is verifiable
+// today. That id is NOT transmitted on any request and is NOT the backend's
+// per-session rate-limit key - US-076 keys its per-session window on the
+// XFF-derived client IP (`_widget_client_ip`), not this value.
 
 const SESSION_PREFIX = 'ar-support:session:'
 const TOKEN_PREFIX = 'ar-support:token:'
