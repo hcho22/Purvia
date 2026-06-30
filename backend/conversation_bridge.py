@@ -80,6 +80,12 @@ _MAX_NOTIFY_PAYLOAD_BYTES = 7000
 # half-open socket would not surface until the next write); reconnect backoff caps
 # the retry storm when the DB is briefly unreachable.
 _HEALTH_PROBE_SECONDS = 30.0
+# A bound on every command run on the LISTEN connection (the one-time `add_listener`
+# and the periodic `select 1` probe). Without it, the probe's read blocks until the
+# OS TCP timeout (minutes) on a half-open socket, so the supervisor would go silently
+# deaf instead of detecting the drop "promptly". Kept well under the probe interval
+# so a dead socket surfaces within a few seconds and triggers the backoff-reconnect.
+_HEALTH_PROBE_TIMEOUT = 5.0
 _RECONNECT_BACKOFF_SECONDS = 2.0
 _RECONNECT_BACKOFF_MAX_SECONDS = 30.0
 
@@ -302,7 +308,9 @@ class ConversationBridge:
         while not self._stopped:
             conn: asyncpg.Connection | None = None
             try:
-                conn = await asyncpg.connect(dsn=self._dsn)
+                conn = await asyncpg.connect(
+                    dsn=self._dsn, command_timeout=_HEALTH_PROBE_TIMEOUT
+                )
                 await conn.add_listener(self._channel, self._on_notification)
                 self._listen_conn = conn
                 log.info(
