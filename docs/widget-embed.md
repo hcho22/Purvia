@@ -142,20 +142,38 @@ seam US-081's live consumer will feed instead of the poll - no UI change when it
 lands. Until then, agent replies appear within one poll interval rather than
 instantly.
 
-## Known integration consideration - the iframe's `Origin` vs the per-key allowlist
+## Known integration consideration - key resolution + the iframe's `Origin` vs the per-key allowlist
 
-The iframe is served from the **kit origin**, so every API call it makes carries
-`Origin: <kit-origin>`, NOT the buyer's host origin. The US-072/073 per-key origin
-allowlist (`widget_keys.allowed_origins`) registers **buyer host origins** and is
-re-checked server-side on the first message (US-078). A cross-origin iframe can
-never present the buyer's origin on these calls, so the kit/widget-serving origin
-must be reconciled with that gate before production - e.g. by registering the kit
-origin, or by gating the iframe's token-authenticated calls by the opaque token
-alone (the real boundary) rather than by `Origin`. This is a pre-existing
-cross-cutting concern between the embed model (US-083) and the origin gate
-(US-073/078), surfaced by wiring the real client; it is **not** introduced by
-US-084 and is left as a follow-up design decision. (The US-073 resolve-on-open
-call made by the *loader* runs on the buyer host origin and is unaffected.)
+This implementation defers **all** widget-key resolution to the **first message**
+(US-078 re-resolve, sent from the iframe = kit origin).
+The loader does NOT call `POST /widget/keys/resolve`: it only injects the iframe
+and relays postMessage, and the iframe itself only fetches
+`/widget/conversations/messages` (on send) and the transcript (poll).
+Three consequences compound here, to reconcile before production:
+
+- **No early key validation.**
+  Because resolution happens lazily on the first message, a revoked or typo'd key
+  presents a fully working-looking widget that only fails when the user actually
+  sends - there is no resolve-on-open to catch a bad key up front.
+- **US-072's intended loader resolve-on-open is NOT yet wired.**
+  Validating the key on the buyer host origin at load time (the buyer origin is the
+  one registered in the allowlist) is the missing piece.
+- **The iframe's `Origin` is the kit origin, not the buyer's.**
+  The iframe is served from the kit origin, so every API call it makes carries
+  `Origin: <kit-origin>`, NOT the buyer's host origin. The US-072/073 per-key origin
+  allowlist (`widget_keys.allowed_origins`) registers **buyer host origins** and is
+  re-checked server-side on the first message (US-078) and in the US-074 widget
+  CORS posture. A cross-origin iframe can never present the buyer's origin on these
+  calls.
+
+Before production, reconcile the origin/resolution architecture: wire the loader's
+resolve-on-open for early buyer-origin validation, AND admit the iframe's kit origin
+in the US-074 widget CORS + US-078's first-message origin gate - e.g. by registering
+the kit origin, or by gating the iframe's token-authenticated calls by the opaque
+US-071 token alone (the real boundary) rather than by `Origin`. This is a
+pre-existing cross-cutting concern between the embed model (US-083) and the origin
+gate (US-073/078), surfaced by wiring the real client; it is **not** introduced by
+US-084 and is left as a follow-up design decision.
 
 ## Scope
 
