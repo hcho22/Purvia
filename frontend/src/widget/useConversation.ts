@@ -54,8 +54,10 @@ function toWidgetMessages(rows: TranscriptMessage[]): WidgetMessage[] {
   return rows.map((m) => ({ id: m.id, role: m.role, content: m.content ?? '' }))
 }
 
-export function useConversation(apiBaseOverride: string | undefined, publicKey: string): ConversationState {
-  const apiBase = (apiBaseOverride || DEFAULT_API_BASE).replace(/\/$/, '')
+export function useConversation(publicKey: string): ConversationState {
+  // The backend base is ALWAYS the kit's build-time value, never host-supplied -
+  // the token is sent here, so the host (or an XSS on it) must not control it.
+  const apiBase = DEFAULT_API_BASE
 
   const [messages, setMessages] = useState<WidgetMessage[]>([])
   const [sending, setSending] = useState(false)

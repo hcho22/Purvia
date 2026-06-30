@@ -33,6 +33,10 @@ export function WidgetApp() {
   // The host origin is learned from the FIRST `init` message and is the ONLY origin
   // we post back to (the `ready` ping is the sole '*' send and carries no secret).
   const hostOriginRef = useRef<string | null>(null)
+  // Config is accepted EXACTLY ONCE. Re-init is ignored as defense-in-depth: a
+  // host-page XSS is same-origin (so it passes the origin/source checks), and
+  // re-applying its config could otherwise let it mutate the widget after setup.
+  const initializedRef = useRef(false)
 
   const postToHost = useCallback((message: WidgetToHostMessage) => {
     const target = hostOriginRef.current
@@ -49,8 +53,10 @@ export function WidgetApp() {
 
       const data = event.data as { type: string }
       if (data.type === 'init') {
+        if (initializedRef.current) return // accept the first init only
         const incoming = event.data as { config?: WidgetInitConfig }
         if (!incoming.config || typeof incoming.config.publicKey !== 'string') return
+        initializedRef.current = true
         hostOriginRef.current = event.origin
         getSessionId(incoming.config.publicKey)
         setConfig(incoming.config)
@@ -102,7 +108,6 @@ function WidgetSurface({
   const side = config.position === 'bottom-left' ? 'left' : 'right'
 
   const { messages, sending, error, throttledUntil, status, send } = useConversation(
-    config.apiBase,
     config.publicKey,
   )
 

@@ -66,7 +66,9 @@
     var d = script.dataset || {}
     var cfg = {
       publicKey: d.publicKey || '',
-      apiBase: d.apiBase || undefined,
+      // NOTE: no `apiBase` here on purpose. The widget talks only to its own
+      // build-time backend (the kit's origin); letting the host point it elsewhere
+      // would let a host XSS redirect the conversation token. See protocol.ts.
       position: d.position === 'bottom-left' ? 'bottom-left' : 'bottom-right',
       brandColor: d.brandColor || undefined,
       greeting: d.greeting || undefined,
@@ -97,7 +99,9 @@
   // panel stacked above the bubble. The iframe only captures pointer events over
   // its own box, so a closed widget never blocks the rest of the host page.
   var CLOSED = { w: 96, h: 96 }
-  var OPEN = { w: 384, h: 620 }
+  // OPEN box leaves slack around the 360x540 panel (+launcher) so the in-iframe
+  // .sw-root insets (margin 20/24) and the panel's drop-shadow render fully.
+  var OPEN = { w: 404, h: 672 }
 
   // --- inject the cross-origin iframe --------------------------------------
   var iframe = document.createElement('iframe')

@@ -28,8 +28,12 @@ export const WIDGET_CHANNEL = 'ar-support-widget@1'
 export interface WidgetInitConfig {
   /** US-072 non-secret `wk_pk_…` public key naming which workspace's bot to reach. */
   publicKey: string
-  /** Optional backend API base override; the iframe defaults to its build-time value. */
-  apiBase?: string
+  // NOTE: there is deliberately NO host-supplied `apiBase`. The widget always
+  // talks to its OWN build-time backend (VITE_BACKEND_URL), which the kit controls.
+  // Trusting a host-provided base would let a host-page XSS redirect the US-071
+  // conversation token to an attacker server (the iframe sends it in the
+  // X-Conversation-Token header) - defeating US-083's isolation. Where the token is
+  // sent must never be host-controllable.
   /** Corner the launcher + panel dock to. */
   position?: 'bottom-right' | 'bottom-left'
   /** Theming knobs (US-084): brand color, greeting line, panel title, launcher glyph. */
