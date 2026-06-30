@@ -145,6 +145,11 @@ function WidgetSurface({
     ? Math.max(0, Math.ceil((throttledUntil - nowTick) / 1000))
     : 0
   const throttled = throttleSecondsLeft > 0
+  // `status === 'resolved'` is currently unreachable on the customer side BY DESIGN:
+  // US-071 purges the conversation token on resolve, so a resolved conversation's
+  // token returns an opaque 401 that the client treats as a dead token (clear +
+  // silent fresh start). The resolved-disabled UX below is retained as defensive
+  // scaffolding for future flows (US-081 live status push / US-088 agent resolve).
   const resolved = status === 'resolved'
 
   return (
@@ -208,13 +213,31 @@ function MessageList({
   messages: WidgetMessage[]
   status: string
 }) {
-  const endRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const atBottomRef = useRef(true)
+  const seenIdsRef = useRef<Set<string>>(new Set())
+
+  function handleScroll() {
+    const el = scrollRef.current
+    if (!el) return
+    atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+  }
+
+  // Auto-scroll only when the user just sent a message or is already at the bottom,
+  // so the 8s transcript poll (which swaps the messages array even when the content
+  // is unchanged) never yanks a reader who scrolled up to read earlier history.
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: 'end' })
+    const userAppended = messages.some(
+      (m) => m.role === 'user' && !seenIdsRef.current.has(m.id),
+    )
+    seenIdsRef.current = new Set(messages.map((m) => m.id))
+    if (!userAppended && !atBottomRef.current) return
+    const el = scrollRef.current
+    if (el) el.scrollTop = el.scrollHeight
   }, [messages])
 
   return (
-    <div className="sw-messages">
+    <div className="sw-messages" ref={scrollRef} onScroll={handleScroll}>
       <div className="sw-msg sw-msg--bot">
         <div className="sw-bubble sw-bubble--bot">{greeting}</div>
       </div>
@@ -238,8 +261,6 @@ function MessageList({
       {status === 'escalated' && (
         <div className="sw-system">A team member will reply here shortly.</div>
       )}
-
-      <div ref={endRef} />
     </div>
   )
 }

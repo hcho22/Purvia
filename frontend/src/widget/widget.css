@@ -45,6 +45,19 @@ body {
   align-items: flex-start;
 }
 
+/* Closed state: inset the launcher from the iframe's clipping edges so its
+   drop-shadow and unread badge render fully inside the 96x96 bubble box (which
+   has ~40px of slack around the 56px launcher). The open panel stays flush. */
+.sw-root.sw-right[data-open='false'] {
+  margin-right: 20px;
+  margin-bottom: 24px;
+}
+
+.sw-root.sw-left[data-open='false'] {
+  margin-left: 20px;
+  margin-bottom: 24px;
+}
+
 /* --- launcher ------------------------------------------------------------- */
 .sw-launcher {
   position: relative;

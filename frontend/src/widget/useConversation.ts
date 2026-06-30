@@ -110,6 +110,20 @@ export function useConversation(apiBaseOverride: string | undefined, publicKey: 
     return () => clearInterval(timer)
   }, [refreshTranscript])
 
+  // Auto-clear the throttle latch once its window elapses, so the composer
+  // re-enables and WidgetApp's countdown interval (keyed on throttledUntil) tears
+  // down instead of ticking for the widget's lifetime after the first 429.
+  useEffect(() => {
+    if (throttledUntil === null) return
+    const remaining = throttledUntil - Date.now()
+    if (remaining <= 0) {
+      setThrottledUntil(null)
+      return
+    }
+    const timer = setTimeout(() => setThrottledUntil(null), remaining)
+    return () => clearTimeout(timer)
+  }, [throttledUntil])
+
   // Stream one attempt into the placeholder bubble. Returns the outcome so the
   // caller can decide whether to retry (a dead token) or surface an error.
   const runTurn = useCallback(
