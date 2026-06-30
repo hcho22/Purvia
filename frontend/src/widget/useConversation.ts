@@ -67,11 +67,25 @@ export function useConversation(apiBaseOverride: string | undefined, publicKey: 
   const sendingRef = useRef(false)
   sendingRef.current = sending
 
+  // Bumped at the start of every send. A transcript fetch captures the generation
+  // before its `await` and discards its result if a send has begun since - so a
+  // stale snapshot can never clobber the in-flight optimistic/streaming rows. The
+  // deliberate post-send reconcile shares its send's generation, so it still applies.
+  const sendGenerationRef = useRef(0)
+
   const refreshTranscript = useCallback(async () => {
     const id = conversationIdRef.current
     const token = getConversationToken(publicKey)
     if (!id || !token) return
+    const generation = sendGenerationRef.current
     const res = await fetchTranscript({ apiBase, conversationId: id, token })
+    if (sendGenerationRef.current !== generation) {
+      // A send started while this fetch was in flight, so this snapshot predates its
+      // optimistic/streaming rows (and any token it just minted). Discard it rather
+      // than clobbering them; the send owns the message list and handles its own
+      // token expiry, and its post-send reconcile (same generation) still applies.
+      return
+    }
     if (res.status === 401) {
       // Token dead (expired/resolved): clear it and STOP polling (nulling the id
       // trips the poll guard). The composer stays usable - the next send starts a
@@ -180,6 +194,7 @@ export function useConversation(apiBaseOverride: string | undefined, publicKey: 
       if (!trimmed || sendingRef.current) return
       if (throttledUntil && Date.now() < throttledUntil) return
 
+      sendGenerationRef.current += 1
       setError(null)
       const localUserId = `local-u-${Date.now()}`
       const localBotId = `local-a-${Date.now()}`
