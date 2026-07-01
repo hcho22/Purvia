@@ -165,9 +165,17 @@ export function useConversation(publicKey: string): ConversationState {
           },
         })
         if (cancelled) break
-        // A 401 means the token is dead; refreshTranscript() (via the poll or the
-        // next send) clears it. Back off a little longer before re-checking so we do
-        // not hot-loop on a dead conversation. Any other end is a normal drop/close.
+        // A 401 means the token is dead (expired/resolved). Clear it ourselves so a
+        // backgrounded tab - whose interim poll is paused by `document.hidden` and so
+        // never clears it - stops re-opening the SSE on a dead conversation; the
+        // `!id || !token` guard then idles until the next send starts a fresh one.
+        // Skip while a send is in flight: it owns token expiry and may have just
+        // minted a fresh token, exactly as the poll's refreshTranscript guards. Any
+        // other end is a normal drop/close; back off longer on 401 to avoid hot-looping.
+        if (status === 401 && !sendingRef.current) {
+          clearConversation(publicKey)
+          conversationIdRef.current = null
+        }
         await wait(status === 401 ? 3000 : 1500)
       }
     }
