@@ -86,6 +86,15 @@ _HEALTH_PROBE_SECONDS = 30.0
 # deaf instead of detecting the drop "promptly". Kept well under the probe interval
 # so a dead socket surfaces within a few seconds and triggers the backoff-reconnect.
 _HEALTH_PROBE_TIMEOUT = 5.0
+# A bound on establishing a connection (the pool's eager connect + the LISTEN
+# connect). `command_timeout` bounds only query execution AFTER a connection exists;
+# it does NOT bound the initial connect, which otherwise falls back to asyncpg's
+# ~60s default. Because `start()` awaits `_ensure_pool()` on the FastAPI startup path
+# (and min_size=1 makes the pool connect eagerly), an unreachable DSN would stall
+# boot for that ~60s before failing soft — contradicting the "never block boot" /
+# "self-heals on first use" guarantee. A few seconds is enough to reach a healthy DB
+# and short enough to degrade to single-instance fan-out promptly on a dead DSN.
+_CONNECT_TIMEOUT = 10.0
 _RECONNECT_BACKOFF_SECONDS = 2.0
 _RECONNECT_BACKOFF_MAX_SECONDS = 30.0
 
@@ -261,6 +270,7 @@ class ConversationBridge:
                     min_size=1,
                     max_size=2,
                     command_timeout=10,
+                    timeout=_CONNECT_TIMEOUT,
                 )
             except Exception:  # noqa: BLE001
                 log.warning(
@@ -309,7 +319,9 @@ class ConversationBridge:
             conn: asyncpg.Connection | None = None
             try:
                 conn = await asyncpg.connect(
-                    dsn=self._dsn, command_timeout=_HEALTH_PROBE_TIMEOUT
+                    dsn=self._dsn,
+                    timeout=_CONNECT_TIMEOUT,
+                    command_timeout=_HEALTH_PROBE_TIMEOUT,
                 )
                 await conn.add_listener(self._channel, self._on_notification)
                 self._listen_conn = conn

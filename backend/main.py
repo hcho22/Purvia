@@ -28,7 +28,7 @@ import os
 import re
 import time
 from datetime import datetime, timedelta, timezone
-from typing import AsyncIterator
+from typing import Any, AsyncIterator
 
 import httpx
 from dotenv import load_dotenv
@@ -482,6 +482,40 @@ _CONVERSATION_FANOUT = ConversationFanout()
 # what it receives back INTO _CONVERSATION_FANOUT — so the registry stays the single
 # delivery point. Torn down in _on_shutdown.
 _CONVERSATION_BRIDGE: ConversationBridge | None = None
+
+# US-081: the cross-instance nudge is best-effort and non-fatal, so it is fired as a
+# detached background task rather than awaited on the operator's agent-reply response
+# (the reply is already durably written and already delivered to LOCAL subscribers).
+# asyncio holds only a weak reference to a task, so we keep a strong one here until it
+# completes, or a slow/degraded fanout pool's task could be GC'd mid-flight.
+_WIDGET_FANOUT_NOTIFY_TASKS: set[asyncio.Task[Any]] = set()
+
+
+def _schedule_fanout_notify(
+    bridge: ConversationBridge, conversation_id: str, event: dict
+) -> None:
+    """Fire the cross-instance NOTIFY off the request path; never raises.
+
+    The agent-reply response must not block on a degraded fanout pool (a lost pool can
+    add its reconnect/command timeout to the response). `notify` already swallows
+    transport errors internally; this wrapper additionally guarantees a scheduling or
+    unexpected error is logged and never propagates into the handler.
+    """
+
+    async def _run() -> None:
+        try:
+            await bridge.notify(conversation_id, event)
+        except Exception:  # noqa: BLE001 — the cross-instance nudge is best-effort
+            log.warning(
+                "widget_agent_reply.notify_failed conversation=%s",
+                conversation_id,
+                exc_info=True,
+            )
+
+    task = asyncio.create_task(_run(), name="widget-fanout-notify")
+    _WIDGET_FANOUT_NOTIFY_TASKS.add(task)
+    task.add_done_callback(_WIDGET_FANOUT_NOTIFY_TASKS.discard)
+
 
 # LangSmith: when LANGSMITH_API_KEY is set the SDK auto-ships traces for every
 # wrapped OpenAI call and every @traceable function. When it's missing,
@@ -4344,17 +4378,13 @@ async def widget_agent_reply(
     # US-081 multi-instance: also nudge OTHER backend instances over Postgres
     # LISTEN/NOTIFY so a customer SSE held on a different process gets the reply too.
     # Best-effort and non-fatal — the local publish above already served this
-    # instance's subscribers, and a remote miss is recovered via the transcript. A
-    # single-instance deployment (no bridge) skips this entirely.
+    # instance's subscribers, and a remote miss is recovered via the transcript. It is
+    # fired as a DETACHED task (not awaited) so a degraded fanout pool can never add
+    # its latency to the operator's response. A single-instance deployment (no bridge)
+    # skips this entirely.
     bridge = _CONVERSATION_BRIDGE
     if bridge is not None:
-        try:
-            await bridge.notify(conversation_id, event)
-        except Exception:  # noqa: BLE001 — the cross-instance nudge is best-effort
-            log.warning(
-                "widget_agent_reply.notify_failed conversation=%s", conversation_id,
-                exc_info=True,
-            )
+        _schedule_fanout_notify(bridge, conversation_id, event)
 
     return {"message": _public_conversation_message_view(message)}
 
