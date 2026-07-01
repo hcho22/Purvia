@@ -32,7 +32,7 @@ const DEFAULT_API_BASE = (
   import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:8000'
 ).replace(/\/$/, '')
 
-// Interim poll cadence (ms) for agent-reply recovery; replaced by US-081's push.
+// Poll cadence (ms) for agent-reply recovery; a backstop behind US-081's SSE push.
 const POLL_INTERVAL_MS = 8000
 
 export interface WidgetMessage {

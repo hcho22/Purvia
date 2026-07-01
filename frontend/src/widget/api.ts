@@ -1,6 +1,6 @@
 // US-084: the widget's backend client, scoped to the anonymous public surface.
 //
-// Two endpoints, both authed by the US-071 opaque per-conversation token (NOT a
+// Three endpoints, all authed by the US-071 opaque per-conversation token (NOT a
 // Supabase JWT - the anonymous customer is off the Supabase trust surface):
 //
 //   * POST /widget/conversations/messages - the customer turn. With no token it is
@@ -10,8 +10,12 @@
 //     `conversation` / `delta` / `done` / `error` events (US-079) - the SAME shape
 //     /api/chat uses.
 //   * GET /widget/conversations/{id}/transcript - the durable message history
-//     (US-071), used to recover prior messages on open AND, until US-081 ships the
-//     live customer-SSE push, to surface agent replies via a light poll.
+//     (US-071), used to recover prior messages on open AND, as a backstop behind
+//     US-081's live push, to surface agent replies via a light poll.
+//   * GET /widget/conversations/{id}/events - the long-lived customer SSE (US-081)
+//     that pushes each async agent reply as a low-latency nudge to re-read the
+//     transcript (`subscribeConversationEvents`); the poll above is retained as a
+//     backstop so a dropped stream never loses a reply.
 //
 // The token lives in the iframe's own-origin localStorage (storage.ts) and is sent
 // in the `X-Conversation-Token` request header - it never appears in a URL/log.
