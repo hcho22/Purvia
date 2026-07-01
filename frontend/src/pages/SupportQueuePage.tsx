@@ -9,13 +9,25 @@ import {
   type ConversationRow,
 } from '@/lib/supportQueue'
 
+// Normalize escalated_at to an epoch so the queue orders by ACTUAL time
+// regardless of source encoding: PostgREST returns ISO 8601 ('T' separator)
+// while Supabase Realtime's payload.new commonly uses a space separator — a raw
+// string compare would sort every Realtime row before every REST row (' ' < 'T')
+// and let a freshly-escalated conversation jump the queue. A null/unparseable
+// value sorts LAST (Infinity) so it never displaces a real, ordered row.
+function escalatedEpoch(row: ConversationRow): number {
+  if (!row.escalated_at) return Number.POSITIVE_INFINITY
+  const t = new Date(row.escalated_at).getTime()
+  return Number.isNaN(t) ? Number.POSITIVE_INFINITY : t
+}
+
 // Oldest-escalation-first: keep the list sorted by escalated_at ascending as
 // live events arrive so a freshly-escalated conversation slots into the right
 // place instead of always jumping to the top/bottom.
 function insertSorted(rows: ConversationRow[], row: ConversationRow): ConversationRow[] {
   const without = rows.filter((r) => r.id !== row.id)
   const next = [...without, row]
-  next.sort((a, b) => (a.escalated_at ?? '').localeCompare(b.escalated_at ?? ''))
+  next.sort((a, b) => escalatedEpoch(a) - escalatedEpoch(b))
   return next
 }
 
