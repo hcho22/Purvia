@@ -243,12 +243,19 @@ def _run_http_surface(main) -> int:
     async def fake_list_shares(http, url, headers, doc_id):  # noqa: ANN001
         return list(state["shares"])
 
+    async def fake_principal_has_grant(http, url, headers, doc_id, ptype, pid):  # noqa: ANN001
+        return any(
+            s.principal_type == ptype and s.principal_id == pid
+            for s in state["shares"]
+        )
+
     orig = {
         "assert": main._assert_doc_owner,
         "resolve": main._resolve_principal,
         "grant": main.grant_doc_to_principal,
         "revoke": main.revoke_doc_from_principal,
         "list": main.list_doc_shares,
+        "hasgrant": main.principal_has_doc_grant,
         "isbot": support_bot.is_bot_user,
         "findbot": support_bot.find_workspace_bot,
         "key": main.SUPABASE_SERVICE_ROLE_KEY,
@@ -258,6 +265,7 @@ def _run_http_surface(main) -> int:
     main.grant_doc_to_principal = fake_grant  # type: ignore[assignment]
     main.revoke_doc_from_principal = fake_revoke  # type: ignore[assignment]
     main.list_doc_shares = fake_list_shares  # type: ignore[assignment]
+    main.principal_has_doc_grant = fake_principal_has_grant  # type: ignore[assignment]
     support_bot.is_bot_user = fake_is_bot_user  # type: ignore[assignment]
     support_bot.find_workspace_bot = fake_find_workspace_bot  # type: ignore[assignment]
     main.SUPABASE_SERVICE_ROLE_KEY = "service-test-key"  # type: ignore[assignment]
@@ -327,6 +335,26 @@ def _run_http_surface(main) -> int:
         total += 1
         print("  shares: the bot is filtered from the normal list; the human grant remains")
 
+        # ===== A transient bot-lookup blip must NOT break the core share read. =====
+        async def _boom(http, ws):  # noqa: ANN001
+            raise RuntimeError("transient PostgREST error resolving the bot")
+
+        orig_resolve = main._resolve_workspace_bot_id
+        main._resolve_workspace_bot_id = _boom  # type: ignore[assignment]
+        try:
+            r = client.get(f"/api/documents/{DOC}/shares")
+        finally:
+            main._resolve_workspace_bot_id = orig_resolve  # type: ignore[assignment]
+        assert r.status_code == 200, (
+            "a bot-lookup error must fail SOFT (unfiltered list), never 500 the read"
+        )
+        listed = [s["principal_id"] for s in r.json()["shares"]]
+        assert HUMAN in listed and BOT in listed, (
+            "fail-soft leaves the list UNFILTERED (a momentary bot row is acceptable)"
+        )
+        total += 1
+        print("  shares: a transient bot-lookup error fails soft (200, unfiltered) not 500")
+
         # ===== Published state is reported by GET /publish-to-bot only. =====
         r = client.get(f"/api/documents/{DOC}/publish-to-bot")
         assert r.status_code == 200
@@ -366,6 +394,7 @@ def _run_http_surface(main) -> int:
         main.grant_doc_to_principal = orig["grant"]  # type: ignore[assignment]
         main.revoke_doc_from_principal = orig["revoke"]  # type: ignore[assignment]
         main.list_doc_shares = orig["list"]  # type: ignore[assignment]
+        main.principal_has_doc_grant = orig["hasgrant"]  # type: ignore[assignment]
         support_bot.is_bot_user = orig["isbot"]  # type: ignore[assignment]
         support_bot.find_workspace_bot = orig["findbot"]  # type: ignore[assignment]
         main.SUPABASE_SERVICE_ROLE_KEY = orig["key"]  # type: ignore[assignment]

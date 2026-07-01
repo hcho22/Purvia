@@ -91,6 +91,7 @@ from permissions import (
     ShareSummary,
     grant_doc_to_principal,
     list_doc_shares,
+    principal_has_doc_grant,
     replay_doc_acls,
     revoke_doc_from_principal,
     snapshot_doc_acls,
@@ -2519,7 +2520,18 @@ async def get_shares(
         # normal share dialog. Its published state is reported ONLY by the
         # dedicated GET /publish-to-bot surface, so the two actions stay cleanly
         # separated ("publishing to the public widget" is not "sharing to a user").
-        bot_id = await _resolve_workspace_bot_id(http, doc["workspace_id"])
+        # This filter is a cosmetic nicety: a transient bot-lookup blip must NOT
+        # break the core share-list read, so it fails soft to no filtering (a
+        # momentarily-visible bot row is acceptable — not a security leak). The
+        # grant path (`_reject_if_bot_principal`) stays fail-CLOSED by contrast.
+        try:
+            bot_id = await _resolve_workspace_bot_id(http, doc["workspace_id"])
+        except Exception:  # noqa: BLE001 — cosmetic filter must not 500 the read
+            log.warning(
+                "share_list.bot_filter_lookup_failed — listing shares unfiltered",
+                exc_info=True,
+            )
+            bot_id = None
         if bot_id is not None:
             shares = [
                 s
@@ -2654,11 +2666,11 @@ async def get_publish_to_bot(
         bot_id = await _resolve_workspace_bot_id(http, doc["workspace_id"])
         if bot_id is None:
             return {"published": False, "bot_provisioned": False}
-        shares = await list_doc_shares(
-            http, SUPABASE_URL, _supabase_headers(user), document_id
-        )
-        published = any(
-            s.principal_type == "user" and s.principal_id == bot_id for s in shares
+        # A targeted chunk_acl existence check — far cheaper than list_doc_shares,
+        # which would additionally resolve every grantee's email/group name just
+        # to test whether this one principal appears among them.
+        published = await principal_has_doc_grant(
+            http, SUPABASE_URL, _supabase_headers(user), document_id, "user", bot_id
         )
     return {"published": published, "bot_provisioned": True}
 
