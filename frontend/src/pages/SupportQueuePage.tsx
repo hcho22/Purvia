@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AppHeader } from '@/components/AppHeader'
 import { ConversationDetail } from '@/components/support/ConversationDetail'
 import { useToast } from '@/components/ui/toast'
@@ -62,6 +62,10 @@ export function SupportQueuePage() {
   // uid -> email for the "Claimed by <email>" label (US-089). Resolved lazily
   // from `profiles` as claimed rows appear; a self-claim never needs a lookup.
   const [claimerEmails, setClaimerEmails] = useState<Record<string, string>>({})
+  // Claimer uids already handed to a `profiles` lookup — including ones with no
+  // `profiles` row, so an unresolvable claimer is requested at most once and the
+  // lazy effect can never spin re-fetching it (it stays the generic fallback).
+  const requestedClaimerIds = useRef<Set<string>>(new Set())
 
   const workspaceId =
     workspace?.status === 'resolved' ? workspace.workspaceId : null
@@ -148,8 +152,12 @@ export function SupportQueuePage() {
     return unsubscribe
   }, [workspaceId])
 
-  // Resolve emails for any claimer that isn't the current agent and isn't already
-  // known. Best-effort: a failed lookup leaves the label as the generic fallback.
+  // Resolve emails for any claimer that isn't the current agent and hasn't
+  // already been requested. Best-effort: a failed or empty lookup leaves the
+  // label as the generic fallback. Each id is marked requested BEFORE the fetch
+  // and never re-requested, and setClaimerEmails runs only when the lookup
+  // actually returns rows — so an unresolvable claimer never creates a new
+  // `claimerEmails` reference that would refire this effect in a loop.
   useEffect(() => {
     const missing = Array.from(
       new Set(
@@ -157,22 +165,24 @@ export function SupportQueuePage() {
           .map((c) => c.claimed_by)
           .filter(
             (id): id is string =>
-              !!id && id !== currentUserId && !(id in claimerEmails),
+              !!id &&
+              id !== currentUserId &&
+              !(id in claimerEmails) &&
+              !requestedClaimerIds.current.has(id),
           ),
       ),
     )
     if (missing.length === 0) return
-    let cancelled = false
+    for (const id of missing) requestedClaimerIds.current.add(id)
     resolveClaimerEmails(missing)
       .then((map) => {
-        if (!cancelled) setClaimerEmails((prev) => ({ ...prev, ...map }))
+        if (Object.keys(map).length > 0) {
+          setClaimerEmails((prev) => ({ ...prev, ...map }))
+        }
       })
       .catch(() => {
         // Non-fatal — the row still shows a generic "another agent" claimer.
       })
-    return () => {
-      cancelled = true
-    }
   }, [conversations, currentUserId, claimerEmails])
 
   // Full-width status note for the empty/loading/none/ambiguous cases; null when

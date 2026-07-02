@@ -224,14 +224,13 @@ export type ClaimFields = {
 // honest value, not a trust boundary. Returns the persisted fields for immediate
 // optimistic UI (Realtime delivers the same change to every other open queue).
 export async function claimConversation(conversationId: string): Promise<ClaimFields> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not signed in.')
+  const { data: sess } = await supabase.auth.getSession()
+  const userId = sess.session?.user?.id
+  if (!userId) throw new Error('Not signed in.')
 
   const { data, error } = await supabase
     .from('conversations')
-    .update({ claimed_by: user.id, claimed_at: new Date().toISOString() })
+    .update({ claimed_by: userId, claimed_at: new Date().toISOString() })
     .eq('id', conversationId)
     .select('claimed_by, claimed_at')
     .single()
