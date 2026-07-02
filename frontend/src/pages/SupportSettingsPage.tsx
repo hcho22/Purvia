@@ -167,7 +167,11 @@ export function SupportSettingsPage() {
               supportEnabled={supportEnabled}
               onChanged={reloadKeys}
             />
-            <ShareToBotSection workspaceId={workspaceId} supportEnabled={supportEnabled} />
+            <ShareToBotSection
+              workspaceId={workspaceId}
+              supportEnabled={supportEnabled}
+              keysLoaded={keys !== null}
+            />
           </div>
         ) : null}
       </main>
@@ -597,9 +601,11 @@ type PublishState = { published: boolean; loading: boolean }
 function ShareToBotSection({
   workspaceId,
   supportEnabled,
+  keysLoaded,
 }: {
   workspaceId: string
   supportEnabled: boolean
+  keysLoaded: boolean
 }) {
   const { toast } = useToast()
   const [docs, setDocs] = useState<DocumentRow[] | null>(null)
@@ -684,7 +690,9 @@ function ShareToBotSection({
         subtitle="Publish a document to make its contents answerable by the public support widget. Only documents you own are listed here."
       />
 
-      {!supportEnabled ? (
+      {!keysLoaded ? (
+        <p className="px-1 text-sm text-neutral-500">Loading…</p>
+      ) : !supportEnabled ? (
         <div className="rounded-md border border-neutral-800 bg-neutral-900/40 px-4 py-3 text-sm text-neutral-400">
           Enable support first (issue a widget key above) before publishing documents to the bot.
         </div>
