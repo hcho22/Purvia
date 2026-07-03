@@ -34,7 +34,7 @@ Run the tests: ``python -m evals.gate.test_pinned_security``
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping
+from typing import Iterable, Mapping
 
 from evals.gate.classes import SecurityGateError, gate_class
 
@@ -85,6 +85,26 @@ def no_access_exercised(security_no_access: "Mapping[str, Mapping[str, float]]")
     exercised".
     """
     return any(bool(by_mode) for by_mode in security_no_access.values())
+
+
+def e4_structurally_blind(
+    viewers: "Iterable[str]",
+    security_no_access: "Mapping[str, Mapping[str, float]]",
+) -> bool:
+    """True when the E4 zero-leak invariant would pass **vacuously**.
+
+    The ``no_access`` viewer was requested for this run, yet its sweep produced
+    no cells, so :func:`check_no_access_zero_leak` has nothing to assert and the
+    pinned gate would exit ``0`` without ever exercising the invariant — the
+    exact "gate silently off" failure US-102 forbids (a dropped ``no_access``
+    block, a misconfigured sweep). The runner treats this as a hard fail,
+    mirroring E6's structural-blindness guard.
+
+    When ``no_access`` was NOT requested (e.g. ``--viewers full``) the invariant
+    legitimately does not apply, so this returns ``False`` — a skip, not a fail
+    (US-102 AC3: the invariant only asserts where it runs).
+    """
+    return "no_access" in viewers and not no_access_exercised(security_no_access)
 
 
 def check_no_access_zero_leak(

@@ -46,6 +46,7 @@ from evals.gate.security import (
     SecurityViolation,
     assert_no_access_zero_leak,
     check_no_access_zero_leak,
+    e4_structurally_blind,
     no_access_exercised,
 )
 
@@ -284,6 +285,42 @@ def _e4_binary_assert() -> None:
     assert no_access_exercised({"pre_filter": {}, "post_filter": {}}) is False
 
 
+def _e4_structural_blindness_guard() -> None:
+    """The runner's fail-closed blindness guard: when the ``no_access`` viewer was
+    REQUESTED but its sweep produced 0 cells, the pinned E4 gate must NOT pass
+    vacuously (mirrors E6's structural-blindness guard, US-102). When ``no_access``
+    was not requested the invariant simply does not apply — a skip, not a fail."""
+
+    empty_tables: tuple[dict, ...] = ({}, {"pre_filter": {}, "post_filter": {}})
+    exercised: dict = {
+        "pre_filter": {"vector": 1.0, "hybrid": 1.0},
+        "post_filter": {"vector": 1.0, "hybrid": 1.0},
+    }
+    requested: tuple[tuple[str, ...], ...] = (
+        ("full_access", "partial_access", "no_access"),
+        ("no_access",),
+    )
+    not_requested: tuple[tuple[str, ...], ...] = (
+        ("full_access",),
+        ("full_access", "partial_access"),
+        (),
+    )
+
+    # REQUESTED but not exercised → structurally blind (fail non-zero in amain).
+    for viewers in requested:
+        for table in empty_tables:
+            assert e4_structurally_blind(viewers, table) is True, (viewers, table)
+
+    # REQUESTED and exercised → not blind (the real leak check then decides).
+    assert e4_structurally_blind(("no_access",), exercised) is False
+
+    # NOT requested → the invariant does not apply, so never blind — even when the
+    # table is empty (`--viewers full` legitimately produces no no_access cells).
+    for viewers in not_requested:
+        for table in empty_tables + (exercised,):
+            assert e4_structurally_blind(viewers, table) is False, (viewers, table)
+
+
 # ---------------------------------------------------------------------------
 # Layer 2 — best-effort integration guard (skips without the heavy runner)
 # ---------------------------------------------------------------------------
@@ -355,6 +392,7 @@ def main() -> None:
     _loader_accepts_quality_and_resolves()
     _loader_rejects_malformed_declarations()
     _e4_binary_assert()
+    _e4_structural_blindness_guard()
     _real_aggregation_feeds_the_assert()
     print(
         "US-102 pinned-security gate OK: "
