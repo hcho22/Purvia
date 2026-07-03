@@ -314,6 +314,21 @@ def _unknown_cell_or_metric_is_a_hard_error() -> None:
                 },
             }
         },
+        # typo'd judge_metric VALUE (the metric key is valid, but the Claude-side
+        # metric name is misspelled) — would silently never corroborate, AC5.
+        "typo'd judge_metric value": {
+            "bindings": {
+                "cells": [JUDGE_CELL],
+                "corroboration": {
+                    "generator_family": "openai",
+                    "judge_family": "anthropic",
+                    "judge_cell": JUDGE_CELL,
+                    "judge_equivalent": {
+                        "faithfulness": {"judge_metric": "faithfullness", "drop": 0.3}
+                    },
+                },
+            }
+        },
         # judge_cell not among the declared cells (dangling reference)
         "unknown judge cell": {
             "bindings": {

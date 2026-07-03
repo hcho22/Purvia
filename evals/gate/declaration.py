@@ -88,6 +88,17 @@ _CORROBORATION_KEYS = frozenset(
 )
 _JUDGE_EQUIVALENT_KEYS = frozenset({"judge_metric", "drop"})
 
+# The Claude judge's output metric names — the universe a `judge_metric` VALUE must
+# name. runner.py's judge tool schema requires exactly these two
+# (`generation_keys = ["faithfulness", "helpfulness"]`), and they are the only keys
+# `by_mode[RAGAS_MODE]` carries, so a `judge_metric` that is not one of these would
+# make `_claude_metric_dropped` look up a missing key, get None, and silently never
+# corroborate. Pinned LOCALLY (like classes.py::_RECALL_KS) to keep this loader
+# import-light — importing the heavy runner.py (asyncpg/openai/httpx) for two
+# strings would defeat that; the drift is guarded by the shipped gate.yaml, which
+# uses exactly these values and must equal default_bindings().
+_JUDGE_METRIC_NAMES = frozenset({"faithfulness", "helpfulness"})
+
 # The exact, audit-quotable message a downgrade attempt produces. Security
 # reviewers grep for this; keep the wording stable.
 _PINNED_MESSAGE = (
@@ -207,9 +218,11 @@ def _parse_corroboration(
     — an empty map + all-``None`` — so every RAGAS drop degrades to
     single-judge-red. When PRESENT the block must be COMPLETE (all four keys):
     a half-specified block is a loud error, never a silent disable. The metric
-    keys are validated against the RAGAS metric universe and ``judge_cell``
-    against the declared cells (an unknown metric / cell is a hard error, AC5) —
-    a typo there would otherwise silently switch corroboration off.
+    keys are validated against the RAGAS metric universe, each ``judge_metric``
+    value against the Claude judge's metric universe (:data:`_JUDGE_METRIC_NAMES`),
+    and ``judge_cell`` against the declared cells (an unknown metric key / judge
+    metric / cell is a hard error, AC5) — a typo in any of them would otherwise
+    silently switch corroboration off for that metric.
     """
     if raw_corr is None:
         return ({}, None, None, None)
@@ -278,7 +291,15 @@ def _parse_corroboration(
                 f"gate-declaration `corroboration.judge_equivalent.{metric}.drop` "
                 f"must be a number, got {type(drop).__name__} ({drop!r})"
             )
-        claude_equivalent[metric] = (str(spec["judge_metric"]), float(drop))
+        judge_metric = str(spec["judge_metric"])
+        if judge_metric not in _JUDGE_METRIC_NAMES:
+            raise ValueError(
+                f"gate-declaration `corroboration.judge_equivalent.{metric}."
+                f"judge_metric` names unknown judge metric {judge_metric!r}; the "
+                f"Claude judge emits only {sorted(_JUDGE_METRIC_NAMES)} (a typo would "
+                "silently never corroborate — no silent skip, AC5)."
+            )
+        claude_equivalent[metric] = (judge_metric, float(drop))
 
     return (claude_equivalent, judge_cell, generator_family, judge_family)
 

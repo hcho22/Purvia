@@ -47,7 +47,9 @@ bindings:
   # Omit this whole block — or set judge_family == generator_family — to run
   # single-family: every RAGAS drop then degrades to single-judge-red (a weaker,
   # non-independent proof; see US-109). The judge_cell must be one of the `cells`
-  # above, and each judge_equivalent key must be a real RAGAS metric.
+  # above, each judge_equivalent key must be a real RAGAS metric, and each
+  # judge_metric value must name a Claude judge metric (`faithfulness` or
+  # `helpfulness`) — a typo in any of them is a hard load error, never a silent skip.
   #
   # NOTE: unlike `cells` and `thresholds`, corroboration is NOT inherited from the
   # default when omitted. A custom `bindings:` block that leaves this block out
