@@ -226,6 +226,7 @@ A declaration that tries `E4_zero_leak: off` or `e6_workspace_boundary: comment`
 Unknown outputs, unknown sections, and invalid verdict values are equally hard errors (no silent skip).
 Second, the security invariants are evaluated as **binary asserts**, not thresholds a buyer can loosen: `evals/gate/security.py:check_no_access_zero_leak` asserts `security_no_access[filter][mode] == 1.0` for every `no_access` cell, and the runner's exit path fails the run non-zero on any breach (a `no_access` viewer that retrieved gold), independent of any verdict config.
 This closes a real gap - the `security_no_access` table was *rendered* in the summary but never hard-asserted - and now fails the build exactly the way an E6 cross-workspace leak already does (the sibling E6 / AU4 / E7-P1b asserts live at their own call sites; this module owns only the E4 table).
+Like E6, the gate also refuses a **vacuous** pass: when a `no_access` viewer was requested but its sweep produced zero cells (a dropped `no_access` block, a misconfigured sweep), `evals/gate/security.py:e4_structurally_blind` fails the run non-zero rather than let the pinned invariant exit `0` without ever asserting - the "gate silently off" failure US-102 forbids (a no-op when `no_access` was not requested at all, e.g. `--viewers full`).
 Run the tests with `python -m evals.gate.test_pinned_security`.
 
 ### The accepted detection-latency gap (F3 / P5)

@@ -358,7 +358,7 @@ export OPENAI_API_KEY=sk-...
 python -m db_seed.corpus_seed
 
 # Eval runs
-python -m evals.retrieval.runner                      # all three modes
+python -m evals.retrieval.runner                      # all three modes; exits 1 on an E4 no_access zero-leak breach (pinned security invariant, US-102)
 python -m evals.retrieval.runner --mode vector        # single mode (faster)
 python -m evals.retrieval.runner --include-generation # adds LLM-judge faithfulness/helpfulness (needs ANTHROPIC_API_KEY)
 python -m evals.retrieval.runner --include-e6         # adds the E6 second-workspace zero-leak gate (exits 1 on a cross-workspace leak)
