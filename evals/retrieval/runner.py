@@ -95,6 +95,12 @@ from .ragas_gates import (  # noqa: E402
     load_ragas_history,
 )
 
+# US-102: E4 zero-leak is a pinned `fail` security invariant, evaluated as a
+# binary assert over the `security_no_access` table (sibling `evals.gate`
+# package, absolute import). Kept import-light — `evals.gate.security` pulls in
+# only stdlib + the gate-class registry.
+from evals.gate.security import check_no_access_zero_leak  # noqa: E402
+
 log = logging.getLogger("agentic_rag.evals.retrieval")
 
 DEFAULT_QUESTIONS = Path(__file__).resolve().parent / "retrieval_gold.yaml"
@@ -1733,6 +1739,24 @@ async def amain() -> int:
             f"  E6 (workspace zero-leak): NOT RUN — transient execution error "
             f"(non-blocking): {e6_error}"
         )
+
+    # US-102: E4 zero-leak is a PINNED `fail` security invariant. It is a binary
+    # assert — `security_no_access[filter][mode] == 1.0` for every no_access
+    # cell — not a threshold a buyer can loosen. A cell below 1.0 means a
+    # no_access viewer retrieved gold (a leak); the run fails non-zero,
+    # independent of any buyer verdict config (there is NO knob to downgrade it —
+    # silence only by deleting the eval, US-102). The E4 JSON + summary.md are
+    # already written above, so the leak detail is preserved despite the exit.
+    e4_violations = check_no_access_zero_leak(aggregates.get("security_no_access", {}))
+    if e4_violations:
+        log.error(
+            "E4 ZERO-LEAK BREACH — a no_access viewer retrieved gold on %d "
+            "cell(s) (pinned security invariant, US-102):",
+            len(e4_violations),
+        )
+        for v in e4_violations:
+            log.error("  %s", v.detail)
+        return 1
 
     # US-005: a red operational gate finding fails the run. The JSON +
     # summary.md are already written above, so the weekly workflow can still
