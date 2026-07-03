@@ -125,6 +125,60 @@ def _loader_rejects_from_a_real_yaml_file() -> None:
         os.unlink(path)
 
 
+def _yaml_boolean_off_is_normalized() -> None:
+    """YAML 1.1 gotcha: an unquoted `off` verdict parses to the boolean `False`.
+    `off` is a valid verdict, so it must normalize to "off" from a real YAML file
+    (quoted or unquoted) — and a security output written `off` is still rejected
+    with the intended verdict shown, while `on`/`true` (-> True) stays invalid."""
+
+    def _write(text: str) -> str:
+        with tempfile.NamedTemporaryFile(
+            "w", suffix=".yaml", delete=False, encoding="utf-8"
+        ) as fh:
+            fh.write(text)
+            return fh.name
+
+    # A quality output written `off` UNQUOTED loads as the "off" verdict (the bug
+    # the no-mistakes test agent surfaced: without normalization this errored
+    # because YAML `off` -> False is not the string "off").
+    p_unquoted = _write("verdicts:\n  recall_at_5: off\n")
+    p_quoted = _write('verdicts:\n  recall_at_5: "off"\n')
+    try:
+        assert load_gate_declaration(p_unquoted).verdict_for("recall_at_5") == "off"
+        assert load_gate_declaration(p_quoted).verdict_for("recall_at_5") == "off"
+    finally:
+        os.unlink(p_unquoted)
+        os.unlink(p_quoted)
+
+    # A dict `False` (however produced) is normalized too.
+    assert load_gate_declaration(
+        {"verdicts": {"recall_at_5": False}}
+    ).verdict_for("recall_at_5") == "off"
+
+    # A SECURITY output written `off` unquoted is still rejected (the pin holds),
+    # and the message shows the normalized `'off'`, not `False`.
+    p_sec = _write("verdicts:\n  E4_zero_leak: off\n")
+    try:
+        exc = _assert_raises(
+            SecurityGateError,
+            lambda: load_gate_declaration(p_sec),
+            what="a security output set to unquoted-off in YAML",
+        )
+        assert "'off'" in str(exc), str(exc)
+        assert _PINNED_MESSAGE in str(exc), str(exc)
+    finally:
+        os.unlink(p_sec)
+
+    # A truthy YAML boolean (`on`/`yes`/`true` -> True) is NOT a verdict — still a
+    # hard error, now with a helpful hint about the gotcha.
+    exc = _assert_raises(
+        ValueError,
+        lambda: load_gate_declaration({"verdicts": {"recall_at_5": True}}),
+        what="a truthy YAML boolean verdict",
+    )
+    assert "YAML" in str(exc), str(exc)
+
+
 def _loader_accepts_quality_and_resolves() -> None:
     """A quality verdict map loads and resolves — explicit settings win, unset
     quality outputs fall back to the registry default (`comment`)."""
@@ -297,6 +351,7 @@ def _real_aggregation_feeds_the_assert() -> None:
 def main() -> None:
     _loader_rejects_security_downgrade()
     _loader_rejects_from_a_real_yaml_file()
+    _yaml_boolean_off_is_normalized()
     _loader_accepts_quality_and_resolves()
     _loader_rejects_malformed_declarations()
     _e4_binary_assert()

@@ -137,7 +137,9 @@ def load_gate_declaration(
     * every verdict key must be a **registered** eval output (unknown → error);
     * a **security**-class key is rejected with the pinned-``fail`` message —
       the load-time enforcement of "silence only by deletion" (AC1/AC5);
-    * every verdict value must be one of ``off | comment | fail``.
+    * every verdict value must be one of ``off | comment | fail`` — an unquoted
+      YAML ``off`` (which parses to the boolean ``False``) is normalized back to
+      ``"off"`` so a buyer's natural ``recall_at_5: off`` works unquoted.
     """
     data = _coerce_source(source)
 
@@ -163,6 +165,17 @@ def load_gate_declaration(
     for name, verdict in raw_verdicts.items():
         name = str(name)
 
+        # (0) YAML 1.1 boolean gotcha: an UNQUOTED `off` verdict parses to the
+        #     boolean False (as `on`/`yes`/`true` parse to True), never the
+        #     string "off". `off` IS a valid verdict, so normalize False -> "off"
+        #     up front — a buyer's natural `recall_at_5: off` then works whether
+        #     or not they quote it, and the security-rejection message below reads
+        #     `'off'` rather than `False`. A truthy YAML boolean (`on`/`yes`/
+        #     `true`) is not a verdict and still falls through to the invalid-value
+        #     error at (3).
+        if verdict is False:
+            verdict = "off"
+
         # (1) The load-time security pin — the heart of US-102. A security output
         #     has no tunable verdict; setting one is a build error, not a downgrade.
         if is_registered(name) and gate_class(name).is_security:
@@ -182,11 +195,19 @@ def load_gate_declaration(
                 "(security invariants carry no knob; see US-101/US-102)."
             )
 
-        # (3) Invalid verdict value.
+        # (3) Invalid verdict value. A leftover YAML boolean here is a truthy
+        #     `on`/`yes`/`true` (False was normalized to "off" above), so hint at
+        #     the gotcha rather than emit a bare `True`.
         if not isinstance(verdict, str) or verdict not in _LOUDNESS_VALUES:
+            hint = ""
+            if isinstance(verdict, bool):
+                hint = (
+                    " (an unquoted YAML `on`/`yes`/`true` parses to a boolean; "
+                    "only `off|comment|fail` are verdicts)"
+                )
             raise ValueError(
                 f"gate declaration sets {name!r} to invalid verdict {verdict!r}; "
-                f"expected one of {sorted(_LOUDNESS_VALUES)}"
+                f"expected one of {sorted(_LOUDNESS_VALUES)}{hint}"
             )
 
         verdicts[name] = verdict
