@@ -48,6 +48,11 @@ bindings:
   # single-family: every RAGAS drop then degrades to single-judge-red (a weaker,
   # non-independent proof; see US-109). The judge_cell must be one of the `cells`
   # above, and each judge_equivalent key must be a real RAGAS metric.
+  #
+  # NOTE: unlike `cells` and `thresholds`, corroboration is NOT inherited from the
+  # default when omitted. A custom `bindings:` block that leaves this block out
+  # runs single-family / single-judge-red - re-declare the whole `corroboration:`
+  # block here to keep cross-family corroboration.
   corroboration:
     generator_family: openai
     judge_family: anthropic

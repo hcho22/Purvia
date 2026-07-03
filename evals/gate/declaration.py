@@ -287,11 +287,19 @@ def _parse_bindings(raw: Any) -> GateBindings:
     """Parse a ``bindings:`` block into a :class:`GateBindings` (US-103).
 
     The buyer's cells / cross-family judge map / thresholds, validated into the
-    exact config object the ``ragas_gates`` detection functions take. Every field
-    defaults to today's constant (:func:`default_bindings`) when omitted, so a
-    partial ``bindings`` block only overrides what it names. Hard errors (no
-    silent skip): an unknown section / threshold / corroboration key, a blank or
-    empty cell list, an unknown corroboration metric or judge cell (AC5).
+    exact config object the ``ragas_gates`` detection functions take. ``cells``
+    and every ``thresholds`` field default to today's constant
+    (:func:`default_bindings`) when omitted, so a partial ``bindings`` block
+    inherits the default for whatever those two sections do not name.
+    ``corroboration`` is the EXCEPTION and does NOT inherit: omitting the
+    ``corroboration:`` sub-block does not fall back to the default map - it
+    DISABLES cross-family corroboration (empty judge map + all-``None`` families)
+    so every score regression degrades to single-judge-red (AC4). A custom
+    ``bindings:`` block that edits only ``cells`` / ``thresholds`` therefore runs
+    single-family; to keep cross-family corroboration the block must RE-DECLARE
+    the ``corroboration:`` sub-block in full. Hard errors (no silent skip): an
+    unknown section / threshold / corroboration key, a blank or empty cell list,
+    an unknown corroboration metric or judge cell (AC5).
 
     Note on the cell universe: the cells are BUYER-defined (the whole point of the
     genericization), so they are not constrained to the kit's default cell set —
