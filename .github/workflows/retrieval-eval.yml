@@ -55,6 +55,19 @@
 # requirements-ci.txt deliberately avoids, so it runs as a SEPARATE job (its own
 # runner = its own disk budget) rather than bloating the dual-checkout eval job.
 #
+# US-105 (review follow-up): the two jobs trigger on DIFFERENT diffs, split by a
+# lightweight `changes` job (dorny/paths-filter). The `retrieval-eval` job keeps
+# its narrower RETRIEVAL-only scope, so it does NOT pay the dual-checkout + double
+# corpus-seed cost on a backend/main.py-only PR. The `au4-security-invariants` job
+# ADDITIONALLY covers the API-edge endpoint surface (backend/main.py): AU4's Phase 1
+# auth floor (`get_user`) and its Phase 3 widget transcript / first-message opaque-
+# token binding checks are ENDPOINT-level logic in main.py, not the RLS migrations,
+# so a PR weakening the transcript binding, the first-message key gate, or the auth
+# floor directly in main.py re-runs AU4 before merge (closing the coverage gap where
+# a main.py-only PR would previously trigger NO per-PR security gate at all). This
+# only refines WHICH deterministic per-PR gate runs for a given diff; determinism-
+# decides-merge-blocking (US-105) is unchanged - a `fail` in either job still blocks.
+#
 # Reranker modes (cohere / voyage / llm) are NOT exercised here — they
 # cost real money per call and add API-dependency flake to PR checks.
 # The nightly workflow (retrieval-eval-nightly.yml) is where rerankers
@@ -74,6 +87,11 @@ name: Retrieval eval (PR)
 
 on:
   pull_request:
+    # Workflow-level trigger = the UNION of the two jobs' path sets; the `changes`
+    # job (below) then splits the diff per-job so each deterministic gate runs only
+    # for a relevant change (retrieval paths -> the retrieval-eval job; the API-edge
+    # endpoint + RLS surface -> the au4-security-invariants job). The union is kept
+    # here so the workflow triggers whenever EITHER gate must run.
     paths:
       - 'backend/retrieval.py'
       - 'backend/chunking.py'
@@ -84,8 +102,13 @@ on:
       - 'backend/**/*prompt*'
       # US-105: AU4 (backend/test_au4_auth_attacks.py, the au4-security-invariants
       # job below) is a deterministic per-PR security invariant. Its leak-critical
-      # surface is the RLS migrations (already listed) + the permission resolver;
-      # a change to either must re-run the API-layer auth-attack suite before merge.
+      # surface is the RLS migrations (already listed), the permission resolver
+      # (backend/permissions.py), AND the API-edge endpoint logic in backend/main.py
+      # - the Phase 1 auth floor (`get_user`) and the Phase 3 widget transcript /
+      # first-message opaque-token binding checks it pins are endpoint-level, not
+      # RLS. A change to any of these must re-run the API-layer auth-attack suite
+      # before merge (the per-job `changes` filter routes it to AU4 only).
+      - 'backend/main.py'
       - 'backend/permissions.py'
       - 'backend/test_au4_auth_attacks.py'
       - 'evals/retrieval/**'
@@ -103,8 +126,53 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # US-105 (review follow-up): compute a per-job path split from the PR diff so the
+  # two deterministic gates trigger independently. The workflow-level `paths:` union
+  # (above) decides whether the workflow runs at all; this job then decides WHICH of
+  # the two jobs runs. The retrieval-eval job stays retrieval-only (it must not pay
+  # the dual-checkout + double corpus-seed cost on a main.py-only PR), while the AU4
+  # job additionally covers the API-edge endpoint surface (backend/main.py), whose
+  # Phase 1 auth floor + Phase 3 widget opaque-token binding checks are endpoint-
+  # level, not RLS. A skipped downstream job (its filter false) reports "skipped",
+  # which branch protection treats as a pass, so a retrieval-only PR does not hang on
+  # the AU4 check and vice versa.
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      retrieval: ${{ steps.filter.outputs.retrieval }}
+      au4: ${{ steps.filter.outputs.au4 }}
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+
+      - name: Filter changed paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            retrieval:
+              - 'backend/retrieval.py'
+              - 'backend/chunking.py'
+              - 'backend/embeddings.py'
+              - 'backend/escalation.py'
+              - 'backend/**/*prompt*'
+              - 'evals/retrieval/**'
+              - 'db_seed/corpus/**'
+              - 'db_seed/corpus_seed.py'
+              - 'supabase/migrations/**'
+              - '.github/workflows/retrieval-eval.yml'
+            au4:
+              - 'backend/main.py'
+              - 'backend/permissions.py'
+              - 'supabase/migrations/**'
+              - 'backend/test_au4_auth_attacks.py'
+              - '.github/workflows/retrieval-eval.yml'
+
   retrieval-eval:
     name: PR vs main
+    needs: changes
+    if: needs.changes.outputs.retrieval == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -340,6 +408,8 @@ jobs:
   # (exit 0) when the required env is unset, so it is never an infra-flake block.
   au4-security-invariants:
     name: AU4 API-layer auth attacks (deterministic, may block)
+    needs: changes
+    if: needs.changes.outputs.au4 == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
