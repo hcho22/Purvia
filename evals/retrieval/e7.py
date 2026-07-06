@@ -8,9 +8,12 @@ touching the six-cell `full/partial/no_access × pre/post` sweep in `runner.py`.
 
 This module owns the **schema + loader** only (US-051). The populations are
 *derived from the existing gold-chunk anchor*, not authored as a parallel set:
-each question carries exactly one `escalation` label, and the content-anchored
-labels reuse the same `gold_stable_ids` mechanism the retrieval gold uses
-(`db_seed.corpus_seed` stable_ids, "{filename_slug}:{chunk_index}").
+each question carries exactly one `escalation` label, and the P2/P3 labels are
+authored directly as a `gold_stable_ids` chunk-index list (`db_seed.corpus_seed`
+stable_ids, "{filename_slug}:{chunk_index}"). This is the legacy directly-authored
+form the retrieval gold used before US-107 moved it to content anchors resolved
+at eval time; E7's `escalation_gold.yaml` keeps the chunk-index form (its
+content-anchor conversion is US-108).
 
 The three hand-authored populations (E9 support-face layer) and their P-codes:
 
@@ -60,8 +63,9 @@ POPULATION_BY_LABEL: dict[str, str] = {
     "should_escalate": "P3",
 }
 
-# The content-anchored labels: a P2/P3 row MUST name the gold chunks that make
-# retrieval strong (reusing the `gold_stable_ids` mechanism). A `no_context`
+# The gold-chunk labels: a P2/P3 row MUST name the gold chunks that make
+# retrieval strong (authored directly as `gold_stable_ids`, the legacy
+# chunk-index form; see the module docstring). A `no_context`
 # (P1a) row MUST NOT — there is, by definition, no corpus chunk to anchor on.
 _ANCHORED_LABELS = ("answerable_faithful", "should_escalate")
 
