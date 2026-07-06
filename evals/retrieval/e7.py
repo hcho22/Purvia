@@ -52,7 +52,7 @@ gold chunks?".
 **P1b is deliberately NOT a label here.** P1b — a question that *is* answerable
 in general but for which *this viewer* can see no gold chunk — is the derived,
 viewer-parameterized case (US-057): the runner reconstructs it at run time from a
-P2/P3 row via `runner.compute_visible_stable_ids`'s ``no_access`` construction.
+P2 row via `runner.compute_visible_stable_ids`'s ``no_access`` construction.
 It is never hand-authored, so the schema has no `p1b` value and the loader
 rejects one as out-of-enum.
 """
@@ -151,7 +151,7 @@ def load_escalation_questions(path: Path = ESCALATION_GOLD) -> list[dict[str, An
         if label not in ESCALATION_LABELS:
             raise RuntimeError(
                 f"{qid}: escalation must be one of {ESCALATION_LABELS}, got {label!r} "
-                "(P1b is the derived no-access case rebuilt from a P2/P3 row at run "
+                "(P1b is the derived no-access case rebuilt from a P2 row at run "
                 "time — never a hand-authored label)"
             )
 
