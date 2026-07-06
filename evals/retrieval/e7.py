@@ -84,7 +84,7 @@ def load_escalation_questions(path: Path = ESCALATION_GOLD) -> list[dict[str, An
     Mirrors the enum/dedup discipline of `runner.load_questions`: a top-level
     `questions` non-empty list, each row with a unique string `id`, a non-empty
     `question`, and exactly one `escalation` label in `ESCALATION_LABELS`. The
-    gold-chunk anchor is **required and non-empty** for the content-anchored
+    gold-chunk anchor is **required and non-empty** for the gold-chunk
     labels (`answerable_faithful` / `should_escalate`) and **forbidden** for
     `no_context` (genuinely-no-context rows carry no gold). The two LLM-judged
     labels (`answerable_faithful` P2, US-053; `should_escalate` P3, US-054) each
