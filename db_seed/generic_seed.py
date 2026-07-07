@@ -24,9 +24,11 @@ Two invariants make it safe against a production corpus (US-110):
    rollout. Grants appear only when a manifest explicitly requests them.
 
 Re-runnable / idempotent: prior rows from *this* seed are identified by
-`documents.metadata->>'generic_seed_label'` (scoped so a buyer seed never
+`documents.metadata->>'generic_seed_label'` ALONE (scoped so a buyer seed never
 clobbers the eval corpus, which is marked `corpus_seed=true`) and deleted
-before re-inserting; chunks + their `chunk_acl` cascade via the documents FK.
+before re-inserting — so re-seeding a label replaces all its documents even if
+the manifest owner id changed across re-seeds; chunks + their `chunk_acl`
+cascade via the documents FK.
 The resulting `(stable_id, md5(content))` pairs are byte-identical across
 re-seeds (the PRD validation criterion) because `stable_id = "{slug}:{idx}"`
 and `content` come only from the deterministic `chunk_text`.
@@ -304,6 +306,24 @@ def load_manifest(path: Path) -> Manifest:
 # ---------------------------------------------------------------------------
 
 
+def validate_grant_documents(
+    manifest: Manifest, corpus: list[tuple[str, str]]
+) -> None:
+    """Fail fast (before any paid embed / DB insert) if a manifest grant names a
+    document not present in the loaded corpus. The corpus slugs are already known
+    at this point, so a typo'd `grants[].document` should never cost a full embed
+    or leave a partially-seeded DB. `_apply_grants` keeps the same check as a
+    backstop against a slug that slips through here."""
+    corpus_slugs = {filename_slug(filename) for filename, _ in corpus}
+    for grant in manifest.grants:
+        slug = filename_slug(grant.document)
+        if slug not in corpus_slugs:
+            raise RuntimeError(
+                f"manifest grant references document {grant.document!r} "
+                f"(slug {slug!r}) which is not present in the seeded docs folder"
+            )
+
+
 def load_docs(docs_dir: Path) -> list[tuple[str, str]]:
     """Return `[(filename, content)]` sorted by filename for deterministic order.
 
@@ -418,19 +438,19 @@ async def _ensure_group(conn: asyncpg.Connection, group: ManifestGroup) -> None:
         )
 
 
-async def _purge_existing(
-    conn: asyncpg.Connection, owner_id: uuid.UUID, seed_label: str
-) -> int:
+async def _purge_existing(conn: asyncpg.Connection, seed_label: str) -> int:
     """Delete prior documents from *this* seed only (chunks + chunk_acl cascade
-    via the documents FK). Scoped by `generic_seed_label` so a buyer seed never
-    touches the eval corpus (`corpus_seed=true`) or another labelled seed."""
+    via the documents FK). Scoped by `generic_seed_label` ALONE so re-seeding a
+    label replaces ALL documents carrying it regardless of owner — the advertised
+    re-runnable/byte-stable idempotency then holds even when the manifest owner id
+    changes across re-seeds. The label is buyer-namespaced to their seed, so it
+    still never touches the eval corpus (`corpus_seed=true`) or another labelled
+    seed."""
     result = await conn.execute(
         """
         delete from public.documents
-         where user_id = $1
-           and (metadata->>'generic_seed_label') = $2
+         where (metadata->>'generic_seed_label') = $1
         """,
-        owner_id,
         seed_label,
     )
     return int(result.rsplit(" ", 1)[1])
@@ -588,6 +608,10 @@ async def seed(
 
     corpus = load_docs(docs_dir)
     manifest = load_manifest(manifest_path) if manifest_path else default_manifest()
+    # Fail fast on a bad grant BEFORE any paid embed or DB write — the corpus
+    # slugs are already known, so a typo'd grant never costs an embed loop or
+    # leaves a partially-seeded DB.
+    validate_grant_documents(manifest, corpus)
     openai_client = build_embedder_client()
     conn = await asyncpg.connect(url)
 
@@ -607,7 +631,7 @@ async def seed(
         for g in manifest.groups:
             await _ensure_group(conn, g)
 
-        purged = await _purge_existing(conn, manifest.owner_id, seed_label)
+        purged = await _purge_existing(conn, seed_label)
         if purged:
             log.info("generic_seed: purged %d previously-seeded documents", purged)
 

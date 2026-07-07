@@ -49,6 +49,7 @@ from db_seed.generic_seed import (
     load_docs,
     parse_manifest,
     seed,
+    validate_grant_documents,
 )
 
 # The synthetic eval-viewer UUIDs the RUNNER (never the seeder) constructs. A
@@ -199,6 +200,19 @@ def _offline_checks() -> None:
     owner_grant = _manifest_dict()
     owner_grant["grants"][0]["principal_id"] = str(OWNER_ID)
     parse_manifest(owner_grant)  # must not raise
+
+    # validate_grant_documents: a grant naming a doc absent from the corpus is a
+    # hard error raised BEFORE any embed / DB write. The real grant matches the
+    # seeded corpus and must pass.
+    corpus = [(DOC_A, DOC_A_BODY), (DOC_B, DOC_B_BODY)]
+    validate_grant_documents(parse_manifest(_manifest_dict()), corpus)  # must not raise
+    bad_grant = _manifest_dict()
+    bad_grant["grants"][0]["document"] = "does-not-exist"
+    try:
+        validate_grant_documents(parse_manifest(bad_grant), corpus)
+        raise AssertionError("expected RuntimeError for a grant to an absent document")
+    except RuntimeError as exc:
+        assert "not present" in str(exc)
 
     # STRUCTURAL US-110 AC2 guarantee: the seeder module uses no synthetic
     # eval-viewer scaffolding whatsoever. Check actual NAME tokens (identifiers),
