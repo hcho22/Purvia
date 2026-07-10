@@ -450,7 +450,7 @@ When the doc exists, confirm each acceptance criterion:
 | US-086 | bot never grantable from normal share box; publish is explicit + confirmed | [x] PASS / [ ] FAIL | verified 2026-07-10 |
 | US-087 | queue is membership-gated + live; no cross-workspace leak | [x] PASS / [ ] FAIL | already verified 2026-07-01 |
 | US-088 | transcript renders; agent reply reaches widget; Resolve invalidates token | [x] PASS / [ ] FAIL | verified 2026-07-10 |
-| US-089 | claim dims for others but never blocks a reply | [ ] PASS / [ ] FAIL | |
+| US-089 | claim dims for others but never blocks a reply | [x] PASS / [ ] FAIL | verified 2026-07-10 |
 | US-090 | admin issues/rotates/revokes; non-admin blocked from settings, not queue | [ ] PASS / [ ] FAIL | |
 | US-112 | demo-corpora doc framing + swap honesty | [ ] PASS / [ ] FAIL | doc not authored yet -> FAIL until written |
 
