@@ -84,6 +84,11 @@ def test_predict_alpha_neutral_prose_is_exactly_half() -> None:
         "how do I reset my password",
         "what is the recommended way to configure retries",
         "tell me about the onboarding process for new customers",
+        # contractions carry two apostrophes but are ordinary prose, not a
+        # quoted phrase — they must stay exactly neutral.
+        "I don't know why it's failing",
+        # common all-caps prose acronyms are not identifier-shaped tokens.
+        "what is the API rate limit",
     ):
         a = predict_alpha(q)
         _check(

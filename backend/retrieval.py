@@ -410,7 +410,7 @@ async def keyword_only_search(
 # stripped, but with internal separators (`_`, `-`, `.`, `:`, `/`) preserved.
 _TOKEN_SPLIT_RE = re.compile(r"\s+")
 _EDGE_PUNCT = "\"'“”‘’.,;:?!()[]{}"
-_QUOTED_PHRASE_RE = re.compile(r"[\"“][^\"”]+[\"”]|['‘][^'’]+['’]")
+_QUOTED_PHRASE_RE = re.compile(r"[\"“][^\"”]+[\"”]")
 _HAS_LETTER_RE = re.compile(r"[A-Za-z]")
 _HAS_DIGIT_RE = re.compile(r"[0-9]")
 _CAMEL_RE = re.compile(r"[a-z][A-Z]")
@@ -433,9 +433,6 @@ def _is_identifier_token(tok: str) -> bool:
     if has_digit and any(sep in tok for sep in ("-", ".", ":", "/")):
         return True
     if has_letter and has_digit:
-        return True
-    # UPPER_SNAKE without an underscore is still a constant-shaped token.
-    if has_letter and tok == tok.upper() and len(tok) >= 3:
         return True
     # intra-token camelCase (getUserById).
     if _CAMEL_RE.search(tok):
