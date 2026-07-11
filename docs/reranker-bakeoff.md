@@ -55,7 +55,7 @@ Elsewhere: `single_chunk` improves sharply (MRR +0.130), `paraphrase` is unchang
 
 The `llm` reranker adds one serial LLM call per query.
 Per-call rerank latency ranged roughly 0.6–2.2s (median ~1.2s), with 1 of 60 calls exceeding the 2s `RERANK_LATENCY_WARN_SECONDS` threshold.
-End-to-end wall-clock for the 60-question run was **343.6s with `llm` vs 11.9s for the `none` control** — a ~28× increase dominated by the added serial model call.
+End-to-end wall-clock for the 60-question run was **343.6s with `llm` vs 12.6s for the `none` control** (`elapsed_s` in the committed JSONs) — a ~27× increase dominated by the added serial model call.
 `cohere`/`voyage` hosted cross-encoders are expected to be materially faster per call, but were not measured here.
 
 Caveat: the local corpus is only 16 chunks, so many queries retrieve fewer than the 20-candidate `RERANK_INPUT_K` pool; a production-scale corpus with deeper pools would exercise the reranker (and its latency) harder. The numbers here are directional but run against the kit's own committed golden set, so they are representative of what CI sees.
