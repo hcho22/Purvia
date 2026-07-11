@@ -1,6 +1,6 @@
 # PRD: Retrieval-Quality Pass (Lexical Leg Revival + Adaptive Fusion)
 
-Status: draft, stories not started.
+Status: in progress. US-113 (lexical golden-set instrumentation) and US-114 (keyword_search OR-fallback) landed; US-115 through US-118 not started.
 Origin: comparison of Agentic_RAG against RakuenSoftware/aimee (2026-07-10), scoped via grilling session.
 Predecessor numbering: continues after US-112 (Phase-2 PRD, `.claude/agent/tasks/prd-phase2-implementation.md`).
 
