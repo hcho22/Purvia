@@ -74,21 +74,25 @@ jobs:
           CORPUS_SEED_DATABASE_URL: ${{ env.DB_URL }}
           DATABASE_URL: ${{ env.DB_URL }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          # Reranker secrets are accepted here so they're available when
-          # the runner gains reranker support; they're unused until then.
+          # US-117: reranker secrets — used by the hybrid+llm nightly reranker
+          # row below (llm needs only OPENAI_API_KEY); cohere/voyage are the
+          # on-demand bake-off backends run manually per docs/reranker-bakeoff.md.
           COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
           VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
         run: |
           python -m db_seed.corpus_seed
           python -m evals.retrieval.runner --out /tmp/nightly.json
-          # TODO (US-035 follow-up): extend runner to sweep reranker modes
-          # — hybrid+cohere / hybrid+voyage / hybrid+llm — and merge those
-          # rows into /tmp/nightly.json before publishing. Requires a
-          # runner CLI flag (e.g. --rerankers cohere,voyage,llm) and the
-          # rerank-on-top-of-hybrid path that production already uses in
-          # backend/main.py:_retrieve_for_agent. Today's nightly publishes
-          # the same three modes the PR workflow runs; reranker comparison
-          # is the next contained piece of work.
+          # US-117: nightly reranker observability. The runner now reruns the
+          # canonical hybrid path with the `llm` reranker on top (the same
+          # backend/main.py:_retrieve_for_agent path production uses), published
+          # alongside the baseline so the reranker delta is trackable over time.
+          # Its own --summary avoids clobbering the baseline summary.md before it
+          # is published below. cohere/voyage are run manually in the full
+          # bake-off — methodology + recommendation in docs/reranker-bakeoff.md.
+          python -m evals.retrieval.runner \
+            --mode hybrid --viewers full --reranker llm \
+            --out /tmp/nightly-rerank-llm.json \
+            --summary /tmp/nightly-rerank-llm.md
 
       - name: Publish to docs/nightly/
         run: |
@@ -96,6 +100,8 @@ jobs:
           mkdir -p docs/nightly
           cp /tmp/nightly.json "docs/nightly/${DATE}.json"
           cp evals/retrieval/summary.md "docs/nightly/${DATE}.md"
+          # US-117: publish the hybrid+llm reranker run beside the baseline.
+          cp /tmp/nightly-rerank-llm.json "docs/nightly/${DATE}-rerank-llm.json"
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
           git add docs/nightly
