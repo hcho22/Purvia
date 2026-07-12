@@ -188,9 +188,11 @@ LOCAL_JWT_SECRET = "super-secret-jwt-token-with-at-least-32-characters-long"
 # Provenance: re-pinned 2026-07-12 to the post-US-116 levels — the first run
 # where the lexical leg (US-114 OR-fallback) and adaptive-alpha fusion (US-116)
 # had both landed. Source snapshot: a clean `--viewers all --include-e6` run of
-# the 60-question golden set against local Supabase with the .env-default
-# SEARCH_SIMILARITY_THRESHOLD=0.4 (the threshold CI uses), full_access ×
-# pre_filter recall@5 per mode. The prior pin (vector/hybrid 0.670,
+# the 60-question golden set against local Supabase at the code-default
+# SEARCH_SIMILARITY_THRESHOLD=0.3 (backend/retrieval.py
+# DEFAULT_SIMILARITY_THRESHOLD — also what CI uses, since no workflow sets
+# SEARCH_SIMILARITY_THRESHOLD and the runner does not load backend/.env),
+# full_access × pre_filter recall@5 per mode. The prior pin (vector/hybrid 0.670,
 # keyword 0.110) predated the lexical-leg revival and left every mode's cell
 # permanently red at +0.19 to +0.81 above baseline.
 #
