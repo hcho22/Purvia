@@ -92,6 +92,14 @@ python -m evals.retrieval.runner --include-generation
 # pinned security invariant, not a thresholded metric. See
 # docs/adr/0002-workspace-tenant-isolation.md for the isolation rationale.
 python -m evals.retrieval.runner --include-e6
+
+# Rerank the retrieved candidates before scoring (US-117), reusing the
+# production rerank path (backend/main.py::_retrieve_for_agent). `none`
+# (default) is a true pass-through; `llm` needs OPENAI_API_KEY, `cohere`/
+# `voyage` need COHERE_API_KEY / VOYAGE_API_KEY. Eval-only — it changes no
+# default and never touches the widget deflection path. The chosen backend is
+# recorded in the results JSON under "reranker". See docs/reranker-bakeoff.md.
+python -m evals.retrieval.runner --reranker llm
 ```
 
 The runner writes `evals/retrieval/results/<ISO-timestamp>.json` (full per-question detail + aggregates) and `evals/retrieval/summary.md` (two markdown tables ready to drop between the EVAL_SUMMARY markers in the next section).
