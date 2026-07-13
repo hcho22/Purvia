@@ -74,21 +74,32 @@ jobs:
           CORPUS_SEED_DATABASE_URL: ${{ env.DB_URL }}
           DATABASE_URL: ${{ env.DB_URL }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          # US-117: reranker secrets — used by the hybrid+llm nightly reranker
-          # row below (llm needs only OPENAI_API_KEY); cohere/voyage are the
-          # on-demand bake-off backends run manually per docs/reranker-bakeoff.md.
-          COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
-          VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
         run: |
           python -m db_seed.corpus_seed
           python -m evals.retrieval.runner --out /tmp/nightly.json
-          # US-117: nightly reranker observability. The runner now reruns the
-          # canonical hybrid path with the `llm` reranker on top (the same
-          # backend/main.py:_retrieve_for_agent path production uses), published
-          # alongside the baseline so the reranker delta is trackable over time.
-          # Its own --summary avoids clobbering the baseline summary.md before it
-          # is published below. cohere/voyage are run manually in the full
-          # bake-off — methodology + recommendation in docs/reranker-bakeoff.md.
+
+      - name: Reranker observability run (hybrid+llm)
+        # US-117: nightly reranker observability. Reruns the canonical hybrid
+        # path with the `llm` reranker on top (the same
+        # backend/main.py:_retrieve_for_agent path production uses), published
+        # alongside the baseline so the reranker delta is trackable over time.
+        # continue-on-error keeps a flaky/rate-limited reranker run from failing
+        # the job and blocking baseline publication (US-117's stated goal); the
+        # publish step below copies this artifact only if it was produced. Its
+        # own --summary avoids clobbering the baseline summary.md. cohere/voyage
+        # are run manually in the full bake-off — methodology + recommendation
+        # in docs/reranker-bakeoff.md.
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ env.API_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ env.SERVICE_ROLE_KEY }}
+          DATABASE_URL: ${{ env.DB_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          # llm needs only OPENAI_API_KEY; cohere/voyage are the on-demand
+          # bake-off backends run manually per docs/reranker-bakeoff.md.
+          COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+          VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
+        run: |
           python -m evals.retrieval.runner \
             --mode hybrid --viewers full --reranker llm \
             --out /tmp/nightly-rerank-llm.json \
@@ -100,8 +111,14 @@ jobs:
           mkdir -p docs/nightly
           cp /tmp/nightly.json "docs/nightly/${DATE}.json"
           cp evals/retrieval/summary.md "docs/nightly/${DATE}.md"
-          # US-117: publish the hybrid+llm reranker run beside the baseline.
-          cp /tmp/nightly-rerank-llm.json "docs/nightly/${DATE}-rerank-llm.json"
+          # US-117: publish the hybrid+llm reranker run beside the baseline, but
+          # only if the (continue-on-error) reranker step actually produced it —
+          # a flaky reranker run must not block baseline publication.
+          if [ -f /tmp/nightly-rerank-llm.json ]; then
+            cp /tmp/nightly-rerank-llm.json "docs/nightly/${DATE}-rerank-llm.json"
+          else
+            echo "reranker observability run produced no artifact — publishing baseline only"
+          fi
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
           git add docs/nightly
