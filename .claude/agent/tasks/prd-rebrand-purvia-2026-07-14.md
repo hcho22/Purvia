@@ -164,13 +164,15 @@ This is a deliberately **tight, display-only rename plus a naming ADR**. The ent
 
 This promotes what was previously a Non-Goal / Open Question into a real deliverable. Scope is deliberately **GitHub-only**: the rename is a repository-name change plus a git-remote update, not a rename of the internal technical namespace (which stays `agentic-rag`/`ar` per the Non-Goals) and not a rename of the local clone directory. GitHub auto-creates a redirect from the old URL, so existing clones, remotes, and historical links keep working; the blast radius is doc-only (no CI, badge, `package.json`, or build coupling references the mixed-case repo name).
 
+**Status:** ✅ Done (2026-07-15) - repo renamed `hcho22/Agentic_RAG` → `hcho22/Purvia`; local `origin` re-pointed and `git fetch origin` clean; old URL returns `301 → hcho22/Purvia`; the 2 historical PR URLs in `docs/evals.md` updated. Technical slug `agentic-rag`/`ar`, local clone path, and CI/deploy identifiers all left untouched.
+
 **Acceptance Criteria:**
 
-- [ ] Rename the GitHub repo `hcho22/Agentic_RAG` → `hcho22/Purvia` (`gh repo rename Purvia`, or Settings → Repository name). GitHub auto-creates a redirect from the old URL.
-- [ ] Update the local `origin` remote: `git remote set-url origin https://github.com/hcho22/Purvia.git`; `git fetch origin` succeeds. (Worktrees share the repo's remote config, so one update covers them all.)
-- [ ] Cosmetic: update the 2 historical PR URLs in `docs/evals.md` (~line 184) from the `hcho22/Agentic_RAG` slug to `hcho22/Purvia` (optional - GitHub redirects keep the old links working).
-- [ ] Explicitly NOT changed: the technical slug `agentic-rag`/`ar` (Fly app `agentic-rag-backend`, Supabase `project_id`, LangSmith project, logger `agentic_rag.backend`, `ar-support:*` localStorage, the `wk_pk_` prefix); the local clone directory `/Users/hcho/Developer/Agentic_RAG`; and the 4 clone-path lines in `docs/manual-test-plan-support-widget.md` (they reference the unchanged local path).
-- [ ] No CI/deploy change: `.github/workflows/*` reference the repo by GitHub context (not by name), so CI stays green; Fly/Supabase/LangSmith deploys are unaffected.
+- [x] Rename the GitHub repo `hcho22/Agentic_RAG` → `hcho22/Purvia` (`gh repo rename Purvia`, or Settings → Repository name). GitHub auto-creates a redirect from the old URL.
+- [x] Update the local `origin` remote: `git remote set-url origin https://github.com/hcho22/Purvia.git`; `git fetch origin` succeeds. (Worktrees share the repo's remote config, so one update covers them all.)
+- [x] Cosmetic: update the 2 historical PR URLs in `docs/evals.md` (~line 184) from the `hcho22/Agentic_RAG` slug to `hcho22/Purvia` (optional - GitHub redirects keep the old links working).
+- [x] Explicitly NOT changed: the technical slug `agentic-rag`/`ar` (Fly app `agentic-rag-backend`, Supabase `project_id`, LangSmith project, logger `agentic_rag.backend`, `ar-support:*` localStorage, the `wk_pk_` prefix); the local clone directory `/Users/hcho/Developer/Agentic_RAG`; and the 4 clone-path lines in `docs/manual-test-plan-support-widget.md` (they reference the unchanged local path).
+- [x] No CI/deploy change: `.github/workflows/*` reference the repo by GitHub context (not by name), so CI stays green; Fly/Supabase/LangSmith deploys are unaffected.
 
 **Validation Test:**
 
