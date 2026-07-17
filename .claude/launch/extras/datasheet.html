@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PURVIA-1 Datasheet, Rev A</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='3' width='19' height='19' rx='5' fill='none' stroke='%2315803D' stroke-width='2'/%3E%3C/svg%3E">
+<style>
+:root{
+  --paper:#FAFAF7;--surface:#FFFFFF;--ink:#0B1220;--muted:#475569;--faint:#64748B;
+  --pass:#15803D;--fail:#B91C1C;--warn:#92400E;--border:#E2E8F0;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  --body:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{--paper:#0B1220;--surface:#111A2E;--ink:#E7EAF0;--muted:#CBD5E1;--faint:#94A3B8;--pass:#4ADE80;--fail:#F87171;--warn:#FBBF24;--border:#24304A}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.55}
+.sheet{max-width:900px;margin:0 auto;padding:32px 24px}
+header{display:flex;align-items:flex-start;gap:16px;border-bottom:3px solid var(--pass);padding-bottom:16px}
+header svg{width:56px;height:56px;flex:none}
+h1{font-family:var(--mono);font-size:1.7rem;margin:0;letter-spacing:.01em}
+.rev{margin-left:auto;text-align:right;font-family:var(--mono);font-size:.8rem;color:var(--faint)}
+.subtitle{color:var(--muted);margin:4px 0 0}
+h2{font-family:var(--mono);font-size:1.02rem;letter-spacing:.05em;text-transform:uppercase;border-bottom:1px solid var(--border);padding-bottom:6px;margin:34px 0 12px;color:var(--ink)}
+table{border-collapse:collapse;width:100%;font-family:var(--mono);font-size:.82rem}
+th,td{border:1px solid var(--border);padding:7px 10px;text-align:left;vertical-align:top}
+th{background:var(--surface);color:var(--muted);font-weight:600}
+.wrap{overflow-x:auto}
+.pass{color:var(--pass);font-weight:700}.fail{color:var(--fail);font-weight:700}.warn{color:var(--warn)}
+.note{color:var(--faint);font-size:.83rem;margin:8px 0 0}
+ul{margin:.4em 0;padding-left:1.2em}
+li{margin:.3em 0}
+footer{margin-top:40px;border-top:1px solid var(--border);padding-top:14px;color:var(--faint);font-size:.8rem;font-family:var(--mono)}
+td.num{white-space:nowrap}
+@media print{body{background:#fff}.sheet{padding:0}}
+</style>
+</head>
+<body>
+<div class="sheet">
+<header>
+  <svg viewBox="0 0 64 64" aria-label="Purvia mark"><rect x="48" y="12" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="48" y="28" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="12" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="28" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="48" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="6" y="6" width="38" height="38" rx="10" fill="none" stroke="#15803D" stroke-width="3.5"/><rect x="12" y="12" width="10" height="10" rx="2.5" fill="#15803D"/><rect x="28" y="12" width="10" height="10" rx="2.5" fill="#15803D"/><rect x="12" y="28" width="10" height="10" rx="2.5" fill="#15803D"/><rect x="28" y="28" width="10" height="10" rx="2.5" fill="#15803D"/></svg>
+  <div>
+    <h1>PURVIA-1</h1>
+    <p class="subtitle">Permissions-aware RAG kit with CI-checked access-correctness and answer-safety</p>
+  </div>
+  <div class="rev">Datasheet Rev A<br>2026-07-16<br>License: MIT<br>github.com/hcho22/Purvia</div>
+</header>
+
+<p class="note" style="margin-top:14px">A datasheet is a promise with test conditions. Every value below carries the conditions it was measured under and the committed artifact it came from. The errata section is maintained with the same discipline as the feature list; a datasheet without errata is marketing.</p>
+
+<h2>1. Device description</h2>
+<p>PURVIA-1 is a self-hosted retrieval-augmented generation stack: FastAPI backend on the raw OpenAI SDK + Pydantic, Postgres/pgvector via Supabase, React frontend, and an embeddable cross-origin support widget. Access control is evaluated inside the retrieval SQL predicate (owner-OR-ACL AND workspace membership, resolved from the caller's JWT under SECURITY INVOKER). An eval harness with 6 CI workflows checks isolation, retrieval quality, and escalation safety; deterministic security gates fail their CI check on any breach. No orchestration framework in the product (the LangSmith tracing SDK is a runtime dependency; RAGAS/langchain are lazy eval-only extras).</p>
+
+<h2>2. Operating conditions (recommended)</h2>
+<div class="wrap"><table>
+  <tr><th>Parameter</th><th>Min</th><th>Typ</th><th>Notes</th></tr>
+  <tr><td>Node</td><td class="num">20</td><td class="num">20 LTS</td><td>frontend build/dev</td></tr>
+  <tr><td>Python</td><td class="num">3.11</td><td class="num">3.11</td><td>backend + evals</td></tr>
+  <tr><td>Postgres + identity</td><td colspan="2">Supabase local or hosted</td><td>NOT a neutral Postgres host: Supabase is the identity and RLS substrate (auth.uid() from GoTrue JWTs is load-bearing). Bringing your own auth means porting the predicate, RLS, JWT minting, and eval seeds. 45 committed migrations</td></tr>
+  <tr><td>Install weight</td><td colspan="2">multi-GB default</td><td>the default install pulls docling, which brings torch transitively (numpy pinned &lt;2 for it); parsing sits behind the PARSER seam, optional-extra split is a roadmap item</td></tr>
+  <tr><td>OpenAI API key</td><td colspan="2">required</td><td>answerer/embedder; BYO host per role, azure tested, fail-closed on misconfig</td></tr>
+  <tr><td>Anthropic API key</td><td colspan="2">optional</td><td>eval judge only; never read by the live backend</td></tr>
+  <tr><td>SUPABASE_SERVICE_ROLE_KEY</td><td colspan="2">optional</td><td>absent: every /widget/* route returns 503 (support surface inert, never unprotected)</td></tr>
+</table></div>
+
+<h2>3. Absolute maximum ratings</h2>
+<p class="note" style="margin:0 0 8px">Beyond these limits the system refuses, throttles, or escalates by design. These are enforcement points, not aspirations.</p>
+<div class="wrap"><table>
+  <tr><th>Symbol</th><th>Parameter</th><th>Rating</th><th>Enforced by</th></tr>
+  <tr><td>FR<sub>max</sub></td><td>False-resolve fraction (support bot auto-resolving what it should escalate)</td><td class="num">0.05 default, buyer-set</td><td>weekly E7 gate; breach fails the workflow and files an issue, never a comment. Enforcement point, not a measured characteristic: no weekly report has published yet (PV-E6), and enforcing it on your corpus requires your own escalation gold set plus a judge key</td></tr>
+  <tr><td>LEAK<sub>max</sub></td><td>Labeled gold chunks returned to a no-access viewer</td><td class="num">0 (binary)</td><td>evals/gate/security.py, == 1.0 assert, no tolerance parameter, no config off-switch</td></tr>
+  <tr><td>XWS<sub>max</sub></td><td>Cross-workspace recall for an ACL-holding non-member</td><td class="num">0.0 @ recall@10</td><td>E6 per-PR gate with positive control; a run that cannot execute after retries is flagged loudly but does not fail the check (PV-E8)</td></tr>
+  <tr><td>RATE<sub>key</sub></td><td>Widget requests per public key per window</td><td class="num">300 / 60 s default</td><td>US-076 limiter, 429 + Retry-After, no LLM work done</td></tr>
+  <tr><td>RATE<sub>ws</sub></td><td>Per-workspace bot ceiling (cost-runaway backstop)</td><td class="num">600 / window default</td><td>US-077 circuit breaker; tripped = generic deferral + escalate</td></tr>
+  <tr><td>ESC<sub>disc</sub></td><td>Information disclosed by an access-denied escalation</td><td class="num">0 bytes beyond the generic deferral</td><td>E7 P1b byte-equality assertion, scoped precisely: it pins the escalation constructor's output across every escalation reason; a production call-site that composed the message separately would be outside its sight</td></tr>
+</table></div>
+
+<h2>4. Measured characteristics</h2>
+<p class="note" style="margin:0 0 8px">Test conditions: 60-question golden set, five categories, 8-doc / 16-chunk demo corpus, nightly run of 2026-07-15 (docs/nightly/2026-07-15.md and .json). Values at this corpus size differentiate retrieval modes; they do not demonstrate scale (see erratum PV-E3).</p>
+<div class="wrap"><table>
+  <tr><th>Parameter</th><th>vector</th><th>keyword</th><th>hybrid</th><th>Conditions / notes</th></tr>
+  <tr><td>recall@5 (headline)</td><td class="num">0.875</td><td class="num">0.917</td><td class="num pass">0.950</td><td>hybrid &gt;= vector in every category</td></tr>
+  <tr><td>MRR (headline)</td><td class="num">0.813</td><td class="num">0.834</td><td class="num pass">0.858</td><td>hybrid trails vector on paraphrase (0.767 vs 1.000; PV-E2)</td></tr>
+  <tr><td>nDCG@5 (headline)</td><td class="num">0.811</td><td class="num">0.830</td><td class="num pass">0.872</td><td></td></tr>
+  <tr><td>MRR (adversarial)</td><td class="num">0.503</td><td class="num">0.617</td><td class="num">0.623</td><td>+0.052 available via LLM rerank at ~1.2 s median/query; default stays none (docs/reranker-bakeoff.md)</td></tr>
+  <tr><td>security_no_access (all modes, pre+post filter)</td><td colspan="3" class="num pass">1.000</td><td>180 no-access runs per nightly; scope: labeled gold chunks; under-labeling is a security defect by contract</td></tr>
+  <tr><td>keyword recall@5, prior revision</td><td colspan="3" class="num fail">0.110-0.140</td><td>2026-05-19 through 07-09, 33 straight published snapshots; fixed same-day as first read (PV-E1 history)</td></tr>
+</table></div>
+
+<h2>5. Verification methodology</h2>
+<ul>
+  <li>6 CI workflows; determinism decides placement: only deterministic gates (E6, E7 P1a/P1b, AU4, ship-green) may fail a PR/push check; LLM-judged gates run weekly and file issues. Declaring an LLM-judged gate per-PR is a structural load error (evals/gate/placement.py).</li>
+  <li>Cross-family judging: OpenAI generates, claude-haiku-4-5 grades (evals/retrieval/runner.py). The judge is a fixed instrument, excluded from the configurable model surface.</li>
+  <li>Non-regression baselines are one-sided (US-118): improvements never flag. Adopted after the two-sided predecessor spent the dead-leg period in permanent false alarm.</li>
+  <li>38 nightly snapshots committed (2026-05-19 to 2026-07-15, with gaps); bad snapshots are retained, not deleted.</li>
+  <li>AU4: 30+ exact API-edge assertions (forged/missing/expired JWTs, cross-tenant ACL holders, revoked keys, opaque-token-as-JWT), its own per-PR job.</li>
+</ul>
+
+<h2>6. Errata</h2>
+<p class="note" style="margin:0 0 8px">Open items are stated with the same precision as the ratings. Marketing that contradicts an erratum is void.</p>
+<div class="wrap"><table>
+  <tr><th>ID</th><th>Description</th><th>Impact</th><th>Workaround</th><th>Status</th></tr>
+  <tr><td>PV-E1</td><td>Permissions scale benchmark (10k-chunk) publishes 0.000 in every cell since 2026-06-19; likely cause: workspace-membership migrations orphaned the benchmark's synthetic viewers</td><td>Scale recall claims are design-time results dated June 2026; nightly alarm fires into a void</td><td>none</td><td class="fail">OPEN - fix is a launch precondition</td></tr>
+  <tr><td>PV-E2</td><td>Hybrid MRR trails vector on paraphrase (0.767 vs 1.000, 2026-07-15)</td><td>Paraphrase ranking below vector-only despite recall parity</td><td>RETRIEVAL_MODE=vector for paraphrase-heavy workloads</td><td class="warn">OPEN - PRD goal unmet on this cell</td></tr>
+  <tr><td>PV-E3</td><td>Demo corpus is 8 docs / 16 chunks; per-category cells have low statistical power (docs/evals.md §5)</td><td>Metric values are not scale evidence</td><td>author a golden set on your corpus (docs/golden-set-authoring.md); anchors fail loud on swap by design</td><td class="warn">BY DESIGN, disclosed</td></tr>
+  <tr><td>PV-E4</td><td>main has no branch protection; PRs are self-merged (solo repo)</td><td>"Fails the required CI check" is a convention, not a GitHub-enforced block</td><td>enable a ruleset requiring E6/AU4/E7 checks</td><td class="warn">OPEN - pre-launch task</td></tr>
+  <tr><td>PV-E5</td><td>Escalation gate thresholds (tau_sim 0.4, n_min 2, faithfulness cutoff 0.7) are documented placeholders</td><td>Not tuned; sweep-derived values pending</td><td>run the E7 knob sweep on your corpus</td><td class="warn">OPEN</td></tr>
+  <tr><td>PV-E6</td><td>Published LLM-judged history is thin: one RAGAS weekly snapshot; no escalation-weekly reports committed</td><td>Gate infrastructure verified; longitudinal record short</td><td>time</td><td class="warn">OPEN</td></tr>
+  <tr><td>PV-E7</td><td>Stale comments in CI and evals: nightly workflow says "50-question" (set is 60); ship-green header says "7-doc/14-chunk" (corpus is 8/16); e6.py docstring says "3 modes x 50 questions" (now 60)</td><td>Cosmetic; numbers in committed outputs are correct</td><td>read the artifacts, not the comments</td><td class="warn">OPEN - cleanup task</td></tr>
+  <tr><td>PV-E8</td><td>E6 fails open on infrastructure failure: a run that cannot execute after retries prints "NOT RUN - non-blocking" and exits 0</td><td>A leak verdict cannot be downgraded, but a flaky day plus a predicate change can merge with the eval skipped (no branch protection compounds this, PV-E4)</td><td>rerun the job; owner decision pending on fail-closed retry semantics</td><td class="warn">OPEN - disclosed</td></tr>
+  <tr><td>PV-E9</td><td>The retrieval nightly ran and failed at its "Seed corpus + run eval" step for 18 consecutive nights (2026-06-01 to 06-18) and nobody noticed; series resumed 06-19</td><td>An 18-night hole in the flagship public record; the same alarm-unread failure class as PV-E1</td><td>none retroactively; disclosed in all launch copy</td><td class="warn">CLOSED as outage, OPEN as lesson</td></tr>
+</table></div>
+
+<h2>7. Ordering information</h2>
+<div class="wrap"><table>
+  <tr><th>Part</th><th>Price</th><th>Contents</th></tr>
+  <tr><td>PURVIA-1 (core)</td><td class="num">$0, MIT</td><td>Everything in this datasheet. The grant is irrevocable; nothing listed here will move behind a paywall.</td></tr>
+  <tr><td>PURVIA-1P (future part, unreleased)</td><td class="num">unpriced</td><td>Would gate only what does not exist in the repo today: future hardening modules, a maintained update stream, priority support. No price is listed because a real datasheet does not price vapor; the one-time developer-asset band is the hypothesis under test in buyer conversations.</td></tr>
+</table></div>
+
+<footer>
+PURVIA-1 Datasheet Rev A.1, 2026-07-16. Sources, all committed in the public repo: docs/nightly/2026-07-15.md, docs/nightly/2026-05-19.md, docs/reranker-bakeoff.md, docs/evals.md, backend/escalation.py, evals/gate/{security,declaration,placement}.py, evals/retrieval/runner.py (PV-E8), README.md (rate-limit defaults), GitHub Actions run history (PV-E9). The full citation ledger ships with the launch package. Errata reports: open a GitHub issue titled "erratum"; security findings go to private vulnerability reporting, never a public issue.
+</footer>
+</div>
+</body>
+</html>

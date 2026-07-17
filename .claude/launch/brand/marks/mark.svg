@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Purvia mark: a grid of chunks with a subset enclosed by a purview boundary">
+  <!-- chunks outside the purview (visible to the system, not to this viewer) -->
+  <rect x="48" y="12" width="10" height="10" rx="2.5" fill="#94A3B8"/>
+  <rect x="48" y="28" width="10" height="10" rx="2.5" fill="#94A3B8"/>
+  <rect x="12" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/>
+  <rect x="28" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/>
+  <rect x="48" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/>
+  <!-- the purview boundary (enforced in the predicate, drawn closed) -->
+  <rect x="6" y="6" width="38" height="38" rx="10" fill="none" stroke="#15803D" stroke-width="3.5"/>
+  <!-- chunks inside the purview (owner or ACL-granted) -->
+  <rect x="12" y="12" width="10" height="10" rx="2.5" fill="#15803D"/>
+  <rect x="28" y="12" width="10" height="10" rx="2.5" fill="#15803D"/>
+  <rect x="12" y="28" width="10" height="10" rx="2.5" fill="#15803D"/>
+  <rect x="28" y="28" width="10" height="10" rx="2.5" fill="#15803D"/>
+</svg>

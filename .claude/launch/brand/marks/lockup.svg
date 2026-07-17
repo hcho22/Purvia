@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 64" role="img" aria-label="Purvia logo lockup">
+  <g>
+    <rect x="48" y="12" width="10" height="10" rx="2.5" fill="#94A3B8"/>
+    <rect x="48" y="28" width="10" height="10" rx="2.5" fill="#94A3B8"/>
+    <rect x="12" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/>
+    <rect x="28" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/>
+    <rect x="48" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/>
+    <rect x="6" y="6" width="38" height="38" rx="10" fill="none" stroke="#15803D" stroke-width="3.5"/>
+    <rect x="12" y="12" width="10" height="10" rx="2.5" fill="#15803D"/>
+    <rect x="28" y="12" width="10" height="10" rx="2.5" fill="#15803D"/>
+    <rect x="12" y="28" width="10" height="10" rx="2.5" fill="#15803D"/>
+    <rect x="28" y="28" width="10" height="10" rx="2.5" fill="#15803D"/>
+  </g>
+  <text x="76" y="43" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="30" font-weight="600" letter-spacing="0.5" fill="#0B1220">purvia</text>
+</svg>

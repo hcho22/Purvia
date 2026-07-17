@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Purvia Instagram cards</title>
+<style>
+:root{
+  --paper:#FAFAF7;--surface:#FFFFFF;--ink:#0B1220;--muted:#475569;--faint:#64748B;
+  --pass:#15803D;--fail:#B91C1C;--warn:#92400E;--chunk:#94A3B8;--border:#E2E8F0;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  --body:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+}
+body{margin:0;background:#555;font-family:var(--body)}
+.card{width:1080px;height:1350px;background:var(--paper);color:var(--ink);margin:24px auto;padding:72px;box-sizing:border-box;display:flex;flex-direction:column;position:relative}
+.kicker{font-family:var(--mono);font-size:28px;color:var(--pass);letter-spacing:.06em;text-transform:uppercase;margin-bottom:28px}
+.kicker.red{color:var(--fail)}
+h1{font-size:72px;line-height:1.08;margin:0 0 36px;font-weight:750;letter-spacing:-.01em}
+p.lead{font-size:38px;line-height:1.45;color:var(--muted);margin:0 0 40px;max-width:26em}
+.panel{background:var(--surface);border:2px solid var(--border);border-radius:20px;padding:44px;font-family:var(--mono)}
+.panel table{border-collapse:collapse;width:100%;font-size:36px}
+.panel th{color:var(--faint);font-weight:600;text-align:left;padding:14px 18px;border-bottom:2px solid var(--border);font-size:30px}
+.panel td{padding:16px 18px;border-bottom:1px solid var(--border)}
+.pass{color:var(--pass);font-weight:700}.fail{color:var(--fail);font-weight:700}
+.src{font-family:var(--mono);font-size:24px;color:var(--faint);margin-top:26px;word-break:normal;overflow-wrap:break-word}
+.src wbr{display:inline}
+.foot{margin-top:auto;display:flex;align-items:center;gap:20px;padding-top:48px}
+.foot .name{font-family:var(--mono);font-weight:600;font-size:34px}
+.foot .gh{margin-left:auto;font-family:var(--mono);font-size:27px;color:var(--faint)}
+.bigmath{font-family:var(--mono);font-size:56px;text-align:center;padding:36px 0;color:var(--ink)}
+pre{font-family:var(--mono);font-size:31px;line-height:1.5;margin:0;white-space:pre;overflow:hidden}
+.cm{color:var(--faint)}
+.g{color:var(--pass)}
+.r{color:var(--fail)}
+svg.mark{width:96px;height:96px;flex:none}
+#c3 pre{font-size:25px}
+#c3 .panel{padding:36px}
+#c3 .note{margin-top:16px}
+#c3 .foot{padding-top:20px}
+#c3 h1{font-size:66px}
+#c6 h1{font-size:60px}
+#c6 p.lead{margin-bottom:24px;font-size:34px}
+#c6 .note{margin-top:16px;font-size:27px}
+#c6 .src{margin-top:14px}
+#c7 pre{font-size:25px}
+#c7 .panel{padding:30px}
+#c7 h1{font-size:64px}
+#c7 .note{font-size:27px;margin-top:16px}
+#c8 ul.big{font-size:30px}
+#c8 ul.big li{margin:.4em 0}
+#c8 p.lead{margin-bottom:24px}
+#c8 .note{margin-top:18px;font-size:27px}
+#c8 .panel{padding:36px}
+.note{font-size:30px;color:var(--faint);line-height:1.45;margin-top:26px}
+.split{display:flex;gap:36px}
+.split>div{flex:1}
+.h2{font-size:40px;font-weight:700;margin:0 0 18px}
+ul.big{font-size:34px;line-height:1.5;color:var(--muted);margin:0;padding-left:1.1em}
+ul.big li{margin:.5em 0}
+ul.big b{color:var(--ink)}
+</style>
+</head>
+<body>
+
+<!-- CARD 1: the confession + before/after -->
+<section class="card" id="c1">
+  <div class="kicker">Receipt 001 / the dead leg</div>
+  <h1>My eval published my failure in 33 straight snapshots.</h1>
+  <p class="lead">The lexical leg of hybrid retrieval shipped dead. The nightly snapshots said so from day one. I did not read them.</p>
+  <div class="panel">
+    <table>
+      <tr><th></th><th>keyword recall@5</th><th>hybrid MRR vs vector</th></tr>
+      <tr><td>2026-05-19 to 07-09</td><td class="fail">0.110 &rarr; 0.140</td><td class="fail">0.786 &lt; 0.796</td></tr>
+      <tr><td>2026-07-11, post-fix</td><td class="pass">0.917</td><td class="pass">0.858 &gt; 0.813</td></tr>
+    </table>
+    <div class="src">docs/<wbr>nightly/<wbr>2026-07-09.md &rarr; docs/<wbr>nightly/<wbr>2026-07-11.md (all 38 snapshots committed, none deleted)</div>
+  </div>
+  <div class="foot"><svg class="mark" viewBox="0 0 64 64"><rect x="48" y="12" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="48" y="28" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="12" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="28" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="48" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="6" y="6" width="38" height="38" rx="10" fill="none" stroke="#15803D" stroke-width="3.5"/><rect x="12" y="12" width="10" height="10" rx="2.5" fill="#15803D"/><rect x="28" y="12" width="10" height="10" rx="2.5" fill="#15803D"/><rect x="12" y="28" width="10" height="10" rx="2.5" fill="#15803D"/><rect x="28" y="28" width="10" height="10" rx="2.5" fill="#15803D"/></svg><span class="name">purvia</span><span class="gh">github.com/hcho22/Purvia</span></div>
+</section>
+
+<!-- CARD 2: post-filter math -->
+<section class="card" id="c2">
+  <div class="kicker">Receipt 002 / the math</div>
+  <h1>Post-filtering permissions breaks retrieval. Quietly.</h1>
+  <p class="lead">Retrieve top-10, then drop what the viewer cannot see. If they can see 5% of the corpus:</p>
+  <div class="panel">
+    <div class="bigmath">E[visible] = k &times; selectivity<br>= 10 &times; 0.05 = <span class="fail">0.5 chunks</span></div>
+  </div>
+  <p class="note">Half a chunk, on average. A multi-hop question needs two. Fetching top-100 does not rescue it: similarity stops ranking the visible set against itself. The fix is the ACL inside the SQL predicate, so the planner only ranks what the viewer may see.</p>
+  <div class="src">docs/<wbr>permissions-aware-rag.md, "Why this is hard"</div>
+  <div class="foot"><svg class="mark" viewBox="0 0 64 64"><rect x="48" y="12" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="48" y="28" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="12" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="28" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="48" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="6" y="6" width="38" height="38" rx="10" fill="none" stroke="#15803D" stroke-width="3.5"/><rect x="12" y="12" width="10" height="10" rx="2.5" fill="#15803D"/><rect x="28" y="12" width="10" height="10" rx="2.5" fill="#15803D"/><rect x="12" y="28" width="10" height="10" rx="2.5" fill="#15803D"/><rect x="28" y="28" width="10" height="10" rx="2.5" fill="#15803D"/></svg><span class="name">purvia</span><span class="gh">github.com/hcho22/Purvia</span></div>
+</section>
+
+<!-- CARD 3: the predicate -->
+<section class="card" id="c3">
+  <div class="kicker">Receipt 003 / the predicate</div>
+  <h1>Permissions live inside the SQL.</h1>
+  <p class="lead">Owner-OR-ACL and tenant membership, checked in the retrieval function itself, under the viewer's JWT.</p>
+  <div class="panel">
+<pre>and (c.user_id = auth.uid()
+     or ca.chunk_id is not null)
+       <span class="cm">-- owner OR chunk-level ACL</span>
+and exists (
+  select 1
+  from workspace_membership wm
+  where wm.workspace_id
+          = d.workspace_id
+    and wm.user_id = auth.uid()
+       <span class="cm">-- tenant boundary, from the JWT</span>
+)</pre>
+  </div>
+  <p class="note">No backend-passed tenant id exists to forget. A missing filter can only narrow, never widen.</p>
+  <div class="src">supabase/<wbr>migrations/<wbr>20260617120300_match_chunks_workspace_membership.sql (comments mine)</div>
+  <div class="foot"><svg class="mark" viewBox="0 0 64 64"><rect x="48" y="12" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="48" y="28" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="12" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="28" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="48" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="6" y="6" width="38" height="38" rx="10" fill="none" stroke="#15803D" stroke-width="3.5"/><rect x="12" y="12" width="10" height="10" rx="2.5" fill="#15803D"/><rect x="28" y="12" width="10" height="10" rx="2.5" fill="#15803D"/><rect x="12" y="28" width="10" height="10" rx="2.5" fill="#15803D"/><rect x="28" y="28" width="10" height="10" rx="2.5" fill="#15803D"/></svg><span class="name">purvia</span><span class="gh">github.com/hcho22/Purvia</span></div>
+</section>
+
+<!-- CARD 4: zero-leak table -->
+<section class="card" id="c4">
+  <div class="kicker">Receipt 004 / the table</div>
+  <h1>180 no-access runs per nightly. Zero labeled chunks leaked.</h1>
+  <p class="lead">Fraction of no-access runs returning zero labeled gold chunks, latest nightly:</p>
+  <div class="panel">
+    <table>
+      <tr><th>Mode</th><th>Pre-filter</th><th>Post-filter</th></tr>
+      <tr><td>vector</td><td class="pass">1.000</td><td class="pass">1.000</td></tr>
+      <tr><td>keyword</td><td class="pass">1.000</td><td class="pass">1.000</td></tr>
+      <tr><td>hybrid</td><td class="pass">1.000</td><td class="pass">1.000</td></tr>
+    </table>
+  </div>
+  <p class="note">The scope, stated before you ask: the guarantee is exactly as complete as the gold labels. That is why the authoring guide treats an unlabeled relevant chunk as a security defect, not a recall miss.</p>
+  <div class="src">docs/<wbr>nightly/<wbr>2026-07-15.md + docs/<wbr>golden-set-authoring.md</div>
+  <div class="foot"><svg class="mark" viewBox="0 0 64 64"><rect x="48" y="12" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="48" y="28" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="12" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="28" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="48" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="6" y="6" width="38" height="38" rx="10" fill="none" stroke="#15803D" stroke-width="3.5"/><rect x="12" y="12" width="10" height="10" rx="2.5" fill="#15803D"/><rect x="28" y="12" width="10" height="10" rx="2.5" fill="#15803D"/><rect x="12" y="28" width="10" height="10" rx="2.5" fill="#15803D"/><rect x="28" y="28" width="10" height="10" rx="2.5" fill="#15803D"/></svg><span class="name">purvia</span><span class="gh">github.com/hcho22/Purvia</span></div>
+</section>
+
+<!-- CARD 5: escalation pipeline -->
+<section class="card" id="c5">
+  <div class="kicker">Receipt 005 / the gate</div>
+  <h1>The bot never decides to escalate. The gates do.</h1>
+  <p class="lead">No escalate() tool. Deterministic control flow, from the docstring that ships:</p>
+  <div class="panel">
+<pre>retrieve (hybrid, ONCE)
+  &rarr; retrieval gate
+      &rarr; weak   <span class="r">&rArr; escalate now</span>
+      &rarr; strong &rarr; draft
+        &rarr; faithfulness gate
+            &rarr; faithful   <span class="g">&rArr; answer</span>
+            &rarr; unfaithful <span class="r">&rArr; escalate</span></pre>
+  </div>
+  <p class="note">One buyer-set risk number: a 5% false-resolve ceiling, enforced by the weekly eval gate. A judge timeout escalates. Failure fails closed.</p>
+  <div class="src">backend/<wbr>escalation.py (run_deflection_pipeline)</div>
+  <div class="foot"><svg class="mark" viewBox="0 0 64 64"><rect x="48" y="12" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="48" y="28" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="12" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="28" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="48" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="6" y="6" width="38" height="38" rx="10" fill="none" stroke="#15803D" stroke-width="3.5"/><rect x="12" y="12" width="10" height="10" rx="2.5" fill="#15803D"/><rect x="28" y="12" width="10" height="10" rx="2.5" fill="#15803D"/><rect x="12" y="28" width="10" height="10" rx="2.5" fill="#15803D"/><rect x="28" y="28" width="10" height="10" rx="2.5" fill="#15803D"/></svg><span class="name">purvia</span><span class="gh">github.com/hcho22/Purvia</span></div>
+</section>
+
+<!-- CARD 6: the trail chart -->
+<section class="card" id="c6">
+  <div class="kicker">Receipt 006 / the trail</div>
+  <h1>What most RAG kits cannot tell you about their own retrieval.</h1>
+  <p class="lead">Keyword recall@5, every published nightly snapshot. One series, real values, gaps where no snapshot published.</p>
+  <div class="panel" style="padding:44px 44px 28px">
+    <svg viewBox="0 0 900 400" style="width:100%;height:auto" role="img" aria-label="Line chart of keyword recall at 5 across 38 nightly snapshots: the failing period in red, flat at 0.110 from May 19 and 0.140 in early July, then turning green after the July 10 fix, jumping to 0.917 and holding">
+      <!-- grid -->
+      <line x1="60" y1="330" x2="880" y2="330" stroke="#E2E8F0" stroke-width="2"/>
+      <line x1="60" y1="60" x2="880" y2="60" stroke="#E2E8F0" stroke-width="1"/>
+      <line x1="60" y1="195" x2="880" y2="195" stroke="#E2E8F0" stroke-width="1"/>
+      <text x="50" y="336" text-anchor="end" font-size="22" fill="#64748B" font-family="ui-monospace,Menlo,monospace">0.0</text>
+      <text x="50" y="201" text-anchor="end" font-size="22" fill="#64748B" font-family="ui-monospace,Menlo,monospace">0.5</text>
+      <text x="50" y="66" text-anchor="end" font-size="22" fill="#64748B" font-family="ui-monospace,Menlo,monospace">1.0</text>
+      <!-- series: 30 pts @0.11, 3 @0.14, 5 @0.9167. Semantic color (GUIDELINES §7): the failing period renders fail-red; the line turns pass-green only after the 07-10 fix. Gap = the 18-night June outage. -->
+      <polyline fill="none" stroke="#B91C1C" stroke-width="4" points="80,300 320,300"/>
+      <polyline fill="none" stroke="#B91C1C" stroke-width="4" stroke-dasharray="3 10" points="320,300 400,300"/>
+      <polyline fill="none" stroke="#B91C1C" stroke-width="4" points="400,300 690,300 700,292 740,292 750,292"/>
+      <polyline fill="none" stroke="#15803D" stroke-width="4" points="750,292 760,83 860,83"/>
+      <circle cx="80" cy="300" r="7" fill="#B91C1C"/>
+      <circle cx="740" cy="292" r="7" fill="#B91C1C"/>
+      <circle cx="760" cy="83" r="7" fill="#15803D"/>
+      <!-- selective direct labels -->
+      <text x="80" y="270" font-size="26" fill="#0B1220" font-family="ui-monospace,Menlo,monospace">0.110</text>
+      <text x="700" y="260" font-size="26" fill="#0B1220" font-family="ui-monospace,Menlo,monospace" text-anchor="middle">0.140</text>
+      <text x="800" y="60" font-size="30" font-weight="700" fill="#0B1220" font-family="ui-monospace,Menlo,monospace" text-anchor="middle">0.917</text>
+      <!-- x labels -->
+      <text x="80" y="370" font-size="22" fill="#64748B" font-family="ui-monospace,Menlo,monospace">05-19</text>
+      <text x="360" y="370" font-size="22" fill="#64748B" font-family="ui-monospace,Menlo,monospace" text-anchor="middle">(gap)</text>
+      <text x="700" y="370" font-size="22" fill="#64748B" font-family="ui-monospace,Menlo,monospace" text-anchor="middle">07-09</text>
+      <text x="850" y="370" font-size="22" fill="#64748B" font-family="ui-monospace,Menlo,monospace" text-anchor="end">07-15</text>
+      <!-- fix marker -->
+      <line x1="750" y1="60" x2="750" y2="330" stroke="#94A3B8" stroke-width="2" stroke-dasharray="6 6"/>
+      <text x="742" y="130" font-size="22" fill="#64748B" font-family="ui-monospace,Menlo,monospace" text-anchor="end">fix: 07-10</text>
+    </svg>
+  </div>
+  <p class="note">Thirty-three straight published snapshots recorded the dead leg before anyone read them. The gap is real too: the nightly itself was down for 18 nights in June.</p>
+  <div class="src">docs/<wbr>nightly/<wbr>*.json, keyword recall@5 (values plotted verbatim)</div>
+  <div class="foot"><svg class="mark" viewBox="0 0 64 64"><rect x="48" y="12" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="48" y="28" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="12" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="28" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="48" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="6" y="6" width="38" height="38" rx="10" fill="none" stroke="#15803D" stroke-width="3.5"/><rect x="12" y="12" width="10" height="10" rx="2.5" fill="#15803D"/><rect x="28" y="12" width="10" height="10" rx="2.5" fill="#15803D"/><rect x="12" y="28" width="10" height="10" rx="2.5" fill="#15803D"/><rect x="28" y="28" width="10" height="10" rx="2.5" fill="#15803D"/></svg><span class="name">purvia</span><span class="gh">github.com/hcho22/Purvia</span></div>
+</section>
+
+<!-- CARD 7: the alarm lesson -->
+<section class="card" id="c7">
+  <div class="kicker">Receipt 007 / the lesson</div>
+  <h1>An alarm that always fires is no alarm.</h1>
+  <div class="split" style="margin-top:12px">
+    <div class="panel">
+      <div class="h2 fail">Before: two-sided</div>
+      <pre>| keyword | +0.030 | <span class="r">&#10007;</span> |
+| vector  | +0.210 | <span class="r">&#10007;</span> |
+| hybrid  | +0.210 | <span class="r">&#10007;</span> |</pre>
+      <p class="note">Improvements flagged as failures. Red on every snapshot it published, so everyone learns to ignore the column.</p>
+    </div>
+    <div class="panel">
+      <div class="h2 pass">After: one-sided (US-118)</div>
+      <pre>| keyword | -0.000 | <span class="g">&#10003;</span> |
+| vector  | +0.000 | <span class="g">&#10003;</span> |
+| hybrid  | +0.000 | <span class="g">&#10003;</span> |</pre>
+      <p class="note">Only a real drop past tolerance flags. Improvements always pass. The alarm means something again.</p>
+    </div>
+  </div>
+  <p class="note">This is hardware-validation discipline applied to RAG: the bug cost one migration; the alarm that failed to catch it cost a redesign.</p>
+  <div class="src">docs/<wbr>nightly/<wbr>2026-07-09.md (before) vs 2026-07-15.md (after); evals/<wbr>retrieval/<wbr>test_us118_one_sided_nonregression.py</div>
+  <div class="foot"><svg class="mark" viewBox="0 0 64 64"><rect x="48" y="12" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="48" y="28" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="12" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="28" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="48" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="6" y="6" width="38" height="38" rx="10" fill="none" stroke="#15803D" stroke-width="3.5"/><rect x="12" y="12" width="10" height="10" rx="2.5" fill="#15803D"/><rect x="28" y="12" width="10" height="10" rx="2.5" fill="#15803D"/><rect x="12" y="28" width="10" height="10" rx="2.5" fill="#15803D"/><rect x="28" y="28" width="10" height="10" rx="2.5" fill="#15803D"/></svg><span class="name">purvia</span><span class="gh">github.com/hcho22/Purvia</span></div>
+</section>
+
+<!-- CARD 8: not yet -->
+<section class="card" id="c8">
+  <div class="kicker red">Receipt 008 / not yet</div>
+  <h1>What this does not do yet.</h1>
+  <p class="lead">If a claim of mine ever contradicts this list, the repo wins and I fix the claim.</p>
+  <div class="panel">
+    <ul class="big">
+      <li><b class="fail">Scale benchmark: broken.</b> 0.000 in every cell since 06-19. Red, in public, until fixed.</li>
+      <li><b>Paraphrase MRR:</b> hybrid 0.767 still trails vector 1.000.</li>
+      <li><b>Demo corpus:</b> 8 documents, 16 chunks. The harness is the product, not the metric values.</li>
+      <li><b>Users:</b> zero. Revenue: zero. Testimonials: zero.</li>
+    </ul>
+  </div>
+  <p class="note">Everything above is verifiable in the repo, the same way as the good numbers.</p>
+  <div class="src">docs/<wbr>permissions-scale-nightly/<wbr> + docs/<wbr>nightly/<wbr>2026-07-15.md</div>
+  <div class="foot"><svg class="mark" viewBox="0 0 64 64"><rect x="48" y="12" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="48" y="28" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="12" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="28" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="48" y="48" width="10" height="10" rx="2.5" fill="#94A3B8"/><rect x="6" y="6" width="38" height="38" rx="10" fill="none" stroke="#15803D" stroke-width="3.5"/><rect x="12" y="12" width="10" height="10" rx="2.5" fill="#15803D"/><rect x="28" y="12" width="10" height="10" rx="2.5" fill="#15803D"/><rect x="12" y="28" width="10" height="10" rx="2.5" fill="#15803D"/><rect x="28" y="28" width="10" height="10" rx="2.5" fill="#15803D"/></svg><span class="name">purvia</span><span class="gh">github.com/hcho22/Purvia</span></div>
+</section>
+
+</body>
+</html>

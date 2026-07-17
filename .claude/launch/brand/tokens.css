@@ -1,0 +1,61 @@
+/* Purvia brand tokens - copy this file whole into any asset.
+   Light theme is default; dark theme via [data-theme="dark"] or prefers-color-scheme.
+   Contrast ratios in comments are computed WCAG 2.1 ratios against the theme background. */
+
+:root {
+  /* color */
+  --pv-paper:   #FAFAF7; /* page background */
+  --pv-surface: #FFFFFF; /* cards, tables */
+  --pv-ink:     #0B1220; /* body text; 17.9:1 on paper */
+  --pv-muted:   #475569; /* secondary text; 7.25:1 on paper */
+  --pv-faint:   #64748B; /* captions, min size 14px; 4.55:1 on paper */
+  --pv-pass:    #15803D; /* the accent: CI-green, verified, granted; 4.8:1 on paper (AA text) */
+  --pv-fail:    #B91C1C; /* failed checks, disclosed breakage; 6.19:1 on paper */
+  --pv-warn:    #92400E; /* caveats, pending items; 6.78:1 on paper */
+  --pv-link:    #1D4ED8; /* links; 6.41:1 on paper */
+  --pv-chunk:   #94A3B8; /* out-of-purview grid chunks; graphic use only, never text */
+  --pv-border:  #E2E8F0;
+
+  /* type */
+  --pv-font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --pv-font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --pv-size-body: 1rem;      /* 16px */
+  --pv-size-small: 0.875rem; /* 14px floor for --pv-faint text */
+  --pv-leading: 1.6;
+
+  /* shape + space (4px base) */
+  --pv-radius: 10px;   /* echoes the mark's boundary corner */
+  --pv-radius-chip: 4px;
+  --pv-space-1: 4px; --pv-space-2: 8px; --pv-space-3: 16px;
+  --pv-space-4: 24px; --pv-space-5: 40px; --pv-space-6: 64px;
+}
+
+[data-theme="dark"], .pv-dark {
+  --pv-paper:   #0B1220;
+  --pv-surface: #111A2E;
+  --pv-ink:     #E7EAF0; /* 15.54:1 on paper */
+  --pv-muted:   #CBD5E1; /* 12.61:1 */
+  --pv-faint:   #94A3B8; /* 7.3:1 */
+  --pv-pass:    #4ADE80; /* 10.74:1 */
+  --pv-fail:    #F87171; /* 6.77:1 */
+  --pv-warn:    #FBBF24; /* 11.22:1 */
+  --pv-link:    #93C5FD; /* 10.38:1 */
+  --pv-chunk:   #475569;
+  --pv-border:  #24304A;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --pv-paper:   #0B1220;
+    --pv-surface: #111A2E;
+    --pv-ink:     #E7EAF0;
+    --pv-muted:   #CBD5E1;
+    --pv-faint:   #94A3B8;
+    --pv-pass:    #4ADE80;
+    --pv-fail:    #F87171;
+    --pv-warn:    #FBBF24; /* 11.22:1 */
+    --pv-link:    #93C5FD;
+    --pv-chunk:   #475569;
+    --pv-border:  #24304A;
+  }
+}

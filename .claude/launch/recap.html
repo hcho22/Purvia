@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Purvia launch package - recap</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='25' y='22' width='7' height='7' rx='2' fill='%2364748B'/%3E%3Crect x='2' y='2' width='21' height='21' rx='6' fill='none' stroke='%2315803D' stroke-width='3'/%3E%3Crect x='7' y='7' width='11' height='11' rx='3' fill='%2315803D'/%3E%3C/svg%3E">
+<style>
+:root{
+  --paper:#FAFAF7;--surface:#FFFFFF;--ink:#0B1220;--muted:#475569;--faint:#64748B;
+  --pass:#15803D;--fail:#B91C1C;--warn:#92400E;--link:#1D4ED8;--chunk:#94A3B8;--border:#E2E8F0;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  --body:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{--paper:#0B1220;--surface:#111A2E;--ink:#E7EAF0;--muted:#CBD5E1;--faint:#94A3B8;--pass:#4ADE80;--fail:#F87171;--warn:#FBBF24;--link:#93C5FD;--chunk:#475569;--border:#24304A}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.6}
+a{color:var(--link)}
+code,.mono{font-family:var(--mono)}
+.wrap{max-width:920px;margin:0 auto;padding:24px 20px 60px}
+h1{font-size:1.9rem;line-height:1.15;margin:.3em 0}
+h2{font-size:1.25rem;margin:2em 0 .5em;border-bottom:1px solid var(--border);padding-bottom:6px}
+table{border-collapse:collapse;width:100%;font-size:.85rem}
+th,td{border:1px solid var(--border);padding:7px 10px;text-align:left;vertical-align:top}
+th{background:var(--surface);color:var(--muted)}
+.tablewrap{overflow-x:auto}
+.pass{color:var(--pass);font-weight:700}.fail{color:var(--fail);font-weight:700}.warn{color:var(--warn);font-weight:600}
+.faint{color:var(--faint);font-size:.875rem}
+ul{padding-left:1.2em} li{margin:.3em 0}
+.hdr{display:flex;align-items:center;gap:14px;padding-top:8px}
+.hdr svg{width:44px;height:44px;flex:none}
+.hdr .n{font-family:var(--mono);font-weight:600;font-size:1.2rem}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:700px){.grid{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;min-width:0}
+.card h3{margin:.1em 0 .4em;font-size:1rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="hdr">
+  <svg viewBox="0 0 64 64" aria-label="Purvia mark"><rect x="48" y="12" width="10" height="10" rx="2.5" fill="var(--chunk)"/><rect x="48" y="28" width="10" height="10" rx="2.5" fill="var(--chunk)"/><rect x="12" y="48" width="10" height="10" rx="2.5" fill="var(--chunk)"/><rect x="28" y="48" width="10" height="10" rx="2.5" fill="var(--chunk)"/><rect x="48" y="48" width="10" height="10" rx="2.5" fill="var(--chunk)"/><rect x="6" y="6" width="38" height="38" rx="10" fill="none" stroke="var(--pass)" stroke-width="3.5"/><rect x="12" y="12" width="10" height="10" rx="2.5" fill="var(--pass)"/><rect x="28" y="12" width="10" height="10" rx="2.5" fill="var(--pass)"/><rect x="12" y="28" width="10" height="10" rx="2.5" fill="var(--pass)"/><rect x="28" y="28" width="10" height="10" rx="2.5" fill="var(--pass)"/></svg>
+  <div><span class="n">purvia</span> <span class="faint">launch package recap - built 2026-07-16 - nothing published</span></div>
+</div>
+
+<h1>The business, in five minutes</h1>
+
+<p><strong>The product</strong> (exists, MIT, public at <a href="https://github.com/hcho22/Purvia">github.com/hcho22/Purvia</a>): a permissions-aware RAG kit where the two claims that matter are checked by evals in CI rather than asserted. Chunk-level ACLs are enforced inside the retrieval SQL predicate under the viewer's JWT; zero-leak and API-attack evals fail their required CI check on any breach; a deterministic escalation gate keeps the support bot under a buyer-set 5% false-resolve ceiling. Raw OpenAI SDK + Pydantic; no orchestration framework in the product.</p>
+
+<p><strong>The brand thesis</strong> (won a 5-pitch, 3-judge tournament, 61.7/65): <em>the receipts are the product.</em> The centerpiece is a confession with a paper trail: the kit's lexical retrieval leg shipped dead, its own nightly eval published that fact in 33 straight snapshots over seven weeks, nobody read them, and when a competitor comparison finally forced a look, the fix landed the same day and the same public series verified it (0.140 to 0.917 keyword recall@5). Every claim in the package terminates in a file path or a fetched URL, catalogued in a 90-row claims ledger with 16 anti-claims that ban specific overstatements.</p>
+
+<p><strong>The buyer</strong>: production-minded engineers adding RAG to real multi-user products, burned by framework churn, whose documents must not leak across users. The bet, falsifiable: receipts change adoption behavior; if eval receipts do not out-convert feature lists for this ICP, the thesis is wrong. Kill criteria with numbers and clocks are in the THESIS.</p>
+
+<p><strong>The honest state</strong>: <span class="warn">launch is currently gated.</span> Eight preconditions must clear first, including a permissions-scale benchmark that has published 0.000 in every cell since 06-19 (disclosed everywhere, including a red badge on the landing page), a README that still contradicts it, and an unverified founder bio. The red team rated launching over these a kill; the content calendar is hard-gated on them. Zero users, zero revenue; the package says so in its own copy.</p>
+
+<h2>Every deliverable</h2>
+<div class="grid">
+  <div class="card"><h3>Thesis + evidence</h3>
+    <a href="THESIS.md">THESIS.md</a> (bet, kill criteria, 13 weaknesses, 8 preconditions)<br>
+    <a href="evidence/claims.md">evidence/claims.md</a> (the audited ledger)<br>
+    <a href="evidence/sources/competitors.md">sources/competitors.md</a> - <a href="evidence/sources/production-pain.md">production-pain.md</a><br>
+    <a href="evidence/sources/prior-art.md">prior-art.md</a> - <a href="evidence/sources/pricing.md">pricing.md</a> - <a href="evidence/sources/naming-domains.md">naming-domains.md</a><br>
+    <a href="evidence/url-check-2026-07-16.txt">url-check-2026-07-16.txt</a> (54 URLs re-verified)
+  </div>
+  <div class="card"><h3>Brand</h3>
+    <a href="brand/GUIDELINES.md">GUIDELINES.md</a> (self-sufficient; stranger-tested)<br>
+    <a href="brand/TOURNAMENT.md">TOURNAMENT.md</a> (rubric + all scorecards, losers included)<br>
+    <a href="brand/tokens.css">tokens.css</a> - <a href="brand/tokens.json">tokens.json</a><br>
+    marks: <a href="brand/marks/mark.svg">mark</a> - <a href="brand/marks/mark-dark.svg">dark</a> - <a href="brand/marks/lockup.svg">lockup</a> - <a href="brand/marks/lockup-dark.svg">lockup-dark</a> - <a href="brand/marks/favicon.svg">favicon</a> - <a href="brand/marks/preview-screenshot.png">preview (viewed)</a>
+  </div>
+  <div class="card"><h3>Landing page</h3>
+    <a href="site/index.html">site/index.html</a> (self-contained, zero build)<br>
+    <a href="site/README.md">site/README.md</a> (run instructions)<br>
+    screenshots (viewed): <a href="site/screenshots/site-390.png">390px</a> - <a href="site/screenshots/site-1440.png">1440px</a>
+  </div>
+  <div class="card"><h3>Social: X</h3>
+    <a href="social/x/launch-thread.md">launch-thread.md</a> (10 tweets)<br>
+    <a href="social/x/posts.md">posts.md</a> (10 standalone, incl. the weakness post)<br>
+    <a href="social/x/voice-and-format.md">voice-and-format.md</a>
+  </div>
+  <div class="card"><h3>Social: LinkedIn</h3>
+    <a href="social/linkedin/posts.md">posts.md</a> (5 essays incl. the agent-workflow disclosure)<br>
+    <a href="social/linkedin/voice-and-format.md">voice-and-format.md</a>
+  </div>
+  <div class="card"><h3>Social: Instagram</h3>
+    <a href="social/instagram/feed-concept.md">feed-concept.md</a> - <a href="social/instagram/posts.md">posts.md</a> (8 posts, captions + alt text)<br>
+    <a href="social/instagram/cards.html">cards.html</a> (source) - <a href="social/instagram/cards/_contact-sheet.png">contact sheet (viewed)</a><br>
+    cards: <a href="social/instagram/cards/ig-01.png">01</a> <a href="social/instagram/cards/ig-02.png">02</a> <a href="social/instagram/cards/ig-03.png">03</a> <a href="social/instagram/cards/ig-04.png">04</a> <a href="social/instagram/cards/ig-05.png">05</a> <a href="social/instagram/cards/ig-06.png">06</a> <a href="social/instagram/cards/ig-07.png">07</a> <a href="social/instagram/cards/ig-08.png">08</a><br>
+    <a href="social/instagram/voice-and-format.md">voice-and-format.md</a>
+  </div>
+  <div class="card"><h3>Social: TikTok + calendar</h3>
+    <a href="social/tiktok/scripts.md">scripts.md</a> (4 shot-listed scripts)<br>
+    <a href="social/tiktok/voice-and-format.md">voice-and-format.md</a><br>
+    <a href="social/content-calendar.md">content-calendar.md</a> (two weeks, precondition-gated)
+  </div>
+  <div class="card"><h3>Adversarial record</h3>
+    <a href="RED_TEAM.md">RED_TEAM.md</a> (40 verbatim objections, 40 dispositions, 0 deleted)<br>
+    <a href="BUILD_LOG.md">BUILD_LOG.md</a> (decisions, self-answered questions, costs, sign-offs)
+  </div>
+  <div class="card"><h3>Extras</h3>
+    <a href="extras/datasheet.html">PURVIA-1 datasheet</a> (the unexpected one: abs-max ratings + a real errata sheet) - <a href="extras/datasheet-screenshot.png">screenshot (viewed)</a><br>
+    <a href="extras/profile-assets/bios.md">profile bios</a> - <a href="extras/profile-assets/avatar-800.png">avatar</a> - <a href="extras/profile-assets/x-banner-1500x500.png">X banner</a> - <a href="extras/profile-assets/li-banner-1584x396.png">LinkedIn banner</a><br>
+    <a href="extras/README.md">extras/README.md</a> (what was deliberately not built)
+  </div>
+  <div class="card"><h3>Tools</h3>
+    <a href="tools/voice-lint.sh">voice-lint.sh</a> - <a href="tools/voice-lint-final-run.txt">final run: 18 files, 0 failures</a><br>
+    <a href="tools/link-check.sh">link-check.sh</a>
+  </div>
+</div>
+
+<p class="faint">To browse everything locally: <code>python3 -m http.server 8080 --directory launch</code> then open <code>/recap.html</code>. Markdown links open as raw text in a browser; any editor renders them.</p>
+
+<h2>Definition of done, graded</h2>
+<div class="tablewrap"><table>
+  <tr><th>Requirement (brief §9)</th><th>Grade</th><th>Evidence</th></tr>
+  <tr><td>Every guardrail held (no spend, publish nothing, invent nothing, stay in launch/, never ask, no dark patterns), external calls listed</td><td class="pass">PASS</td><td>External calls, all read-only: ~60 research-page fetches via WebFetch/WebSearch (every one logged in evidence/sources/ with timestamp + quoted span, incl. 4 skeptic-pass fetches); the 54-URL curl re-check; DNS/whois for 16 domains + 3 registry lookups; one CIPO trademark fetch (2 trademark sites returned 403, recorded); GitHub API reads (repo metadata, branch protection, Actions run history) via unauthenticated api.github.com and local gh. Zero posts, zero signups, zero purchases, zero deploys; no API keys consumed beyond ambient local tooling. One repo file outside launch/ was touched: .gitignore, to enforce the publish guardrail (reasoning in BUILD_LOG Q6). Fabrication guardrail enforced by the ledger + 3 skeptics + 4-person red team.</td></tr>
+  <tr><td>Every load-bearing THESIS claim traces to a fetched URL or resolving repo path; URLs still 200</td><td class="pass">PASS</td><td><a href="tools/link-check.sh">link-check.sh</a>: all claims.md repo paths resolve (one path is cited because it does not exist, allowlisted as such). <a href="evidence/url-check-2026-07-16.txt">URL re-check</a>: 51/54 return 200; the 3 non-200s were documented as dead/blocked at original fetch time inside the evidence files themselves.</td></tr>
+  <tr><td>No claim contradicts the known-weakness list</td><td class="pass">PASS</td><td>The weakness list grew from the brief's 4 to 13 items because the build kept finding more (broken scale benchmark, June nightly outage, E6 fail-open); 16 anti-claims in <a href="evidence/claims.md">claims.md §J</a> ban specific overstatements, and three critic passes plus the red team audited copy against them. Where the brief's own §2 was stale (the lexical leg is fixed, not broken), the repo won and BUILD_LOG Q1 logs it.</td></tr>
+  <tr><td>Site screenshot-verified at mobile + desktop, screenshots looked at</td><td class="pass">PASS</td><td>Three rounds (initial, post-critic, post-red-team), all viewed. Round 1 caught real 390px overflow, fixed and re-verified programmatically (scrollWidth == clientWidth). <a href="site/screenshots/site-390.png">390</a> / <a href="site/screenshots/site-1440.png">1440</a>.</td></tr>
+  <tr><td>All four platforms finished, non-placeholder; every visual a real rendered image, viewed</td><td class="pass">PASS</td><td>10-tweet thread + 10 X posts + 5 LinkedIn essays + 8 IG posts with 8 rendered 1080x1350 cards + 4 TikTok shot-listed scripts. Cards rendered via headless Chromium, re-rendered after every copy change, reviewed on the <a href="social/instagram/cards/_contact-sheet.png">contact sheet</a>; banners and avatar rendered and viewed.</td></tr>
+  <tr><td>Everything passes the voice linter, grep output in the build log</td><td class="pass">PASS</td><td><a href="tools/voice-lint-final-run.txt">Final run</a>: 18 files, exit 0 (also excerpted in BUILD_LOG). The red team additionally caught what a grep cannot (question openers, stacked cadence, aphorism density); those are fixed and the manual checks are now in the format notes.</td></tr>
+  <tr><td>Two-week calendar exists; every entry points at a real asset file</td><td class="pass">PASS</td><td><a href="social/content-calendar.md">content-calendar.md</a>: 19 entries, every file verified to exist (Phase-4 critic re-checked IDs inside files). Dates are placeholders hard-gated on the THESIS launch preconditions.</td></tr>
+  <tr><td>recap.html links to every deliverable and every link resolves, proven by a link-check pass</td><td class="pass">PASS</td><td><code>tools/link-check.sh recap.html ...</code> run output is recorded in BUILD_LOG Phase 6; all local hrefs resolve on disk.</td></tr>
+  <tr><td>Brand guidelines self-sufficient for a stranger</td><td class="pass">PASS</td><td>Stranger-tested by the Phase-2 critic (could a new on-brand card be produced from the file alone: yes); tokens copyable; every referenced file exists; contrast ratios independently recomputed and matched.</td></tr>
+  <tr><td>Red team ran; objections visible, not buried</td><td class="pass">PASS</td><td><a href="RED_TEAM.md">RED_TEAM.md</a>: 40 verbatim objections (3 kill), each with a disposition; tally up top; the kill-severity items became the launch gate. Zero objections deleted.</td></tr>
+  <tr><td>Tournament scorecards, including rejected pitches, published</td><td class="pass">PASS</td><td><a href="brand/TOURNAMENT.md">TOURNAMENT.md</a>: rubric published before judging, 5 full pitches, 3 judges x 5 scorecards, losers with reasons, grafts recorded.</td></tr>
+  <tr><td>Nothing is a placeholder pretending to be finished (no lorem, TODO, fake metrics, stub images)</td><td class="pass">PASS</td><td>Repo-wide grep for lorem/TODO/FIXME/placeholder over launch/: only legitimate references to the eval knobs' documented placeholder status. Every metric traces to the ledger; every image was rendered from source and viewed.</td></tr>
+  <tr><td>THESIS kill criteria actionable within a week</td><td class="pass">PASS</td><td>Four post-launch criteria with numeric triggers, calendar bounds, and named actions (thresholds explicitly labeled assumed); present-tense blockers moved to a separate precondition list so the kill list stays purely post-launch. Redesigned once after the Phase-1 skeptics attacked the originals.</td></tr>
+</table></div>
+
+<h2>What a skeptic should read first</h2>
+<ul>
+  <li>The dispositions of the three kill-severity red-team objections in <a href="RED_TEAM.md">RED_TEAM.md</a> (SE-1, BUY-2, BUY-5): they are the sharpest statement of this package's real risks, written by its own adversaries and left verbatim.</li>
+  <li>The <a href="evidence/claims.md">claims ledger's anti-claims section</a>: the list of things this marketing is forbidden to say is a faster read than the things it does say.</li>
+  <li>The buyer's overall verdict in RED_TEAM.md, which concludes the honest disclosures assemble into a case against adoption. It is quoted in full, undeleted, because if the receipts thesis cannot survive its own red team being published, it is not a receipts thesis. Whether that verdict or the thesis wins is exactly what the THESIS kill criteria measure after launch.</li>
+</ul>
+
+<p class="faint">Built by an autonomous agent build on 2026-07-16 against mission brief gtm/marketing-build-prompt_071626.md; every phase closed with a completeness-critic sign-off recorded in <a href="BUILD_LOG.md">BUILD_LOG.md</a>. Nothing in this package was published anywhere.</p>
+
+</div>
+</body>
+</html>

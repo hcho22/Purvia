@@ -1,0 +1,58 @@
+URL liveness re-check, 2026-07-16 (Phase 6, definition-of-done item 2).
+Method: curl HEAD then GET fallback, browser UA, 20s timeout, redirects followed.
+Known-at-fetch-time exceptions are annotated; everything else returned 200.
+
+200	https://arxiv.org/abs/2408.04870
+200	https://arxiv.org/abs/2509.14608
+200	https://authzed.com/blog/fine-grained-authorization-using-spicedb-for-retrieval-augmented-generation-rag
+200	https://aws.amazon.com/blogs/security/authorizing-access-to-data-with-rag-implementations/
+200	https://cloudsecurityalliance.org/blog/2024/06/05/the-risks-of-relying-on-ai-lessons-from-air-canada-s-chatbot-debacle
+200	https://developers.llamaindex.ai/python/examples/multi_tenancy/multi_tenancy_rag/
+200	https://docs.haystack.deepset.ai/docs/evaluation
+200	https://docs.langchain.com/langsmith/pytest
+404	https://docs.langchain.com/oss/python/security	[truncated variant of security-policy URL in prose]
+200	https://docs.langchain.com/oss/python/security-policy
+404	https://docs.onyx.app/admins/connectors/permissioning/overview	[documented as dead at fetch time; replaced by live equivalent]
+200	https://docs.onyx.app/admins/permissions/whats_changing
+200	https://docs.onyx.app/security/architecture/access_controls
+200	https://docs.vectara.com/docs/security/authorization/attribute-based-access-control
+200	https://github.com/SciPhi-AI/R2R
+200	https://github.com/deepset-ai/haystack
+200	https://github.com/infiniflow/ragflow
+200	https://github.com/langchain-ai/langchain
+200	https://github.com/morphik-org/morphik-core
+200	https://github.com/onyx-dot-app/onyx
+200	https://github.com/run-llama/llama_index
+200	https://github.com/weaviate/Verba
+200	https://hamel.dev/blog/posts/evals/
+200	https://hn.algolia.com/api/v1/items/48273068
+200	https://hn.algolia.com/api/v1/search?query=%22RAG%22%20%22permissions%22&tags=comment&hitsPerPage=10
+200	https://ised-isde.canada.ca/cipo/trademark-search/1403254?wbdisable=true
+200	https://learn.microsoft.com/en-us/microsoft-365/copilot/secure-govern-copilot-foundational-deployment-guidance
+200	https://makerkit.dev/pricing
+200	https://minimaxir.com/2023/07/langchain-problem/
+200	https://news.ycombinator.com/item?id=40739982
+200	https://news.ycombinator.com/item?id=48273068
+200	https://petri.com/copilot-didnt-overshare-your-data-your-permissions-did/
+200	https://plus.excalidraw.com/pricing
+200	https://python.langchain.com/v0.2/docs/how_to/qa_per_user/
+200	https://qaskills.sh/blog/rag-regression-testing-guide
+200	https://shipfa.st/
+200	https://sidekiq.org/
+200	https://startkit.ai/
+200	https://supabase.com/docs/guides/ai/rag-with-permissions
+200	https://supastarter.dev/
+200	https://tailwindcss.com/plus
+200	https://tiptap.dev/pricing
+200	https://www.cbsnews.com/news/aircanada-chatbot-discount-customer/
+404	https://www.credal.ai/enterprise-developer-rag-platform	[documented 404; live page under /products/ also checked]
+200	https://www.credal.ai/products/enterprise-developer-rag-platform
+200	https://www.glean.com/blog/secure-generative-ai-for-the-enterprise-requires-the-right-permissions-structure
+200	https://www.mikeperham.com/2015/11/23/how-to-charge-for-your-open-source/
+200	https://www.osohq.com/post/right-approach-to-authorization-in-rag
+200	https://www.pinecone.io/learn/rag-access-control/
+200	https://www.ragie.ai/pricing
+200	https://www.saaspegasus.com/pricing/
+200	https://www.shadcnblocks.com/pricing
+200	https://www.vectara.com/pricing
+200	https://www.yellowduck.be/posts/why-we-no-longer-use-langchain-for-building-our-ai-agents

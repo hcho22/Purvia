@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Purvia - the RAG kit that shows its work</title>
+<meta name="description" content="Purvia is an MIT-licensed, permissions-aware RAG kit. Chunk-level ACLs enforced inside the retrieval SQL predicate, zero-leak evals in CI, and a support bot with a buyer-set false-resolve ceiling.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='24' y='6' width='5' height='5' rx='1.25' fill='%2394A3B8'/%3E%3Crect x='24' y='15' width='5' height='5' rx='1.25' fill='%2394A3B8'/%3E%3Crect x='6' y='24' width='5' height='5' rx='1.25' fill='%2394A3B8'/%3E%3Crect x='15' y='24' width='5' height='5' rx='1.25' fill='%2394A3B8'/%3E%3Crect x='24' y='24' width='5' height='5' rx='1.25' fill='%2394A3B8'/%3E%3Crect x='3' y='3' width='19' height='19' rx='5' fill='none' stroke='%2315803D' stroke-width='2'/%3E%3Crect x='6' y='6' width='5' height='5' rx='1.25' fill='%2315803D'/%3E%3Crect x='15' y='6' width='5' height='5' rx='1.25' fill='%2315803D'/%3E%3Crect x='6' y='15' width='5' height='5' rx='1.25' fill='%2315803D'/%3E%3Crect x='15' y='15' width='5' height='5' rx='1.25' fill='%2315803D'/%3E%3C/svg%3E">
+<style>
+/* Purvia brand tokens (launch/brand/tokens.css, inlined so this file is self-contained) */
+:root{
+  --pv-paper:#FAFAF7;--pv-surface:#FFFFFF;--pv-ink:#0B1220;--pv-muted:#475569;--pv-faint:#64748B;
+  --pv-pass:#15803D;--pv-fail:#B91C1C;--pv-warn:#92400E;--pv-link:#1D4ED8;--pv-chunk:#94A3B8;--pv-border:#E2E8F0;
+  --pv-font-body:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --pv-font-mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --pv-radius:10px;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --pv-paper:#0B1220;--pv-surface:#111A2E;--pv-ink:#E7EAF0;--pv-muted:#CBD5E1;--pv-faint:#94A3B8;
+    --pv-pass:#4ADE80;--pv-fail:#F87171;--pv-warn:#FBBF24;--pv-link:#93C5FD;--pv-chunk:#475569;--pv-border:#24304A;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--pv-paper);color:var(--pv-ink);font-family:var(--pv-font-body);font-size:16px;line-height:1.6}
+a{color:var(--pv-link)}
+code,pre,.mono{font-family:var(--pv-font-mono)}
+pre{background:var(--pv-surface);border:1px solid var(--pv-border);border-radius:var(--pv-radius);padding:16px;overflow-x:auto;font-size:13px;line-height:1.5}
+h1,h2,h3{line-height:1.15;font-weight:700}
+h1{font-size:clamp(1.6rem,4.5vw,2.6rem);margin:.2em 0 .4em}
+h2{font-size:clamp(1.25rem,3vw,1.7rem);margin:2.2em 0 .5em}
+h3{font-size:1.05rem;margin:1.4em 0 .4em}
+.wrap{max-width:960px;margin:0 auto;padding:0 20px}
+header.site{display:flex;align-items:center;gap:12px;padding:18px 0;border-bottom:1px solid var(--pv-border)}
+header.site .name{font-family:var(--pv-font-mono);font-weight:600;font-size:1.15rem;letter-spacing:.02em}
+header.site nav{margin-left:auto;display:flex;gap:16px;flex-wrap:wrap;font-size:.9rem}
+.receipt{background:var(--pv-surface);border:1px solid var(--pv-border);border-radius:var(--pv-radius);padding:18px 18px 12px;margin:18px 0}
+.receipt .src{color:var(--pv-faint);font-size:.8rem;font-family:var(--pv-font-mono);margin-top:10px;word-break:break-all}
+.receipt .src a{color:var(--pv-faint)}
+table{border-collapse:collapse;width:100%;font-family:var(--pv-font-mono);font-size:.85rem}
+th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--pv-border);white-space:nowrap}
+th{color:var(--pv-muted);font-weight:600}
+.tablewrap{overflow-x:auto}
+.pass{color:var(--pv-pass);font-weight:600}
+.fail{color:var(--pv-fail);font-weight:600}
+.warn{color:var(--pv-warn)}
+.muted{color:var(--pv-muted)}
+.faint{color:var(--pv-faint);font-size:.875rem}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.grid2>*{min-width:0}
+@media (max-width:720px){.grid2{grid-template-columns:1fr}}
+pre{max-width:100%}
+.receipt{min-width:0}
+.btn{display:inline-block;background:var(--pv-ink);color:var(--pv-paper);border-radius:8px;padding:10px 16px;text-decoration:none;font-weight:600;font-family:var(--pv-font-mono);font-size:.9rem}
+.btn.ghost{background:transparent;color:var(--pv-link);border:1px solid var(--pv-border)}
+.badges{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.badges img{height:20px}
+ul{padding-left:1.2em}
+li{margin:.35em 0}
+footer{border-top:1px solid var(--pv-border);margin-top:64px;padding:24px 0;color:var(--pv-faint);font-size:.875rem}
+.hero-mark{width:56px;height:56px;flex:none}
+.arc{border-left:3px solid var(--pv-chunk);padding-left:18px;margin:18px 0}
+.arc .d{font-family:var(--pv-font-mono);color:var(--pv-muted);font-size:.85rem}
+.arc p{margin:.3em 0 1.1em}
+.kbd{background:var(--pv-surface);border:1px solid var(--pv-border);border-radius:4px;padding:1px 6px;font-size:.85em}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="site">
+  <svg class="hero-mark" style="width:34px;height:34px" viewBox="0 0 64 64" aria-label="Purvia mark"><rect x="48" y="12" width="10" height="10" rx="2.5" fill="var(--pv-chunk)"/><rect x="48" y="28" width="10" height="10" rx="2.5" fill="var(--pv-chunk)"/><rect x="12" y="48" width="10" height="10" rx="2.5" fill="var(--pv-chunk)"/><rect x="28" y="48" width="10" height="10" rx="2.5" fill="var(--pv-chunk)"/><rect x="48" y="48" width="10" height="10" rx="2.5" fill="var(--pv-chunk)"/><rect x="6" y="6" width="38" height="38" rx="10" fill="none" stroke="var(--pv-pass)" stroke-width="3.5"/><rect x="12" y="12" width="10" height="10" rx="2.5" fill="var(--pv-pass)"/><rect x="28" y="12" width="10" height="10" rx="2.5" fill="var(--pv-pass)"/><rect x="12" y="28" width="10" height="10" rx="2.5" fill="var(--pv-pass)"/><rect x="28" y="28" width="10" height="10" rx="2.5" fill="var(--pv-pass)"/></svg>
+  <span class="name">purvia</span>
+  <nav>
+    <a href="#receipts">Receipts</a>
+    <a href="#permissions">Permissions</a>
+    <a href="#escalation">Escalation</a>
+    <a href="#honest">Not yet</a>
+    <a href="https://github.com/hcho22/Purvia">GitHub</a>
+  </nav>
+</header>
+
+<main>
+<section>
+  <h1>The RAG kit that shows its work.</h1>
+  <p style="max-width:44em">Purvia is an MIT-licensed, permissions-aware RAG kit.
+  Chunk-level ACLs are enforced inside the retrieval SQL predicate and checked by zero-leak evals in CI.
+  A deterministic escalation gate keeps the support bot under a false-resolve ceiling you set.
+  Raw OpenAI SDK + Pydantic; no orchestration framework in the product.
+  Every claim on this page ends in a file path you can open.</p>
+  <p>
+    <a class="btn" href="https://github.com/hcho22/Purvia">git clone the receipts</a>
+    <a class="btn ghost" href="https://github.com/hcho22/Purvia/tree/main/docs/nightly">read 38 nightly snapshots</a>
+  </p>
+  <div class="badges">
+    <a href="https://github.com/hcho22/Purvia/blob/main/.github/workflows/retrieval-eval.yml"><img src="https://github.com/hcho22/Purvia/actions/workflows/retrieval-eval.yml/badge.svg" alt="retrieval-eval workflow badge"></a>
+    <a href="https://github.com/hcho22/Purvia/blob/main/.github/workflows/ship-green.yml"><img src="https://github.com/hcho22/Purvia/actions/workflows/ship-green.yml/badge.svg" alt="ship-green workflow badge"></a>
+    <a href="https://github.com/hcho22/Purvia/blob/main/.github/workflows/retrieval-eval-nightly.yml"><img src="https://github.com/hcho22/Purvia/actions/workflows/retrieval-eval-nightly.yml/badge.svg" alt="nightly eval workflow badge"></a>
+    <a href="https://github.com/hcho22/Purvia/blob/main/.github/workflows/permissions-scale-eval.yml"><img src="https://github.com/hcho22/Purvia/actions/workflows/permissions-scale-eval.yml/badge.svg" alt="permissions scale eval workflow badge, currently failing"></a>
+  </div>
+  <p class="faint">Badges are live from GitHub Actions and link to the workflow files. If one is red, that is the product working.</p>
+</section>
+
+<section id="story">
+  <h2>I shipped the lexical leg of hybrid retrieval dead</h2>
+  <p style="max-width:44em">The first nightly snapshot, 2026-05-19, put keyword recall@5 at 0.110.
+  Thirty-three straight published snapshots showed the leg dead - 0.110 at the series start, 0.140 after the golden set was extended on July 6 - before a comparison against another project made me actually read them.
+  The fix landed the same day as that read, and the next nightly shows keyword recall@5 at 0.917 on the extended 60-question set.
+  Every bad snapshot is still in the repo.
+  That is the kit: you do not have to trust me, you rerun the harness.</p>
+
+  <div class="grid2">
+    <div class="receipt">
+      <strong class="fail">Before</strong>
+      <div class="tablewrap"><table>
+        <tr><th>Mode</th><th>recall@5</th><th>MRR</th></tr>
+        <tr><td>vector</td><td>0.880</td><td>0.796</td></tr>
+        <tr><td class="fail">keyword</td><td class="fail">0.140</td><td class="fail">0.150</td></tr>
+        <tr><td>hybrid</td><td>0.880</td><td class="fail">0.786</td></tr>
+      </table></div>
+      <div class="src"><a href="https://github.com/hcho22/Purvia/blob/main/docs/nightly/2026-07-09.md">docs/nightly/2026-07-09.md</a> - hybrid MRR below its own vector leg; paraphrase keyword recall was 0.000</div>
+    </div>
+    <div class="receipt">
+      <strong class="pass">After</strong>
+      <div class="tablewrap"><table>
+        <tr><th>Mode</th><th>recall@5</th><th>MRR</th></tr>
+        <tr><td>vector</td><td>0.875</td><td>0.813</td></tr>
+        <tr><td class="pass">keyword</td><td class="pass">0.917</td><td class="pass">0.834</td></tr>
+        <tr><td class="pass">hybrid</td><td class="pass">0.950</td><td class="pass">0.858</td></tr>
+      </table></div>
+      <div class="src"><a href="https://github.com/hcho22/Purvia/blob/main/docs/nightly/2026-07-15.md">docs/nightly/2026-07-15.md</a> - extended 60-question set; hybrid recall@5 at or above vector in every category (MRR still trails vector on paraphrase: 0.767 vs 1.000)</div>
+    </div>
+  </div>
+
+  <div class="arc">
+    <div class="d">2026-05-19</div><p>First published nightly. Keyword recall@5 0.110. The leg shipped dead and the snapshot says so.</p>
+    <div class="d">2026-05-19 to 2026-07-09</div><p>33 straight published snapshots record the dead leg. Nobody reads them. The only automated alarm was a two-sided baseline check stuck flagging improvements as failures. Publication is not detection. Worse: the series has an 18-night hole in June because the nightly itself ran and failed at its seed step every night from 06-01 to 06-18, and I did not notice that either (GitHub Actions history).</p>
+    <div class="d">2026-07-10</div><p>A comparison against another project prompts the first real read. Six-story fix PRD filed and the SQL fix (a deliberately boring AND-then-OR fallback, <a href="https://github.com/hcho22/Purvia/blob/main/docs/adr/0009-keyword-or-fallback.md">ADR-0009</a>) merged the same day.</p>
+    <div class="d">2026-07-11</div><p>Nightly shows keyword 0.917. By 07-13 all six stories are in: a lexical golden-set category so this leg is measured on every run, and a one-sided alarm that only fires on real drops (<a href="https://github.com/hcho22/Purvia/blob/main/evals/retrieval/test_us118_one_sided_nonregression.py">US-118</a>). The harness makes failure undeniable; whether I read it is the discipline the broken scale benchmark below shows I am still building.</p>
+    <div class="d">Throughout</div><p>The security zero-leak table stayed <span class="mono pass">1.000</span> in every cell (labeled gold chunks; scope below). One honest asterisk: the vector and hybrid rows carried real attack pressure the whole time; the keyword row proves less during the dead period, since a leg retrieving at 0.11 barely stresses the ACL.</p>
+  </div>
+</section>
+
+<section id="permissions">
+  <h2>Permissions live inside the retrieval predicate</h2>
+  <p style="max-width:44em">The naive approach post-filters: retrieve top-k, then drop what the viewer cannot see.
+  At 5% visibility and top-10, the expected number of visible chunks in the result is k times selectivity: 10 x 0.05 = 0.5 chunks.
+  Purvia pushes owner-OR-ACL and workspace membership into the SQL the planner executes, under the viewer's JWT (SECURITY INVOKER), so the database ranks only what the viewer may see.
+  A forgotten backend filter cannot cross the tenant boundary, because there is no backend-passed tenant id to forget.</p>
+
+  <div class="receipt">
+    <strong>The actual predicate</strong>
+<pre>where c.embedding is not null
+  and d.deleted_at is null
+  and (1 - (c.embedding &lt;=&gt; query_embedding)) &gt;= match_threshold
+  and (c.user_id = auth.uid() or ca.chunk_id is not null)   -- owner OR chunk-level ACL
+  and exists (
+    select 1
+    from public.workspace_membership wm
+    where wm.workspace_id = d.workspace_id
+      and wm.user_id = auth.uid()                           -- tenant boundary, from the JWT
+  )</pre>
+    <div class="src"><a href="https://github.com/hcho22/Purvia/blob/main/supabase/migrations/20260617120300_match_chunks_workspace_membership.sql">supabase/migrations/20260617120300_match_chunks_workspace_membership.sql</a> (inline comments mine; the SQL diffs clean)</div>
+  </div>
+
+  <div class="grid2">
+    <div class="receipt">
+      <strong>Zero-leak table, latest nightly</strong>
+      <div class="tablewrap"><table>
+        <tr><th>Mode</th><th>Pre-filter</th><th>Post-filter</th></tr>
+        <tr><td>vector</td><td class="pass">1.000</td><td class="pass">1.000</td></tr>
+        <tr><td>keyword</td><td class="pass">1.000</td><td class="pass">1.000</td></tr>
+        <tr><td>hybrid</td><td class="pass">1.000</td><td class="pass">1.000</td></tr>
+      </table></div>
+      <div class="src">Fraction of no-access runs returning zero labeled gold chunks. The guarantee is as complete as the gold labels; the <a href="https://github.com/hcho22/Purvia/blob/main/docs/golden-set-authoring.md">authoring guide</a> treats under-labeling as a security defect. <a href="https://github.com/hcho22/Purvia/blob/main/docs/nightly/2026-07-15.md">docs/nightly/2026-07-15.md</a></div>
+    </div>
+    <div class="receipt">
+      <strong>Attacked, not just asserted</strong>
+      <ul style="font-size:.95rem">
+        <li>E6 seeds a second workspace with an identical corpus, grants the viewer ACLs on both but membership in one, and asserts recall@10 == 0.0 across the boundary, with a positive control. <span class="faint">Fails the required CI check on any leak.</span></li>
+        <li>AU4 throws forged, missing, and expired JWTs, a cross-workspace JWT holding an ACL on the other tenant, and revoked widget keys at the API edge. Over 30 exact assertions (== 0 rows or 401).</li>
+        <li>No security verdict has a config off-switch: the gate loader rejects any downgrade at load time, so burying a leak finding requires a code-visible PR diff. Precise scope: an E6 run that cannot execute at all (transient infra failure, after retries) is flagged loudly but deliberately does not fail the check; that trade-off is documented in the runner and in the honest section below.</li>
+      </ul>
+      <div class="src"><a href="https://github.com/hcho22/Purvia/blob/main/evals/retrieval/e6.py">evals/retrieval/e6.py</a> - <a href="https://github.com/hcho22/Purvia/blob/main/backend/test_au4_auth_attacks.py">backend/test_au4_auth_attacks.py</a> - <a href="https://github.com/hcho22/Purvia/blob/main/evals/gate/declaration.py">evals/gate/declaration.py</a></div>
+    </div>
+  </div>
+  <p class="faint">In the chat UI, every retrieved chunk carries a badge naming the ACL rule that granted it: "via owner", "via direct grant", "via engineering". The share dialog and the retrieval predicate use the same chunk_acl rows.</p>
+</section>
+
+<section id="escalation">
+  <h2>The support bot's risk tolerance is a number</h2>
+  <p style="max-width:44em">A support bot that confidently answers what it should have escalated is a liability with a court record.
+  In Purvia, escalate-vs-answer is deterministic control flow. The model drafts; two gates decide.
+  There is no model escalate() tool.</p>
+  <div class="receipt">
+    <strong>The pipeline, from the docstring that ships</strong>
+<pre>retrieve (hybrid, ONCE) → retrieval gate
+    → weak  ⇒ escalate now (ZERO draft, ZERO judge calls)
+    → strong ⇒ draft → faithfulness gate
+        → faithful   ⇒ answer (send the draft)
+        → unfaithful ⇒ escalate</pre>
+    <div class="src"><a href="https://github.com/hcho22/Purvia/blob/main/backend/escalation.py">backend/escalation.py</a> (run_deflection_pipeline)</div>
+  </div>
+  <ul>
+    <li><strong>One buyer-set risk number.</strong> <code>ESCALATION_FALSE_RESOLVE_CEILING</code>, default 5%: the maximum fraction of should-escalate questions allowed to auto-resolve. Enforced by the weekly eval gate, never the request path, so your risk tolerance costs zero latency. A breach fails the workflow and files an issue; it is never downgraded to a comment.</li>
+    <li><strong>Fails closed everywhere it matters.</strong> A judge error, timeout, or refusal escalates rather than auto-sending. Without the service-role key, every widget route returns 503. The escalation message a no-access customer sees is asserted byte-identical to the ordinary deferral, so escalating never discloses that restricted content exists.</li>
+    <li><strong>Deflection is derived, not stored.</strong> resolved with escalated_at null means the bot handled it alone; the timestamp is stamped by a Postgres trigger that callers cannot fake. No resolved_by_bot column to game.</li>
+    <li class="warn"><strong>Caveats, stated first:</strong> the gate thresholds are documented placeholder values, not tuned; the published LLM-judged history is thin (one RAGAS weekly snapshot; no escalation-weekly reports committed yet). The gate infrastructure is in CI; its published track record is short.</li>
+  </ul>
+  <div class="src" style="font-family:var(--pv-font-mono);font-size:.8rem;color:var(--pv-faint)"><a href="https://github.com/hcho22/Purvia/blob/main/.github/workflows/escalation-eval-weekly.yml">.github/workflows/escalation-eval-weekly.yml</a> - <a href="https://github.com/hcho22/Purvia/blob/main/supabase/migrations/20260623130000_conversation_status_machine.sql">conversation_status_machine.sql</a></div>
+</section>
+
+<section id="receipts">
+  <h2>The eval harness is most of the point</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Gate</th><th>When</th><th>On failure</th></tr>
+    <tr><td>E6 cross-workspace zero-leak</td><td>every retrieval PR</td><td class="fail">CI check fails</td></tr>
+    <tr><td>E7 escalation tripwire (deterministic legs)</td><td>every retrieval PR</td><td class="fail">CI check fails</td></tr>
+    <tr><td>AU4 API-edge auth attacks</td><td>every API-edge PR</td><td class="fail">CI check fails</td></tr>
+    <tr><td>ship-green: clean seed reproduces the 1.000 table</td><td>every eval-surface push to main</td><td class="fail">CI check fails</td></tr>
+    <tr><td>recall/MRR/nDCG delta vs main</td><td>every retrieval PR</td><td class="muted">advisory comment</td></tr>
+    <tr><td>Nightly snapshot publish</td><td>daily 02:00 UTC</td><td class="muted">committed either way</td></tr>
+    <tr><td>False-resolve ceiling + RAGAS</td><td>weekly</td><td class="warn">workflow fails, issue filed</td></tr>
+  </table></div>
+  <p class="faint">Determinism decides CI placement, structurally: declaring an LLM-judged gate as a per-PR fail-on-red is a load error (<a href="https://github.com/hcho22/Purvia/blob/main/evals/gate/placement.py">evals/gate/placement.py</a>). A judge wobble cannot red-bar a merge.</p>
+  <ul>
+    <li>60-question golden set across five categories, including adversarial and exact-token lexical questions. Small on purpose; the <a href="https://github.com/hcho22/Purvia/blob/main/docs/evals.md">eval doc's own limitations section</a> says the per-category cells have low statistical power. And to be precise about what the nightly series is: the same deterministic assertions rerun against an unchanged corpus, a change-detector and an audit trail, not 38 independent trials.</li>
+    <li>Cross-family judging: OpenAI writes answers, a Claude model grades them. The Anthropic key is eval-only and never read by the live backend.</li>
+    <li>Golden sets are built to fail loud on a corpus swap: content anchors are quoted verbatim from the demo corpus, so replacing the corpus and authoring your own golden set are the same step, by design.</li>
+    <li>Reranker decision made with data and published: LLM rerank wins adversarial MRR by +0.052 but costs ~1.2s median per query, so the default stays <code>none</code> (<a href="https://github.com/hcho22/Purvia/blob/main/docs/reranker-bakeoff.md">docs/reranker-bakeoff.md</a>, source JSONs committed).</li>
+  </ul>
+</section>
+
+<section id="run">
+  <h2>Run it, then check my numbers</h2>
+  <div class="grid2">
+    <div class="receipt">
+      <strong>The app</strong>
+<pre>supabase start
+cd backend && cp .env.example .env
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+cd ../frontend && cp .env.example .env
+npm install && npm run dev</pre>
+      <div class="src">Node 20+, Python 3.11+, Docker, Supabase CLI, an OpenAI key. <a href="https://github.com/hcho22/Purvia#local-development">README - Local development</a></div>
+    </div>
+    <div class="receipt">
+      <strong>The receipts</strong>
+<pre>python -m db_seed.corpus_seed
+python -m evals.retrieval.runner
+# exits non-zero on a zero-leak breach
+python -m evals.retrieval.runner --include-e6
+python -m backend.test_au4_auth_attacks</pre>
+      <div class="src"><a href="https://github.com/hcho22/Purvia#eval-suite">README - Eval suite</a></div>
+    </div>
+  </div>
+</section>
+
+<section id="honest">
+  <h2>What this does not do yet</h2>
+  <p style="max-width:44em">This list is maintained with the same discipline as the eval tables. If a claim above contradicts something here, the repo wins and I fix the claim.</p>
+  <ul>
+    <li><span class="fail">The 10k-chunk permissions scale benchmark is currently broken.</span> Every nightly report since 2026-06-19 publishes 0.000 in every cell; the likely cause is that the workspace-membership migrations orphaned the benchmark's synthetic viewers. The regression alarm that is supposed to catch exactly this has been firing into a void. Fixing it is a precondition for taking the scale story seriously; until then the HNSW findings in the README are design-time results, dated June 2026. <span class="src"><a href="https://github.com/hcho22/Purvia/tree/main/docs/permissions-scale-nightly">docs/permissions-scale-nightly/</a></span></li>
+    <li>Hybrid MRR still trails vector on paraphrase questions (0.767 vs 1.000 in the 07-15 nightly). The fix PRD's own goal is not fully met on that cell.</li>
+    <li>The demo corpus is 8 documents and 16 chunks, and the receipts do not transfer to your corpus: swapping in your documents and authoring your own golden set are the same step, by design. Day one on your data starts at zero receipts plus a labeling contract where under-labeling is a security defect. A semi-automated golden-set bootstrapper is the roadmap answer; it is not shipped.</li>
+    <li>The retrieval nightly itself went down for 18 nights in June (it ran and failed at its seed step, 06-01 to 06-18, per the Actions history) and I did not notice. Same lesson as the dead leg, and I only found it during this launch audit.</li>
+    <li>The E6 security gate fails open on infrastructure failure: a run that cannot execute after retries is flagged loudly but does not fail the check. A leak verdict cannot be downgraded; a flaky day can slip a run. Making repeated execution failure fail-closed is an open decision.</li>
+    <li>Adoption assumptions, stated plainly: Supabase is the identity and RLS substrate (auth.uid() from GoTrue JWTs is load-bearing; bringing your own auth means porting the predicate, RLS, JWT minting, and eval seeds), and the default install pulls docling, which brings torch. Parsing sits behind a seam, so an optional-extra split is feasible; it is a roadmap item.</li>
+    <li>Zero users, zero revenue, zero testimonials. Not deployed to a public URL. You are early, which is the honest word for it.</li>
+    <li>Bus factor is one. If I take a job tomorrow, what survives is what you already have: MIT-licensed code and the eval harness that lets a fork prove it still holds its properties. That is the whole succession plan, and I would rather say so than let you find out.</li>
+    <li>Solo repo: PRs are self-merged, and main has no branch protection yet, so "fails the required CI check" is a convention I honor, not a GitHub-enforced block. Enabling a ruleset is on the pre-launch list.</li>
+    <li>One RAGAS weekly snapshot published; no escalation-weekly history yet. The gates exist; their long-run record does not, yet.</li>
+  </ul>
+</section>
+
+<section id="pricing">
+  <h2>Pricing</h2>
+  <div class="grid2">
+    <div class="receipt">
+      <strong>Core - free, MIT, forever</strong>
+      <ul style="font-size:.95rem">
+        <li>Everything described on this page: the predicate, the ACLs, the widget, the escalation gate, the full eval harness, all of it already in the repo under an irrevocable MIT grant.</li>
+        <li>A receipt behind a paywall is not a receipt. The proof stays free because the proof is the pitch.</li>
+      </ul>
+    </div>
+    <div class="receipt">
+      <strong>Pro - planned, unpriced</strong>
+      <ul style="font-size:.95rem">
+        <li>Stated plainly: a pro tier would gate only what does not exist yet - future hardening modules, a maintained update stream, priority support. Nothing already MIT will ever move behind it, and there is no price tag here because there is nothing to sell yet.</li>
+        <li>The working hypothesis is a one-time price in the developer-asset band; it gets tested in buyer conversations, not on this page.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="about">
+  <h2>Who built this</h2>
+  <p style="max-width:44em">I spent about ten years in hardware validation and two in applied AI consulting.
+  Hardware taught me that a system you have not tried to break is a system you know nothing about.
+  Purvia is that discipline applied to RAG: golden sets, non-regression baselines, one-sided alarms, fail-closed defaults, and a public record of the times it failed.
+  I have not proven this sells. I have proven it leaks zero labeled chunks across the 180 no-access runs in every published nightly, and you can rerun that sentence.
+  One more receipt about how it was built: 49 of the 152 human-authored commits on main say Co-authored-by: Claude. The workflow is PRD-driven agent development with the deterministic eval gates as the reviewer that never sleeps; the git log is the disclosure.</p>
+</section>
+</main>
+
+<footer>
+  <div>purvia - MIT licensed - <a href="https://github.com/hcho22/Purvia">github.com/hcho22/Purvia</a></div>
+  <div>This page makes no claim without a path. If you find one without a receipt, open an issue titled "claim without a receipt." If you find a security vulnerability, report it privately (GitHub private vulnerability reporting), never in a public issue.</div>
+</footer>
+
+</div>
+</body>
+</html>

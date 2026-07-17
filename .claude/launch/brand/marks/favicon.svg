@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Purvia favicon (simplified sub-24px variant: purview boundary, granted chunks, one out-of-purview chunk)">
+  <!-- Sub-24px variant per GUIDELINES §6: fewer, larger elements so the boundary-and-outside-chunk story survives 16px (red team BR-11) -->
+  <rect x="25" y="22" width="7" height="7" rx="2" fill="#64748B"/>
+  <rect x="2" y="2" width="21" height="21" rx="6" fill="none" stroke="#15803D" stroke-width="3"/>
+  <rect x="7" y="7" width="11" height="11" rx="3" fill="#15803D"/>
+</svg>

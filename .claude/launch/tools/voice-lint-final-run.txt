@@ -1,0 +1,21 @@
+OK: site/index.html
+OK: THESIS.md
+note (brand/GUIDELINES.md) AGENTIC mentions for manual review:
+12:Decided in ADR-0011 (accepted 2026-07-14, merged 2026-07-15); the technical namespace deliberately stays `agentic-rag` (I1).
+143:No invented users, logos, or testimonials (J9); no deployed-product screenshots (J10); no superlatives the ledger cannot cash (J1); no hiding of red cells (J2); no "agentic" as a selling word; no purple gradients; no urgency mechanics.
+OK: brand/GUIDELINES.md
+OK: social/x/launch-thread.md
+OK: social/x/posts.md
+OK: social/x/voice-and-format.md
+OK: social/linkedin/posts.md
+OK: social/linkedin/voice-and-format.md
+OK: social/instagram/feed-concept.md
+OK: social/instagram/posts.md
+OK: social/instagram/voice-and-format.md
+OK: social/tiktok/scripts.md
+OK: social/tiktok/voice-and-format.md
+OK: social/content-calendar.md
+OK: extras/datasheet.html
+OK: extras/README.md
+OK: extras/profile-assets/bios.md
+OK: RED_TEAM.md
