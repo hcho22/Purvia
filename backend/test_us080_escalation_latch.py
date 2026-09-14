@@ -9,9 +9,10 @@ Two layers, the same shape as the other support-surface tests
         owns it) — pinned with an httpx `MockTransport` that captures the request.
       - `_run_widget_bot_turn` latches a DELIBERATE escalate (the pipeline deciding
         `escalated`, or a tripped US-077 breaker) and DOES NOT latch a confident
-        answer or a recoverable degraded deferral (botless workspace) — so a blip
-        never permanently silences the bot. The breaker-trip latch goes through the
-        breaker's `on_trip` hook AND runs ZERO pipeline calls (the US-077 guarantee).
+        answer or a recoverable degraded deferral (botless workspace or judge
+        failure) — so a blip never permanently silences the bot. The breaker-trip
+        latch goes through the breaker's `on_trip` hook AND runs ZERO pipeline calls
+        (the US-077 guarantee).
 
   * an INTEGRATION layer (skips cleanly when the app can't import), encoding the
     PRD US-080 "Validation Test" end-to-end through the REAL endpoints via a FastAPI
@@ -25,6 +26,12 @@ Two layers, the same shape as the other support-surface tests
       - EXPLICIT "talk to a human" (AC3): `POST /widget/conversations/escalate`
         latches via the SAME path WITHOUT running the pipeline, and the next message
         skips the pipeline too.
+
+    The issue-#105 regression uses this closest representative backend path
+    because the suite has no mandatory database-backed layer: the real message
+    endpoint and latch control flow run, while mocked DB helpers record that a
+    judge-failure deferral writes no latch and that the next turn re-enters the
+    pipeline. It does not claim to exercise the PostgreSQL status trigger.
 
 Run:
     python -m backend.test_us080_escalation_latch
@@ -161,14 +168,30 @@ def _run_unit(main) -> int:
                 ),
                 reason="answered",
             )
+        if action == "escalated":
+            return DeflectionResult(
+                action="escalated",
+                customer_message=GENERIC_DEFERRAL,
+                retrieval=RetrievalGateDecision(
+                    strong=False, top1_cosine=0.1, n_cleared=0, reason="weak: top1"
+                ),
+                faithfulness=None,
+                reason="retrieval_weak",
+            )
         return DeflectionResult(
-            action="escalated",
+            action="deferred",
             customer_message=GENERIC_DEFERRAL,
             retrieval=RetrievalGateDecision(
-                strong=False, top1_cosine=0.1, n_cleared=0, reason="weak: top1"
+                strong=True, top1_cosine=0.92, n_cleared=4, reason="strong"
             ),
-            faithfulness=None,
-            reason="retrieval_weak",
+            faithfulness=FaithfulnessDecision(
+                faithful=False,
+                supported=False,
+                score=0.0,
+                reason="unfaithful: judge_error",
+                judge_failed=True,
+            ),
+            reason="unfaithful: judge_error",
         )
 
     state = {"next": _result("answered"), "pipeline_calls": 0, "escalated": []}
@@ -238,6 +261,20 @@ def _run_unit(main) -> int:
         )
         checks += 1
         print("  unit: a model-mediated escalate latches (status='escalated')")
+
+        # judge failure → fail-closed deferral for THIS turn, NO permanent latch.
+        state["next"], state["pipeline_calls"], state["escalated"][:] = (
+            _result("deferred"), 0, []
+        )
+        reply = _turn()
+        assert reply == GENERIC_DEFERRAL, "a judge failure must still defer this turn"
+        assert state["pipeline_calls"] == 1, "the judge-failure turn ran the pipeline once"
+        assert state["escalated"] == [], (
+            "FAILURE INDICATOR: a transient judge failure must NOT permanently latch "
+            "the conversation"
+        )
+        checks += 1
+        print("  unit: a judge-failure deferral does not latch (recoverable next turn)")
 
         # botless workspace → recoverable degraded deferral, NO latch, NO pipeline.
         state["pipeline_calls"], state["escalated"][:] = 0, []
@@ -320,6 +357,23 @@ def _run_integration(main) -> int:
             ),
             faithfulness=None,
             reason="retrieval_weak",
+        )
+
+    def _deferred() -> DeflectionResult:
+        return DeflectionResult(
+            action="deferred",
+            customer_message=GENERIC_DEFERRAL,
+            retrieval=RetrievalGateDecision(
+                strong=True, top1_cosine=0.92, n_cleared=4, reason="strong"
+            ),
+            faithfulness=FaithfulnessDecision(
+                faithful=False,
+                supported=False,
+                score=0.0,
+                reason="unfaithful: judge_error",
+                judge_failed=True,
+            ),
+            reason="unfaithful: judge_error",
         )
 
     def _fresh_active() -> dict:
@@ -489,6 +543,40 @@ def _run_integration(main) -> int:
             )
         total += 1
         print("  routing: the two later messages persisted + queued with the pipeline NEVER re-run; escalated_at preserved")
+
+        # ===== TRANSIENT judge failure defers THIS turn without latching. The
+        #       next customer message must re-enter the pipeline (visible recovery
+        #       contract), not be suppressed as though a human handoff occurred. =====
+        state["conversation"] = _fresh_active()
+        state["persisted"].clear()
+        state["turn_calls"], state["escalate_calls"] = 0, 0
+        state["next_result"] = _deferred()
+
+        r = _first_message("what is your return window?")
+        assert r.status_code == 200, f"judge-failure turn must succeed, got {r.status_code} {r.text}"
+        assert _collect_deltas(r.text) == GENERIC_DEFERRAL, (
+            "the failed judge must fail closed and stream only the generic deferral"
+        )
+        assert state["conversation"]["status"] == "active", (
+            "FAILURE INDICATOR: a transient judge failure must leave the conversation active"
+        )
+        assert state["conversation"]["escalated_at"] is None
+        assert state["escalate_calls"] == 0, (
+            "FAILURE INDICATOR: a transient judge failure must not write the one-way latch"
+        )
+
+        state["persisted"].clear()
+        state["next_result"] = _answered()
+        r = _resumed_message("please try again")
+        assert _collect_deltas(r.text) == ANSWER, (
+            "the next turn must re-run and recover after the transient judge failure"
+        )
+        assert state["turn_calls"] == 2, (
+            "FAILURE INDICATOR: the bot must not stay silent after a transient judge failure"
+        )
+        assert state["escalate_calls"] == 0
+        total += 1
+        print("  judge failure: current turn deferred; next turn re-ran and answered without a latch")
 
         # ===== EXPLICIT 'talk to a human' button latches via the SAME path (AC3). =====
         state["conversation"] = _fresh_active()

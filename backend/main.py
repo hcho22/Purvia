@@ -4047,10 +4047,11 @@ async def _escalate_conversation_safe(
     logged and swallowed, leaving the conversation `active` so the NEXT turn
     re-evaluates rather than the customer getting an error. This is also why only a
     DELIBERATE escalate (the pipeline's `action='escalated'` or a breaker trip)
-    latches — a transient pipeline error or a momentarily-botless workspace defers
-    THIS turn but does not permanently silence the bot. The explicit-escalate
-    endpoint uses the strict `_escalate_conversation` instead (a user-pressed button
-    can surface "try again").
+    latches — a transient pipeline error, the pipeline's typed
+    `action='deferred'` judge-failure result, or a momentarily-botless workspace
+    defers THIS turn but does not permanently silence the bot. The
+    explicit-escalate endpoint uses the strict `_escalate_conversation` instead (a
+    user-pressed button can surface "try again").
     """
     try:
         await _escalate_conversation(http, conversation_id)
@@ -4128,8 +4129,9 @@ async def _run_widget_bot_turn(
       * the pipeline returning `action='escalated'` (weak retrieval / unfaithful
         draft) — latched after the un-tripped turn.
     The fail-closed DEGRADED deferrals (botless workspace, import error, pipeline
-    exception) deliberately do NOT latch: they may be transient, and permanently
-    silencing the bot on a blip would be wrong — they defer THIS turn and leave the
+    exception, or the pipeline's typed judge-failure `action='deferred'` result)
+    deliberately do NOT latch: they may be transient, and permanently silencing
+    the bot on a blip would be wrong — they defer THIS turn and leave the
     conversation `active` to recover next turn. The latch is best-effort
     (`_escalate_conversation_safe`): a latch-write blip never turns the deferral 200
     into a 500. The minted bot JWT is a bearer credential that never leaves
@@ -4201,10 +4203,11 @@ async def _run_widget_bot_turn(
         )
         return GENERIC_DEFERRAL
 
-    # US-080: a DELIBERATE ADR-0003 escalate decision (weak retrieval / unfaithful
-    # draft) latches the conversation so the bot goes silent. A breaker trip already
-    # latched via `_on_trip` (and left `turn=None`); a confident answer never
-    # latches.
+    # US-080/issue #105: a DELIBERATE ADR-0003 escalate decision (weak retrieval /
+    # unfaithful draft / grounded non-answer) latches the conversation so the bot
+    # goes silent. A typed judge-failure deferral is not escalated, so it remains
+    # active and retries on the next turn. A breaker trip already latched via
+    # `_on_trip` (and left `turn=None`); a confident answer never latches.
     if not result.tripped and result.turn is not None and result.turn.escalated:
         await _escalate_conversation_safe(http, conversation_id)
     return result.customer_message

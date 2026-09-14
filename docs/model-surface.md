@@ -167,10 +167,10 @@ selector falls back so a single-model setup sets only `OPENAI_MODEL`.
 > non-reasoning model unless you deliberately point `JUDGE_MODEL` at a reasoning
 > one. On a non-OpenAI judge, set
 > `JUDGE_MODEL` to your deployment/model id; an unset/wrong value just makes the
-> judge call fail, which fails **closed** (escalate), never auto-sends a reply -
-> but read the residual-risk paragraph under `JUDGE_TEMPERATURE` below before
-> repointing production: a judge that fails on *every* call latches the
-> conversations it hits to `escalated` permanently (issue #105).
+> judge call fail, which fails **closed** for that turn and never auto-sends a
+> reply. Issue #105's structured `deferred` result keeps that failure distinct
+> from a deliberate escalation, so the conversation stays active for a later
+> retry.
 
 > **`JUDGE_TEMPERATURE` pins the two runtime gates' sampler.** Both gates fail
 > **closed**, and a gate that returns a different verdict on identical input is
@@ -238,23 +238,17 @@ selector falls back so a single-model setup sets only `OPENAI_MODEL`.
 > the gate fails closed anyway. So a judge call is exactly one call with no retry,
 > and every failure - auth, rate limit, timeout, network, any 400 - fails closed.
 >
-> **Why that matters, and the residual risk.** A judge that fails on *every* call
-> makes both gates fail closed, `run_deflection_pipeline` returns
-> `action='escalated'`, and the latch site in
-> `backend/main.py` tests only `result.turn.escalated` - it cannot tell that from
-> a **deliberate** ADR-0003 escalate, so it calls `_escalate_conversation_safe`
-> and pins `conversations.status='escalated'`. That transition is one-way and
-> DB-trigger-enforced (AGENTS.md invariant 5), so the blast radius is **permanent
-> per-conversation bot silence**, not merely lost deflection. Repairing the
-> configuration stops NEW conversations from latching; it does **not** un-latch
-> the ones already latched, which stay `escalated` with the bot silent in them,
-> because the status transition cannot be reversed. The failure is not
-> self-healing, so verify a new `JUDGE_MODEL` answers before pointing production
-> at it. The underlying defect - that a transient or misconfigured judge failure
-> is indistinguishable from a deliberate escalate
-> at the latch site, contradicting both invariant 8 ("a degraded/transient failure
-> defers this turn but does NOT latch") and the `_escalate_conversation_safe`
-> docstring - is **not yet fixed**; issue #105 tracks it.
+> **Why that matters, and the issue-#105 boundary.** Both gates still fail the
+> affected turn closed on every judge failure: an unchecked draft is never sent,
+> and the customer receives the fixed generic deferral. The gate decisions also
+> carry a structured `judge_failed=True`, which `run_deflection_pipeline` maps to
+> `action='deferred'` rather than the `action='escalated'` reserved for a real gate
+> verdict. The latch site in `backend/main.py` therefore leaves the conversation
+> `active` and retries the bot on a later message. Ordinary unfaithful/non-answer
+> verdicts still latch, as does a circuit-breaker trip. This does not repair
+> conversations that were already latched before the fix: the status transition
+> is one-way and DB-trigger-enforced (AGENTS.md invariant 5), so those existing
+> rows remain `escalated` with the bot silent in them.
 >
 > **How the knob resolves.** The literal `none` is the **only** way to un-pin -
 > unset and blank both mean the pinned default, so a bare `-e JUDGE_TEMPERATURE`

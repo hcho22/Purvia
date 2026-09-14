@@ -10,7 +10,8 @@ Covers the PRD validation test:
   * a grounded draft -> supported=True, passes (faithful);
   * an ungrounded draft -> fails;
   * EXACTLY ONE judge call per evaluation (no RAGAS-style multi-call decomp);
-  * a forced judge exception -> unfaithful (fail-closed, escalate);
+  * a forced judge exception -> unfaithful + structured judge failure
+    (fail-closed; the pipeline defers this turn);
 plus the cutoff `>=` boundary, refusal / empty-choices / missing-payload
 fail-closed paths, score clamping to [0,1], and the JUDGE_MODEL selector.
 
@@ -146,6 +147,7 @@ def test_grounded_draft_passes() -> None:
     one call."""
     d, fake = _run(_judgment(True, 0.92), "Returns are accepted for 30 days.")
     _check(d.faithful is True, f"grounded draft must be faithful, got {d!r}")
+    _check(d.judge_failed is False, "a successful judge verdict must not report failure")
     _check(d.supported is True, f"supported must surface True, got {d.supported!r}")
     _check(d.score == 0.92, f"score must surface 0.92, got {d.score!r}")
     _check(d.reason == "faithful", f"reason must be 'faithful', got {d.reason!r}")
@@ -157,6 +159,7 @@ def test_ungrounded_draft_fails() -> None:
     """A draft the judge marks unsupported fails (escalate), in one call."""
     d, fake = _run(_judgment(False, 0.10), "We offer lifetime free returns worldwide.")
     _check(d.faithful is False, f"ungrounded draft must fail, got {d!r}")
+    _check(d.judge_failed is False, "an unfaithful verdict is not a judge failure")
     _check(d.reason == "unfaithful: judge_unsupported", f"reason got {d.reason!r}")
     _check(fake.calls == 1, f"must make exactly one judge call, got {fake.calls}")
     print("ok: ungrounded draft -> faithful=False (escalate) in one call")
@@ -164,13 +167,14 @@ def test_ungrounded_draft_fails() -> None:
 
 def test_judge_exception_fails_closed() -> None:
     """The PRD's forced-error case: a judge exception must NOT default to
-    faithful (fail-open). It fails closed -> escalate, still one call attempted."""
+    faithful (fail-open). It fails closed for this turn, still one call attempted."""
 
     def boom() -> Any:
         raise RuntimeError("judge timeout / 503")
 
     d, fake = _run(boom, "Returns are accepted for 30 days.")
     _check(d.faithful is False, f"judge error must fail CLOSED, got {d!r}")
+    _check(d.judge_failed is True, "the judge exception must be structured as a failure")
     _check(d.supported is False and d.score == 0.0, f"fail-closed fields wrong: {d!r}")
     _check(
         d.reason.startswith("unfaithful: judge_error"),
@@ -206,6 +210,7 @@ def test_refusal_and_malformed_responses_fail_closed() -> None:
     for tag, behavior in cases.items():
         d, fake = _run(behavior, "x")
         _check(d.faithful is False, f"{tag}: must fail closed, got {d!r}")
+        _check(d.judge_failed is True, f"{tag}: must be structured as a judge failure")
         _check(d.reason == f"unfaithful: {tag}", f"{tag}: reason got {d.reason!r}")
         _check(fake.calls == 1, f"{tag}: one call, got {fake.calls}")
     print("ok: refusal / empty-choices / missing-payload all fail closed in one call")
@@ -724,7 +729,7 @@ def test_context_and_draft_reach_the_judge() -> None:
 
 
 def test_every_judge_failure_fails_closed_in_one_call() -> None:
-    """No error shape is ever retried: every failure is one call, then escalate.
+    """No error shape is ever retried: every failure is one call, then defer.
 
     `_judge_parse` makes exactly one call with no exception at all. A judge
     deployment that will not accept the `temperature` PARAMETER is a CONFIGURATION

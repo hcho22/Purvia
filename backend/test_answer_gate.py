@@ -15,7 +15,8 @@ Covers:
   * a real answer -> answers=True, passes;
   * a non-answer / deferral -> fails (escalate);
   * EXACTLY ONE judge call per evaluation;
-  * a forced judge exception -> non-answer (fail-closed, escalate);
+  * a forced judge exception -> non-answer + structured judge failure
+    (fail-closed; the pipeline defers this turn);
   * the pinned sampler (issue #104), and that NO error shape is ever retried —
     including a 400 that names `temperature`, whose remedy is the typed-out
     `JUDGE_TEMPERATURE=none` rather than anything inferred at call time;
@@ -145,6 +146,7 @@ def test_real_answer_passes() -> None:
     call."""
     d, fake = _run(_judgment(True, 0.9), "Refurbished units carry a 90-day warranty.")
     _check(d.answers is True, f"a real answer must pass, got {d!r}")
+    _check(d.judge_failed is False, "a successful judge verdict must not report failure")
     _check(d.addressed is True, f"addressed must surface True, got {d.addressed!r}")
     _check(d.score == 0.9, f"score must surface 0.9, got {d.score!r}")
     _check(d.reason == "answers", f"reason must be 'answers', got {d.reason!r}")
@@ -160,6 +162,7 @@ def test_non_answer_fails() -> None:
         "I'm sorry, I don't have that information about refurbished units.",
     )
     _check(d.answers is False, f"a non-answer must fail, got {d!r}")
+    _check(d.judge_failed is False, "a non-answer verdict is not a judge failure")
     _check(d.reason == "non_answer: judge_unaddressed", f"reason got {d.reason!r}")
     _check(fake.calls == 1, f"must make exactly one judge call, got {fake.calls}")
     print("ok: grounded non-answer -> answers=False (escalate) in one call")
@@ -167,13 +170,14 @@ def test_non_answer_fails() -> None:
 
 def test_judge_exception_fails_closed() -> None:
     """A judge exception must NOT default to answers (fail-open). It fails closed
-    -> escalate, still one call attempted."""
+    for this turn, still one call attempted."""
 
     def boom() -> Any:
         raise RuntimeError("judge timeout / 503")
 
     d, fake = _run(boom, "Refurbished units carry a 90-day warranty.")
     _check(d.answers is False, f"judge error must fail CLOSED, got {d!r}")
+    _check(d.judge_failed is True, "the judge exception must be structured as a failure")
     _check(d.addressed is False and d.score == 0.0, f"fail-closed fields wrong: {d!r}")
     _check(
         d.reason.startswith("non_answer: judge_error"),
@@ -209,6 +213,7 @@ def test_refusal_and_malformed_responses_fail_closed() -> None:
     for tag, behavior in cases.items():
         d, fake = _run(behavior, "x")
         _check(d.answers is False, f"{tag}: must fail closed, got {d!r}")
+        _check(d.judge_failed is True, f"{tag}: must be structured as a judge failure")
         _check(d.reason == f"non_answer: {tag}", f"{tag}: reason got {d.reason!r}")
         _check(fake.calls == 1, f"{tag}: one call, got {fake.calls}")
     print("ok: refusal / empty-choices / missing-payload all fail closed in one call")
@@ -310,7 +315,7 @@ def test_reasoning_effort_reaches_this_gate() -> None:
 
 
 def test_every_judge_failure_fails_closed_in_one_call() -> None:
-    """No error shape is ever retried: every failure is one call, then escalate.
+    """No error shape is ever retried: every failure is one call, then defer.
 
     `_judge_parse` makes exactly one call with no exception at all - there is no
     error-text inference and no un-pinned retry. A judge deployment that will not

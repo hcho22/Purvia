@@ -22,7 +22,7 @@ when the retrieval gate calls retrieval strong. It makes **exactly one**
 structured-output judge call (ADR-0006 runtime judge role; `gpt-4o-mini` /
 `haiku`-class) verifying the drafted answer is grounded in its retrieved chunks,
 and fails **closed** — any judge error / refusal / parse failure / timeout is
-treated as unfaithful (⇒ escalate), never auto-sent. This runtime gate is a
+treated as unfaithful and the affected turn is deferred, never auto-sent. This runtime gate is a
 NET-NEW one-call check, NOT the offline RAGAS `faithfulness` metric in
 `evals/retrieval/ragas.py` (which decomposes claims across several calls and
 runs weekly); the same English word "faithfulness" names two distinct
@@ -37,10 +37,19 @@ The retrieval gate cannot catch it either: retrieval is *strong* precisely
 because the chunk is topically adjacent (the right subject, the wrong fact). So a
 separate operand — composed per ADR-0003 as deterministic control flow, not a
 model tool — verifies the draft actually ANSWERS the customer's question, and
-fails **closed** like the faithfulness gate (any judge error ⇒ escalate). It runs
+fails **closed** like the faithfulness gate (any judge error defers the affected
+turn). It runs
 only on the would-be-answered path (after the draft clears faithfulness), so it
 adds ONE judge call to a turn that was about to auto-resolve — exactly the
 population at risk — and none to any escalate path.
+
+Issue #105: a judge that cannot reach a verdict still fails the affected turn
+closed, but that outage is not a deliberate human-handoff decision. Both judge
+decision types carry `judge_failed=True` for exceptions, refusals, and malformed
+responses. `run_deflection_pipeline` maps that structured signal to
+`action="deferred"`, which returns the same generic customer message while keeping
+the conversation active so a later turn can retry. Ordinary unfaithful/non-answer
+verdicts remain `action="escalated"` and keep the one-way latch semantics.
 
 US-049: `run_deflection_pipeline` wires the gates into the exact ADR-0003
 control flow — `retrieve (hybrid, once) → retrieval gate → [if strong] draft →
@@ -227,12 +236,16 @@ class FaithfulnessDecision(BaseModel):
     gate's decision.
 
     `faithful` is the bottom-line verdict the orchestrator (US-049) acts on:
-    `True` ⇒ the drafted answer may auto-send, `False` ⇒ escalate. It is
+    `True` ⇒ the drafted answer may auto-send; `False` ⇒ withhold it, then
+    `judge_failed` selects current-turn deferral vs deliberate escalation. It is
     `supported AND score >= cutoff`, and is forced `False` on any judge failure
     (fail-closed). `supported` / `score` carry the raw judge output (score
-    clamped to `[0,1]`; `0.0` on failure). `reason` is a machine-stable tag for
-    logging/eval only — every escalating reason starts with `"unfaithful"` — and
-    is never shown to the customer (US-049 returns the generic deferral).
+    clamped to `[0,1]`; `0.0` on failure). `judge_failed` distinguishes a judge
+    that could not reach a verdict from an ordinary unfaithful verdict so the
+    support latch can defer only the affected turn (issue #105). `reason` is a
+    machine-stable tag for logging/eval only — every non-passing reason starts
+    with `"unfaithful"` — and is never shown to the customer (US-049 returns the
+    generic deferral).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -241,6 +254,7 @@ class FaithfulnessDecision(BaseModel):
     supported: bool
     score: float
     reason: str
+    judge_failed: bool = False
 
 
 def get_judge_model() -> str:
@@ -254,7 +268,7 @@ def get_judge_model() -> str:
     expensive. Selects the model only — the provider/connection is the
     `judge_client` the caller passes in (ADR-0006). On a non-OpenAI judge the
     operator sets `JUDGE_MODEL` to their deployment/model; an unset, wrong model
-    just makes the call fail — which fails closed (escalate), never open.
+    just makes the call fail — which fails closed for this turn, never open.
     """
     return os.environ.get("JUDGE_MODEL") or DEFAULT_JUDGE_MODEL
 
@@ -783,8 +797,9 @@ async def faithfulness_gate(
     Makes exactly one `chat.completions.parse` structured-output call on the
     runtime-judge client/model and returns `faithful = supported AND
     score >= cutoff`. Any failure mode — SDK/API error, timeout, refusal, empty
-    choices, missing parsed payload — fails **closed**: `faithful=False`
-    (escalate), never open. This is the runtime gate, NOT the offline RAGAS
+    choices, missing parsed payload — fails **closed**: `faithful=False` and
+    `judge_failed=True` (defer this turn), never open. This is the runtime gate,
+    NOT the offline RAGAS
     metric (see the module banner); it never decomposes claims or makes a second
     call.
 
@@ -839,9 +854,13 @@ async def faithfulness_gate(
 
 
 def _unfaithful(tag: str) -> FaithfulnessDecision:
-    """The fail-closed decision: unfaithful, score 0, escalate."""
+    """The fail-closed judge-failure decision: defer this turn, never answer."""
     return FaithfulnessDecision(
-        faithful=False, supported=False, score=0.0, reason=f"unfaithful: {tag}"
+        faithful=False,
+        supported=False,
+        score=0.0,
+        reason=f"unfaithful: {tag}",
+        judge_failed=True,
     )
 
 
@@ -855,7 +874,7 @@ def _unfaithful(tag: str) -> FaithfulnessDecision:
 # customer got nothing. This is a SECOND, orthogonal judge call that verifies the
 # draft actually addresses the customer's question, and — like the faithfulness
 # gate — fails **closed**: any judge error / refusal / parse failure / timeout is
-# treated as a non-answer (⇒ escalate), never auto-sent. It compares the QUESTION
+# treated as a non-answer that defers this turn, never auto-sent. It compares the QUESTION
 # against the DRAFT (NOT the chunks — grounding is the other gate's job); it is
 # the runtime companion to the OFFLINE-only `answer_relevancy` RAGAS metric
 # (`evals/retrieval/ragas.py`), which gates CI regressions, never an individual
@@ -933,11 +952,14 @@ class AnswerDecision(BaseModel):
     gate decisions.
 
     `answers` is the bottom-line verdict the orchestrator (US-049) acts on:
-    `True` ⇒ the (already-faithful) draft may auto-send, `False` ⇒ escalate. It
+    `True` ⇒ the (already-faithful) draft may auto-send; `False` ⇒ withhold it,
+    then `judge_failed` selects current-turn deferral vs deliberate escalation. It
     is `addressed AND score >= cutoff`, forced `False` on any judge failure
     (fail-closed). `addressed` / `score` carry the raw judge output (score clamped
-    to `[0,1]`; `0.0` on failure). `reason` is a machine-stable tag for logging /
-    eval only — every escalating reason starts with `"non_answer"` — and is never
+    to `[0,1]`; `0.0` on failure). `judge_failed` distinguishes a judge outage
+    from an ordinary non-answer verdict so only the latter latches the
+    conversation (issue #105). `reason` is a machine-stable tag for logging / eval
+    only — every non-passing reason starts with `"non_answer"` — and is never
     shown to the customer (US-049 returns the generic deferral).
     """
 
@@ -947,6 +969,7 @@ class AnswerDecision(BaseModel):
     addressed: bool
     score: float
     reason: str
+    judge_failed: bool = False
 
 
 async def answer_gate(
@@ -962,9 +985,10 @@ async def answer_gate(
     Makes exactly one `chat.completions.parse` structured-output call on the
     runtime-judge client/model and returns `answers = addressed AND
     score >= cutoff`. Any failure mode — SDK/API error, timeout, refusal, empty
-    choices, missing parsed payload — fails **closed**: `answers=False`
-    (escalate), never open. Compares the QUESTION against the DRAFT only; grounding
-    is `faithfulness_gate`'s job, not this gate's.
+    choices, missing parsed payload — fails **closed**: `answers=False` and
+    `judge_failed=True` (defer this turn), never open. Compares the QUESTION
+    against the DRAFT only; grounding is `faithfulness_gate`'s job, not this
+    gate's.
 
     Sampled at `JUDGE_TEMPERATURE` (default 0) - see `get_judge_temperature`.
     """
@@ -1018,24 +1042,25 @@ async def answer_gate(
 
 # The tags `_non_answer` is called with - the branches where the JUDGE ITSELF
 # failed, as opposed to `judge_unaddressed` / `score < cutoff`, which are verdicts
-# the judge actually reached. Both shapes fail closed to `answers=False`, so the
-# `reason` is the ONLY thing that tells them apart; a caller measuring what the
-# rubric concludes must not count a dead judge as a non-answer verdict (invariant
-# 12: measured nothing must never be reportable as a measurement). Note that
+# the judge actually reached. Both shapes fail closed to `answers=False`;
+# `judge_failed` carries the runtime control distinction, while this registry maps
+# the stable reason tag for eval measurement. A caller measuring what the rubric
+# concludes must not count a dead judge as a non-answer verdict (invariant 12:
+# measured nothing must never be reportable as a measurement). Note that
 # `judge_unaddressed` shares the `judge_` prefix, so this is an exact-match set
 # rather than a prefix test.
 JUDGE_FAILURE_TAGS = ("judge_error", "judge_no_choices", "judge_refusal", "judge_no_payload")
 
 
 def _non_answer(tag: str) -> AnswerDecision:
-    """The fail-closed decision: the judge itself failed, escalate.
+    """The fail-closed decision: the judge itself failed, defer this turn.
 
     NEVER raises, including on an unregistered tag. Every fail-closed branch of
     `answer_gate` returns through here - one of them the blanket
     `except Exception` handler - and that function's contract is that it always
-    yields an escalate decision on the customer request path. So an unregistered
-    tag logs and still escalates; it must not turn a graceful escalate into an
-    exception (AGENTS.md invariant 4).
+    withholds the unchecked draft on the customer request path. So an unregistered
+    tag logs and still returns a structured judge failure; it must not turn a
+    graceful fail-closed deferral into an exception (AGENTS.md invariant 4).
 
     The anti-drift check is a SOURCE-level property, so it is pinned statically by
     `test_answer_gate_rubric.test_every_non_answer_tag_is_registered`: it reads
@@ -1060,7 +1085,11 @@ def _non_answer(tag: str) -> AnswerDecision:
             tag,
         )
     return AnswerDecision(
-        answers=False, addressed=False, score=0.0, reason=f"non_answer: {tag}"
+        answers=False,
+        addressed=False,
+        score=0.0,
+        reason=f"non_answer: {tag}",
+        judge_failed=True,
     )
 
 
@@ -1119,8 +1148,11 @@ class DeflectionResult(BaseModel):
 
     `customer_message` is the ONLY field ever shown to the customer: the drafted
     answer when `action == "answered"`, the fixed `GENERIC_DEFERRAL` when
-    `action == "escalated"`. The remaining fields are internal diagnostics for
-    logging and the US-067 conversation status — `retrieval` (always present),
+    `action` is `"escalated"` or `"deferred"`. `"escalated"` is a deliberate
+    handoff that may latch the conversation; `"deferred"` is a transient judge
+    failure that fails this turn closed but must not latch (issue #105). The
+    remaining fields are internal diagnostics for logging and the US-067
+    conversation status — `retrieval` (always present),
     `faithfulness` (`None` when the retrieval gate short-circuited before any
     draft/judge call), `answer` (the answer-completeness decision, issue #97;
     `None` unless the draft reached the answer gate — i.e. it cleared
@@ -1132,7 +1164,7 @@ class DeflectionResult(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    action: Literal["answered", "escalated"]
+    action: Literal["answered", "escalated", "deferred"]
     customer_message: str
     retrieval: RetrievalGateDecision
     faithfulness: FaithfulnessDecision | None
@@ -1142,6 +1174,10 @@ class DeflectionResult(BaseModel):
     @property
     def escalated(self) -> bool:
         return self.action == "escalated"
+
+    @property
+    def deferred(self) -> bool:
+        return self.action == "deferred"
 
 
 def _escalated(
@@ -1159,6 +1195,29 @@ def _escalated(
     never ran."""
     return DeflectionResult(
         action="escalated",
+        customer_message=GENERIC_DEFERRAL,
+        retrieval=retrieval,
+        faithfulness=faithfulness,
+        answer=answer,
+        reason=reason,
+    )
+
+
+def _deferred_for_judge_failure(
+    retrieval: RetrievalGateDecision,
+    faithfulness: FaithfulnessDecision,
+    reason: str,
+    answer: AnswerDecision | None = None,
+) -> DeflectionResult:
+    """Fail the current turn closed without requesting a permanent handoff.
+
+    Both runtime judges route exceptions, refusals, and malformed responses here
+    through their structured `judge_failed` flag. The unchecked draft remains
+    withheld and the customer receives only `GENERIC_DEFERRAL`, but the distinct
+    action keeps the conversation active so a later turn can retry (issue #105).
+    """
+    return DeflectionResult(
+        action="deferred",
         customer_message=GENERIC_DEFERRAL,
         retrieval=retrieval,
         faithfulness=faithfulness,
@@ -1232,6 +1291,11 @@ async def run_deflection_pipeline(
                     → non-answer ⇒ escalate (a grounded non-answer is NOT a
                                    deflection — it answered nothing)
 
+    If either judge cannot reach a verdict, the turn follows a separate
+    `action="deferred"` path: it still returns only `GENERIC_DEFERRAL` (fail
+    closed) but is not a deliberate handoff and therefore must not trigger the
+    conversation's one-way escalation latch (issue #105).
+
     `supabase_headers` MUST carry the customer's/bot's JWT so retrieval runs
     under RLS + the workspace membership clause — that membership, resolved from
     `auth.uid()`, IS the trust boundary (ADR-0002), never a passed id. `workspace_id`
@@ -1280,6 +1344,10 @@ async def run_deflection_pipeline(
         judge_client, draft, chunks, faithfulness_cutoff, model=judge_model
     )
     if not faithfulness.faithful:
+        if faithfulness.judge_failed:
+            return _deferred_for_judge_failure(
+                retrieval, faithfulness=faithfulness, reason=faithfulness.reason
+            )
         return _escalated(
             retrieval, faithfulness=faithfulness, reason=faithfulness.reason
         )
@@ -1293,6 +1361,13 @@ async def run_deflection_pipeline(
         judge_client, message, draft, answer_cutoff, model=judge_model
     )
     if not answer.answers:
+        if answer.judge_failed:
+            return _deferred_for_judge_failure(
+                retrieval,
+                faithfulness=faithfulness,
+                reason=answer.reason,
+                answer=answer,
+            )
         return _escalated(
             retrieval, faithfulness=faithfulness, reason=answer.reason, answer=answer
         )

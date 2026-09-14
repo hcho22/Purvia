@@ -311,13 +311,13 @@ def test_every_non_answer_tag_is_registered() -> None:
 
 
 def test_non_answer_fails_closed_for_an_unregistered_tag() -> None:
-    """An unregistered tag must still escalate, never raise.
+    """An unregistered tag must still fail closed, never raise.
 
     `_non_answer` is how every fail-closed branch of `answer_gate` returns,
     including the blanket `except Exception` handler, so raising here would
-    convert a graceful escalate into an exception on the customer request path -
-    in the one function whose contract is that it never raises (AGENTS.md
-    invariant 4).
+    convert a graceful current-turn deferral into an exception on the customer
+    request path - in the one function whose contract is that it never raises
+    (AGENTS.md invariant 4).
     """
     decision = _non_answer("judge_not_a_registered_tag")
     _check(
@@ -329,7 +329,8 @@ def test_non_answer_fails_closed_for_an_unregistered_tag() -> None:
         "an unregistered tag cannot be recognised by judge_failure_tag - that is "
         "the drift test_every_non_answer_tag_is_registered exists to block",
     )
-    print("ok: _non_answer escalates rather than raising on an unregistered tag")
+    _check(decision.judge_failed is True, "an unregistered failure tag must stay structured")
+    print("ok: _non_answer fails closed rather than raising on an unregistered tag")
 
 
 def test_boot_warning_call_site_is_wired_to_the_widget_surface() -> None:
