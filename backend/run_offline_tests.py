@@ -13,28 +13,53 @@ import re
 import subprocess
 import sys
 from collections.abc import Mapping
+from enum import Enum
 from pathlib import Path
 
 
 BACKEND_DIR = Path(__file__).resolve().parent
 
-# These modules have no offline assertions. Mixed unit/integration modules are
-# not listed: PURVIA_OFFLINE_TESTS=1 makes them run only their unit layer.
-INTEGRATION_ONLY: dict[str, str] = {
-    "test_au4_auth_attacks.py": "requires local Supabase, Postgres, and OpenAI",
-    "test_conversation_status_machine.py": "requires local Postgres migrations",
-    "test_llamaparse_smoke.py": "requires a LlamaCloud credential and live API",
-    "test_permissions.py": "requires local Supabase and Postgres",
-    "test_sec_rls_hardening.py": "requires local Supabase and Postgres",
-    "test_share_api.py": "requires local Supabase and Postgres",
-    "test_us066_conversations_rls.py": "requires local Supabase and Postgres",
-    "test_us070_bot_retrieval_integration.py": "requires local Supabase and Postgres",
+class IntegrationDependency(str, Enum):
+    LLAMA_CLOUD = "LlamaCloud credential and live API"
+    OPENAI = "OpenAI credential and live API"
+    POSTGRES = "local Postgres"
+    SUPABASE = "local Supabase"
+
+
+INTEGRATION_ONLY: dict[str, frozenset[IntegrationDependency]] = {
+    "test_au4_auth_attacks.py": frozenset(
+        {
+            IntegrationDependency.OPENAI,
+            IntegrationDependency.POSTGRES,
+            IntegrationDependency.SUPABASE,
+        }
+    ),
+    "test_conversation_status_machine.py": frozenset(
+        {IntegrationDependency.POSTGRES}
+    ),
+    "test_llamaparse_smoke.py": frozenset({IntegrationDependency.LLAMA_CLOUD}),
+    "test_permissions.py": frozenset(
+        {IntegrationDependency.POSTGRES, IntegrationDependency.SUPABASE}
+    ),
+    "test_sec_rls_hardening.py": frozenset(
+        {IntegrationDependency.POSTGRES, IntegrationDependency.SUPABASE}
+    ),
+    "test_share_api.py": frozenset(
+        {IntegrationDependency.POSTGRES, IntegrationDependency.SUPABASE}
+    ),
+    "test_us066_conversations_rls.py": frozenset(
+        {IntegrationDependency.POSTGRES, IntegrationDependency.SUPABASE}
+    ),
+    "test_us070_bot_retrieval_integration.py": frozenset(
+        {IntegrationDependency.POSTGRES, IntegrationDependency.SUPABASE}
+    ),
 }
 
 # A test module that only says SKIP has not produced an offline verdict. Requiring
 # the suite's established PASS/OK marker makes a new live-only module fail CI
 # until it is explicitly classified above.
 _VERDICT_RE = re.compile(r"(?:^|\n)\s*(?:PASS|OK):", re.MULTILINE)
+_SKIP_RE = re.compile(r"(?:^|\n)\s*SKIP:", re.MULTILINE)
 
 _LIVE_ENV_KEYS = {
     "REDIS_URL",
@@ -47,7 +72,7 @@ _LIVE_ENV_KEYS = {
 
 def discover_test_modules(
     backend_dir: Path = BACKEND_DIR,
-    integration_only: dict[str, str] = INTEGRATION_ONLY,
+    integration_only: Mapping[str, object] = INTEGRATION_ONLY,
 ) -> list[str]:
     """Return every unclassified backend test module, sorted by filename."""
     paths = sorted(backend_dir.glob("test_*.py"))
@@ -61,7 +86,7 @@ def discover_test_modules(
 
 
 def offline_environment(source: Mapping[str, str] | None = None) -> dict[str, str]:
-    """Return a subprocess environment with live-service credentials removed."""
+    """Return a subprocess environment configured for local-only execution."""
     env = dict(os.environ if source is None else source)
     for key in tuple(env):
         if (
@@ -72,7 +97,36 @@ def offline_environment(source: Mapping[str, str] | None = None) -> dict[str, st
         ):
             env.pop(key)
     env["PURVIA_OFFLINE_TESTS"] = "1"
+    env["HF_DATASETS_OFFLINE"] = "1"
+    env["HF_HUB_DISABLE_TELEMETRY"] = "1"
+    env["HF_HUB_OFFLINE"] = "1"
+    env["TRANSFORMERS_OFFLINE"] = "1"
     return env
+
+
+def has_offline_verdict(output: str) -> bool:
+    return _VERDICT_RE.search(output) is not None
+
+
+def has_skip_verdict(output: str) -> bool:
+    return _SKIP_RE.search(output) is not None
+
+
+def execute_test_module(
+    module: str,
+    *,
+    env: Mapping[str, str] | None = None,
+    timeout: int = 180,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "-m", "backend.offline_test_bootstrap", module],
+        cwd=BACKEND_DIR.parent,
+        env=dict(offline_environment() if env is None else env),
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        timeout=timeout,
+    )
 
 
 def main() -> int:
@@ -84,23 +138,16 @@ def main() -> int:
 
     print(f"Discovered {len(modules)} offline backend test modules")
     print(f"Classified {len(INTEGRATION_ONLY)} integration-only modules:")
-    for filename, reason in sorted(INTEGRATION_ONLY.items()):
-        print(f"  - backend.{Path(filename).stem}: {reason}")
+    for filename, dependencies in sorted(INTEGRATION_ONLY.items()):
+        reason = ", ".join(sorted(dependencies))
+        print(f"  - backend.{Path(filename).stem}: requires {reason}")
 
     failures: list[str] = []
     env = offline_environment()
     for module in modules:
         print(f"\n=== {module} ===", flush=True)
         try:
-            result = subprocess.run(
-                [sys.executable, "-m", module],
-                cwd=BACKEND_DIR.parent,
-                env=env,
-                text=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                timeout=180,
-            )
+            result = execute_test_module(module, env=env)
         except subprocess.TimeoutExpired as exc:
             output = exc.stdout or ""
             if isinstance(output, bytes):
@@ -114,7 +161,7 @@ def main() -> int:
         if result.returncode != 0:
             print(f"FAIL: {module} exited {result.returncode}")
             failures.append(module)
-        elif not _VERDICT_RE.search(result.stdout):
+        elif not has_offline_verdict(result.stdout):
             print(
                 f"FAIL: {module} produced no PASS:/OK: offline verdict; "
                 "classify it as integration-only if it intentionally requires live services"
