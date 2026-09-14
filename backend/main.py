@@ -871,7 +871,8 @@ async def _on_startup() -> None:
     )
     # The symmetric case for the ADR-0013 reasoning-effort knob: a non-reasoning
     # judge (the shipped gpt-4o-mini) 400s on JUDGE_REASONING_EFFORT the same way a
-    # reasoning judge 400s on the temperature pin, with the same issue #105 latch.
+    # reasoning judge 400s on the temperature pin. Issue #105 defers the affected
+    # turn without a new latch; rows latched before the fix remain irreversible.
     # Same widget-surface predicate: these gates run only on the support path.
     warn_if_judge_rejects_reasoning_effort(
         support_configured=bool(SUPABASE_SERVICE_ROLE_KEY)
@@ -4047,10 +4048,11 @@ async def _escalate_conversation_safe(
     logged and swallowed, leaving the conversation `active` so the NEXT turn
     re-evaluates rather than the customer getting an error. This is also why only a
     DELIBERATE escalate (the pipeline's `action='escalated'` or a breaker trip)
-    latches — a transient pipeline error or a momentarily-botless workspace defers
-    THIS turn but does not permanently silence the bot. The explicit-escalate
-    endpoint uses the strict `_escalate_conversation` instead (a user-pressed button
-    can surface "try again").
+    latches — a transient pipeline error, the pipeline's typed
+    `action='deferred'` judge-failure result, or a momentarily-botless workspace
+    defers THIS turn but does not permanently silence the bot. The
+    explicit-escalate endpoint uses the strict `_escalate_conversation` instead (a
+    user-pressed button can surface "try again").
     """
     try:
         await _escalate_conversation(http, conversation_id)
@@ -4108,11 +4110,13 @@ async def _run_widget_bot_turn(
     """US-079: run ONE customer turn's ADR-0003 deflection pipeline AS the bot,
     behind the US-077 per-workspace breaker; return the customer-facing message.
 
-    Returns the bot's drafted answer when retrieval is strong AND the draft clears
-    the faithfulness gate, else the fixed generic deferral (escalate). The turn is
-    fail-CLOSED end to end — a botless workspace, an unimportable support module, a
-    missing `SUPABASE_JWT_SECRET`, or any pipeline error all escalate to a human
-    (generic deferral) rather than guess. The per-workspace breaker is checked
+    Returns the bot's drafted answer only when retrieval is strong AND the draft
+    clears both the faithfulness and answer-completeness gates; otherwise it returns
+    a fixed generic deferral. The turn is fail-CLOSED end to end — a botless
+    workspace, an unimportable support module, a missing `SUPABASE_JWT_SECRET`, or
+    any pipeline error withholds the unchecked answer rather than guessing. Only
+    the deliberate paths described below write the escalation latch. The
+    per-workspace breaker is checked
     FIRST: when tripped, `run_bot_deflection_turn` is NEVER awaited (zero retrieval,
     zero LLM — the US-077 cost-runaway backstop) and the breaker deferral is
     returned. The breaker is wired here so the cost ceiling is live the moment the
@@ -4128,8 +4132,9 @@ async def _run_widget_bot_turn(
       * the pipeline returning `action='escalated'` (weak retrieval / unfaithful
         draft) — latched after the un-tripped turn.
     The fail-closed DEGRADED deferrals (botless workspace, import error, pipeline
-    exception) deliberately do NOT latch: they may be transient, and permanently
-    silencing the bot on a blip would be wrong — they defer THIS turn and leave the
+    exception, or the pipeline's typed judge-failure `action='deferred'` result)
+    deliberately do NOT latch: they may be transient, and permanently silencing
+    the bot on a blip would be wrong — they defer THIS turn and leave the
     conversation `active` to recover next turn. The latch is best-effort
     (`_escalate_conversation_safe`): a latch-write blip never turns the deferral 200
     into a 500. The minted bot JWT is a bearer credential that never leaves
@@ -4137,7 +4142,7 @@ async def _run_widget_bot_turn(
     """
     if not bot_user_id or not workspace_id:
         # Botless workspace (provisioning unavailable, US-078): the bot has no
-        # principal to retrieve as, so defer to a human. No breaker, no LLM.
+        # principal to retrieve as, so defer this turn. No breaker, no LLM.
         log.info(
             "widget_turn.no_bot conversation=%s — escalating (no provisioned bot)",
             conversation_id,
@@ -4149,7 +4154,7 @@ async def _run_widget_bot_turn(
         from support_bot import run_bot_deflection_turn  # US-070
     except ImportError:
         # Belt-and-suspenders for a build that ships the widget without the
-        # support-bot module (mirrors `_ensure_workspace_bot`): escalate.
+        # support-bot module (mirrors `_ensure_workspace_bot`): defer this turn.
         log.warning(
             "widget_turn.support_module_unavailable conversation=%s — escalating",
             conversation_id,
@@ -4192,7 +4197,7 @@ async def _run_widget_bot_turn(
             run_turn=_turn,
             on_trip=_on_trip,  # US-080: latch the conversation on a breaker trip
         )
-    except Exception:  # noqa: BLE001 — any turn failure escalates (fail closed)
+    except Exception:  # noqa: BLE001 — any turn failure defers (fail closed)
         # A transient pipeline error defers THIS turn but does NOT latch: it may be
         # recoverable, and permanently silencing the bot on a blip would be wrong.
         log.exception(
@@ -4201,10 +4206,11 @@ async def _run_widget_bot_turn(
         )
         return GENERIC_DEFERRAL
 
-    # US-080: a DELIBERATE ADR-0003 escalate decision (weak retrieval / unfaithful
-    # draft) latches the conversation so the bot goes silent. A breaker trip already
-    # latched via `_on_trip` (and left `turn=None`); a confident answer never
-    # latches.
+    # US-080/issue #105: a DELIBERATE ADR-0003 escalate decision (weak retrieval /
+    # unfaithful draft / grounded non-answer) latches the conversation so the bot
+    # goes silent. A typed judge-failure deferral is not escalated, so it remains
+    # active and retries on the next turn. A breaker trip already latched via
+    # `_on_trip` (and left `turn=None`); a confident answer never latches.
     if not result.tripped and result.turn is not None and result.turn.escalated:
         await _escalate_conversation_safe(http, conversation_id)
     return result.customer_message

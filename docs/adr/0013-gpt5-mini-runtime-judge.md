@@ -39,11 +39,11 @@ decision rather than discovered later:
 1. **It cannot accept a `temperature`.** `gpt-5-mini` returns a `400` on any
    `temperature` value, including the pinned `0`. Because both gates splat the
    resolved sampling kwargs into every judge call and fail **closed** on any
-   error, a `temperature` sent to `gpt-5-mini` 400s every call, escalates every
-   turn, and - per **issue #105** - the latch site cannot tell that from a
-   deliberate escalate, so affected conversations latch to `status='escalated'`
-   permanently and repairing the config does not un-latch them. The only correct
-   config is therefore `JUDGE_TEMPERATURE=none`, which omits the parameter.
+   error, a `temperature` sent to `gpt-5-mini` 400s every call and defers every
+   affected turn. **Issue #105** now keeps that judge failure distinct from a
+   deliberate escalation, so the conversation stays active for a later retry.
+   Conversations latched before that fix remain irreversibly escalated. The only
+   correct config is therefore `JUDGE_TEMPERATURE=none`, which omits the parameter.
 
 2. **At default reasoning effort it is not latency-viable.** The two judge calls
    sit inline on the customer reply path; `gpt-5-mini` at default effort adds a
@@ -59,7 +59,7 @@ with the required configuration:
 
 - `JUDGE_MODEL=gpt-5-mini`
 - `JUDGE_TEMPERATURE=none` (mandatory - see above; without it both gates fail
-  closed and latch every conversation per issue #105)
+  closed and defer every affected turn per issue #105)
 - `JUDGE_REASONING_EFFORT=minimal` (without it, a ~9.6s-p95 latency regression on
   the reply path)
 
@@ -114,7 +114,8 @@ A second, symmetric warning covers the inverse migration slip.
 `JUDGE_REASONING_EFFORT` is set but `JUDGE_MODEL` does **not** look like a known
 reasoning family - the case of an operator who sets the value while leaving the
 non-reasoning default `gpt-4o-mini` in place, which 400s on `reasoning_effort` and
-latches conversations via the same issue #105 path.
+defers affected turns via the same issue #105 path. Conversations latched before
+that fix remain irreversibly escalated.
 It shares the one hand-maintained name list (`_name_is_temperature_refusing`),
 takes the same widget-scoped `support_configured` gate, and is best-effort and
 wrong in both directions (a reasoning model under an unrecognised name gets a
