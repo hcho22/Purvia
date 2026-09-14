@@ -214,6 +214,8 @@ class FaithfulnessJudgment(BaseModel):
     represent judge confidence and must follow the malformed-response path.
     """
 
+    model_config = ConfigDict(strict=True)
+
     supported: bool = Field(
         ...,
         description=(
@@ -935,6 +937,8 @@ class AnswerJudgment(BaseModel):
     represent judge confidence and must follow the malformed-response path.
     """
 
+    model_config = ConfigDict(strict=True)
+
     answers: bool = Field(
         ...,
         description=(
@@ -1048,50 +1052,13 @@ async def answer_gate(
     )
 
 
-# The tags `_non_answer` is called with - the branches where the JUDGE ITSELF
-# failed, as opposed to `judge_unaddressed` / `score < cutoff`, which are verdicts
-# the judge actually reached. Both shapes fail closed to `answers=False`;
-# `judge_failed` carries the runtime control distinction, while this registry maps
-# the stable reason tag for eval measurement. A caller measuring what the rubric
-# concludes must not count a dead judge as a non-answer verdict (invariant 12:
-# measured nothing must never be reportable as a measurement). Note that
-# `judge_unaddressed` shares the `judge_` prefix, so this is an exact-match set
-# rather than a prefix test.
-JUDGE_FAILURE_TAGS = ("judge_error", "judge_no_choices", "judge_refusal", "judge_no_payload")
-
-
 def _non_answer(tag: str) -> AnswerDecision:
     """The fail-closed decision: the judge itself failed, defer this turn.
 
-    NEVER raises, including on an unregistered tag. Every fail-closed branch of
-    `answer_gate` returns through here - one of them the blanket
-    `except Exception` handler - and that function's contract is that it always
-    withholds the unchecked draft on the customer request path. So an unregistered
-    tag logs and still returns a structured judge failure; it must not turn a
-    graceful fail-closed deferral into an exception (AGENTS.md invariant 4).
-
-    The anti-drift check is a SOURCE-level property, so it is pinned statically by
-    `test_answer_gate_rubric.test_every_non_answer_tag_is_registered`: it reads
-    these call sites with `ast` and asserts set-equality with
-    `JUDGE_FAILURE_TAGS`. That holds unconditionally, unlike an `assert`, which
-    `python -O` strips out of an optimized deployment entirely.
-
-    Its scope is exactly the tags passed to `_non_answer`, and no wider: the test
-    walks CALLS to this helper, so a fail-closed branch that builds an
-    `AnswerDecision` directly is invisible to it - and `answer_gate` already
-    constructs decisions that way for its two real verdicts, so the pattern is at
-    hand. A new judge-failure branch MUST return through `_non_answer` for the guard
-    to see it; written any other way, `judge_failure_tag` reports the dead judge as
-    a real non-answer verdict, which is the invariant-12 drift the registry exists
-    to block.
+    Every fail-closed branch of `answer_gate` returns through here, including the
+    blanket exception handler. The structured `judge_failed` field is the semantic
+    distinction from an ordinary non-answer verdict; `reason` remains diagnostic.
     """
-    if tag not in JUDGE_FAILURE_TAGS:
-        log.error(
-            "unregistered judge failure tag %r: judge_failure_tag() will report this "
-            "dead judge as a real non-answer verdict until the tag is added to "
-            "JUDGE_FAILURE_TAGS",
-            tag,
-        )
     return AnswerDecision(
         answers=False,
         addressed=False,
@@ -1099,18 +1066,6 @@ def _non_answer(tag: str) -> AnswerDecision:
         reason=f"non_answer: {tag}",
         judge_failed=True,
     )
-
-
-def judge_failure_tag(reason: str) -> str | None:
-    """The `JUDGE_FAILURE_TAGS` entry an `AnswerDecision.reason` reports, if any.
-
-    `None` means the judge was reached and returned a verdict (including a
-    legitimate `judge_unaddressed`), so the decision reflects the rubric.
-    """
-    for tag in JUDGE_FAILURE_TAGS:
-        if reason == f"non_answer: {tag}":
-            return tag
-    return None
 
 
 # -----------------------------------------------------------------------------

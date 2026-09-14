@@ -80,8 +80,8 @@ two implementations drifting apart.
 
 Layers (the project convention — see CLAUDE.md "How to test"):
   * unit layer, ALWAYS runs, no network/keys/DB: rubric lockstep + rule presence,
-    plus the two source-level structural checks (the `_non_answer` tag registry
-    and the boot warning's call-site wiring in `main.py`).
+    executable structured judge-failure behavior, plus the boot warning's
+    call-site wiring in `main.py`.
   * integration layer, SKIPS CLEANLY without keys: live discrimination on both
     implementations.
 
@@ -96,7 +96,7 @@ import asyncio
 import os
 import sys
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Optional, Tuple
+from typing import Any, Awaitable, Callable
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
@@ -106,11 +106,9 @@ from escalation import (  # noqa: E402
     _non_answer,
     AnswerJudgment,
     DEFAULT_ANSWER_CUTOFF,
-    JUDGE_FAILURE_TAGS,
     answer_gate,
     get_judge_model,
     get_judge_temperature,
-    judge_failure_tag,
 )
 
 # How many times each live case is judged. Every case must come back UNANIMOUS.
@@ -121,10 +119,6 @@ _REPS = 3
 # its rubric out of the source with `ast` instead: these are plain literals, so
 # this needs nothing but the stdlib and still reads the REAL shipped text.
 _RUNNER_SRC = ROOT / "evals" / "retrieval" / "runner.py"
-
-# The runtime gate's own source, read the same way for the `_non_answer` registry
-# check below.
-_ESCALATION_SRC = ROOT / "backend" / "escalation.py"
 
 # The app's own source, read the same way again for the boot-warning CALL-SITE
 # check below. Read, never imported: `main` pulls the ML stack and the whole
@@ -201,24 +195,6 @@ def _names_in(node: ast.AST) -> set[str]:
     return found
 
 
-def _non_answer_call_tags(path: Path) -> set[str]:
-    """Every tag literal `_non_answer(...)` is called with in `path`'s source.
-
-    Raises if a call site passes anything but a plain string literal, since a
-    computed tag would slip past the registry check below unseen.
-    """
-    tags: set[str] = set()
-    for node in _calls_to(path, "_non_answer"):
-        if len(node.args) != 1 or not isinstance(node.args[0], ast.Constant):
-            raise AssertionError(
-                f"{path.name}:{node.lineno}: _non_answer must be called with one "
-                "plain string literal so the JUDGE_FAILURE_TAGS registry can be "
-                "checked statically"
-            )
-        tags.add(node.args[0].value)
-    return tags
-
-
 # The rules BOTH implementations must state. Phrased as the substrings they share,
 # so the check survives the small wording differences between the two prompts
 # while still failing loudly if one of them loses a rule the other keeps.
@@ -285,52 +261,27 @@ def test_both_tool_schemas_describe_the_disposition_case() -> None:
     print("ok: both tool schemas describe the disposition case")
 
 
-def test_every_non_answer_tag_is_registered() -> None:
-    """`JUDGE_FAILURE_TAGS` must name exactly the tags the gate can produce.
-
-    Both shapes of a `False` answer verdict fail closed, so `reason` is the only
-    thing that tells a DEAD JUDGE apart from a real non-answer, and
-    `judge_failure_tag` reads that off this registry. A failure branch added
-    without registering its tag silently reclassifies a dead judge as a rubric
-    verdict - invariant 12 again, at the layer that measures the rubric.
-
-    This is a source-level check on purpose. The runtime `_non_answer` only logs,
-    because it sits in the fail-closed path and must never raise there, and an
-    `assert` would be stripped by `python -O` anyway. Reading the call sites with
-    `ast` gives the guarantee unconditionally and before merge.
-    """
-    called = _non_answer_call_tags(_ESCALATION_SRC)
-    registered = set(JUDGE_FAILURE_TAGS)
-    _check(
-        called == registered,
-        "JUDGE_FAILURE_TAGS must match the tags escalation.py actually calls "
-        f"_non_answer with. Unregistered: {sorted(called - registered)}; "
-        f"registered but never produced: {sorted(registered - called)}",
-    )
-    print(f"ok: all {len(called)} _non_answer tags are registered")
-
-
-def test_non_answer_fails_closed_for_an_unregistered_tag() -> None:
-    """An unregistered tag must still fail closed, never raise.
-
-    `_non_answer` is how every fail-closed branch of `answer_gate` returns,
-    including the blanket `except Exception` handler, so raising here would
-    convert a graceful current-turn deferral into an exception on the customer
-    request path - in the one function whose contract is that it never raises
-    (AGENTS.md invariant 4).
-    """
-    decision = _non_answer("judge_not_a_registered_tag")
-    _check(
-        decision.answers is False and decision.addressed is False,
-        f"an unregistered tag must fail CLOSED, got {decision!r}",
-    )
-    _check(
-        judge_failure_tag(decision.reason) is None,
-        "an unregistered tag cannot be recognised by judge_failure_tag - that is "
-        "the drift test_every_non_answer_tag_is_registered exists to block",
-    )
-    _check(decision.judge_failed is True, "an unregistered failure tag must stay structured")
-    print("ok: _non_answer fails closed rather than raising on an unregistered tag")
+def test_non_answer_failures_are_structured_independently_of_reason() -> None:
+    """Every diagnostic tag yields the same executable fail-closed signal."""
+    for tag in (
+        "judge_error",
+        "judge_no_choices",
+        "judge_refusal",
+        "judge_no_payload",
+        "future_failure_tag",
+    ):
+        decision = _non_answer(tag)
+        _check(
+            decision.answers is False
+            and decision.addressed is False
+            and decision.judge_failed is True,
+            f"{tag}: must be a structured fail-closed judge failure, got {decision!r}",
+        )
+        _check(
+            decision.reason == f"non_answer: {tag}",
+            f"{tag}: diagnostic reason changed unexpectedly to {decision.reason!r}",
+        )
+    print("ok: answer judge failures use the structured signal for every reason")
 
 
 def test_boot_warning_call_site_is_wired_to_the_widget_surface() -> None:
@@ -570,11 +521,7 @@ def test_live_rubric_discrimination() -> None:
 
     failures: list[str] = []
 
-    # A judge verdict, plus the `JUDGE_FAILURE_TAGS` entry naming a judge that was
-    # CALLED AND FAILED (`None` when the judge actually reached a verdict). This
-    # alias is EVALUATED, not deferred like an annotation, so it spells the union
-    # the `typing` way rather than with `|`.
-    Judge = Callable[[str, str], Awaitable[Tuple[bool, Optional[str]]]]
+    Judge = Callable[[str, str], Awaitable[tuple[bool, bool]]]
 
     def _build_impls() -> list[tuple[str, Judge]]:
         impls: list[tuple[str, Judge]] = []
@@ -583,18 +530,18 @@ def test_live_rubric_discrimination() -> None:
 
             oc = AsyncOpenAI(api_key=openai_key)
 
-            async def runtime(question: str, draft: str) -> tuple[bool, str | None]:
+            async def runtime(question: str, draft: str) -> tuple[bool, bool]:
                 # `answer_gate` fails CLOSED, so an expired key, a rate limit, a
                 # timeout or a network blip all return answers=False - the same
                 # value a correct non-answer verdict returns. Reading only
                 # `.answers` would print `ok` for every must_answer=False case
                 # while zero rubric evaluation happened, which is exactly the
-                # invariant-12 shape the project forbids. The `reason` is what
-                # separates the two, so it is carried out of here.
+                # invariant-12 shape the project forbids. The structured failure
+                # signal separates the two, independently of diagnostic wording.
                 decision = await answer_gate(
                     oc, question, draft, DEFAULT_ANSWER_CUTOFF
                 )
-                return decision.answers, judge_failure_tag(decision.reason)
+                return decision.answers, decision.judge_failed
 
             impls.append(("runtime", runtime))
         if anthropic_key:
@@ -625,8 +572,8 @@ def test_live_rubric_discrimination() -> None:
                 # The offline mirror RAISES on a failed/unparseable judge call
                 # rather than failing closed, so it cannot silently report a dead
                 # judge as a verdict and never needs a failure tag.
-                async def offline(question: str, draft: str) -> tuple[bool, str | None]:
-                    return await judge_answering(ac, question, draft), None
+                async def offline(question: str, draft: str) -> tuple[bool, bool]:
+                    return await judge_answering(ac, question, draft), False
 
                 impls.append(("offline", offline))
         return impls
@@ -652,15 +599,14 @@ def test_live_rubric_discrimination() -> None:
                 # A judge that was called and failed measured NOTHING, so this case
                 # is UNMEASURED - never a legitimate non-answer verdict, and never
                 # an `ok`.
-                judge_failures = sorted({tag for _, tag in results if tag})
-                if judge_failures:
+                if any(judge_failed for _, judge_failed in results):
                     print(
                         f"  UNMEASURED [{impl_name:>7}] {label}: the judge was "
-                        f"called and failed ({', '.join(judge_failures)})"
+                        "called and failed"
                     )
                     failures.append(
                         f"[{impl_name}] {label}: HARNESS FAILURE - the judge was "
-                        f"called and failed ({', '.join(judge_failures)}), so this "
+                        "called and failed, so this "
                         "case exercised no rubric at all. The gate fails closed, so "
                         "a dead judge reports answers=False and would otherwise read "
                         "as the rubric correctly rejecting a non-answer. Fix the "
@@ -711,8 +657,7 @@ def main() -> int:
     tests = [
         test_both_rubrics_state_every_shared_rule,
         test_both_tool_schemas_describe_the_disposition_case,
-        test_every_non_answer_tag_is_registered,
-        test_non_answer_fails_closed_for_an_unregistered_tag,
+        test_non_answer_failures_are_structured_independently_of_reason,
         test_boot_warning_call_site_is_wired_to_the_widget_surface,
         test_live_rubric_discrimination,
     ]

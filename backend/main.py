@@ -871,7 +871,8 @@ async def _on_startup() -> None:
     )
     # The symmetric case for the ADR-0013 reasoning-effort knob: a non-reasoning
     # judge (the shipped gpt-4o-mini) 400s on JUDGE_REASONING_EFFORT the same way a
-    # reasoning judge 400s on the temperature pin, with the same issue #105 latch.
+    # reasoning judge 400s on the temperature pin. Issue #105 defers the affected
+    # turn without a new latch; rows latched before the fix remain irreversible.
     # Same widget-surface predicate: these gates run only on the support path.
     warn_if_judge_rejects_reasoning_effort(
         support_configured=bool(SUPABASE_SERVICE_ROLE_KEY)
