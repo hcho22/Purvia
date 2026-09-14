@@ -4110,11 +4110,13 @@ async def _run_widget_bot_turn(
     """US-079: run ONE customer turn's ADR-0003 deflection pipeline AS the bot,
     behind the US-077 per-workspace breaker; return the customer-facing message.
 
-    Returns the bot's drafted answer when retrieval is strong AND the draft clears
-    the faithfulness gate, else the fixed generic deferral (escalate). The turn is
-    fail-CLOSED end to end — a botless workspace, an unimportable support module, a
-    missing `SUPABASE_JWT_SECRET`, or any pipeline error all escalate to a human
-    (generic deferral) rather than guess. The per-workspace breaker is checked
+    Returns the bot's drafted answer only when retrieval is strong AND the draft
+    clears both the faithfulness and answer-completeness gates; otherwise it returns
+    a fixed generic deferral. The turn is fail-CLOSED end to end — a botless
+    workspace, an unimportable support module, a missing `SUPABASE_JWT_SECRET`, or
+    any pipeline error withholds the unchecked answer rather than guessing. Only
+    the deliberate paths described below write the escalation latch. The
+    per-workspace breaker is checked
     FIRST: when tripped, `run_bot_deflection_turn` is NEVER awaited (zero retrieval,
     zero LLM — the US-077 cost-runaway backstop) and the breaker deferral is
     returned. The breaker is wired here so the cost ceiling is live the moment the
@@ -4140,7 +4142,7 @@ async def _run_widget_bot_turn(
     """
     if not bot_user_id or not workspace_id:
         # Botless workspace (provisioning unavailable, US-078): the bot has no
-        # principal to retrieve as, so defer to a human. No breaker, no LLM.
+        # principal to retrieve as, so defer this turn. No breaker, no LLM.
         log.info(
             "widget_turn.no_bot conversation=%s — escalating (no provisioned bot)",
             conversation_id,
@@ -4152,7 +4154,7 @@ async def _run_widget_bot_turn(
         from support_bot import run_bot_deflection_turn  # US-070
     except ImportError:
         # Belt-and-suspenders for a build that ships the widget without the
-        # support-bot module (mirrors `_ensure_workspace_bot`): escalate.
+        # support-bot module (mirrors `_ensure_workspace_bot`): defer this turn.
         log.warning(
             "widget_turn.support_module_unavailable conversation=%s — escalating",
             conversation_id,
@@ -4195,7 +4197,7 @@ async def _run_widget_bot_turn(
             run_turn=_turn,
             on_trip=_on_trip,  # US-080: latch the conversation on a breaker trip
         )
-    except Exception:  # noqa: BLE001 — any turn failure escalates (fail closed)
+    except Exception:  # noqa: BLE001 — any turn failure defers (fail closed)
         # A transient pipeline error defers THIS turn but does NOT latch: it may be
         # recoverable, and permanently silencing the bot on a blip would be wrong.
         log.exception(

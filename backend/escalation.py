@@ -1,8 +1,9 @@
 """US-047: deterministic cosine-defined retrieval gate (ADR-0003).
 
-The support face answers or escalates via a deterministic deflection pipeline
-(US-049) — escalate-vs-answer is *control flow*, never a model `escalate()`
-tool. The cheap left operand of that decision is this **retrieval gate**: pure
+The support face answers, deliberately escalates, or transiently defers via a
+deterministic deflection pipeline (US-049) — escalate-vs-answer is *control
+flow*, never a model `escalate()` tool. The cheap left operand of that decision
+is this **retrieval gate**: pure
 arithmetic on the raw, pre-fusion vector cosine (`cosine_similarity`, US-046)
 that calls a query's retrieval "weak" — meaning *escalate before any draft or
 faithfulness-judge call* — when the best hit is below `tau_sim` or too few hits
@@ -22,8 +23,8 @@ when the retrieval gate calls retrieval strong. It makes **exactly one**
 structured-output judge call (ADR-0006 runtime judge role; `gpt-4o-mini` /
 `haiku`-class) verifying the drafted answer is grounded in its retrieved chunks,
 and fails **closed** — any judge error / refusal / parse failure / timeout is
-treated as unfaithful and the affected turn is deferred, never auto-sent. This runtime gate is a
-NET-NEW one-call check, NOT the offline RAGAS `faithfulness` metric in
+treated as unfaithful and the affected turn is deferred, never auto-sent. This
+runtime gate is a NET-NEW one-call check, NOT the offline RAGAS `faithfulness` metric in
 `evals/retrieval/ragas.py` (which decomposes claims across several calls and
 runs weekly); the same English word "faithfulness" names two distinct
 machineries on two different latency budgets.
@@ -38,8 +39,8 @@ because the chunk is topically adjacent (the right subject, the wrong fact). So 
 separate operand — composed per ADR-0003 as deterministic control flow, not a
 model tool — verifies the draft actually ANSWERS the customer's question, and
 fails **closed** like the faithfulness gate (any judge error defers the affected
-turn). It runs
-only on the would-be-answered path (after the draft clears faithfulness), so it
+turn). It runs only on the would-be-answered path (after the draft clears
+faithfulness), so it
 adds ONE judge call to a turn that was about to auto-resolve — exactly the
 population at risk — and none to any escalate path.
 
@@ -53,8 +54,8 @@ verdicts remain `action="escalated"` and keep the one-way latch semantics.
 
 US-049: `run_deflection_pipeline` wires the gates into the exact ADR-0003
 control flow — `retrieve (hybrid, once) → retrieval gate → [if strong] draft →
-faithfulness gate → answer gate → answer-or-escalate` — as deterministic control
-flow, never a model `escalate()` tool and never the M1 agentic loop
+faithfulness gate → answer gate → answer, escalate, or current-turn defer` — as
+deterministic control flow, never a model `escalate()` tool and never the M1 agentic loop
 (`MAX_TOOL_ITERATIONS` in `main.py`). The OR short-circuits on its cheap left
 operand: a weak retrieval escalates having made ZERO draft and ZERO judge calls.
 On any escalate the customer-facing message is a fixed generic deferral with NO
@@ -881,8 +882,8 @@ def _unfaithful(tag: str) -> FaithfulnessDecision:
 # customer got nothing. This is a SECOND, orthogonal judge call that verifies the
 # draft actually addresses the customer's question, and — like the faithfulness
 # gate — fails **closed**: any judge error / refusal / parse failure / timeout is
-# treated as a non-answer that defers this turn, never auto-sent. It compares the QUESTION
-# against the DRAFT (NOT the chunks — grounding is the other gate's job); it is
+# treated as a non-answer that defers this turn, never auto-sent. It compares the
+# QUESTION against the DRAFT (NOT the chunks — grounding is the other gate's job); it is
 # the runtime companion to the OFFLINE-only `answer_relevancy` RAGAS metric
 # (`evals/retrieval/ragas.py`), which gates CI regressions, never an individual
 # customer reply.
@@ -1077,10 +1078,9 @@ def _non_answer(tag: str) -> AnswerDecision:
 # here by the two gates, not by the model.
 # -----------------------------------------------------------------------------
 
-# The single customer-facing escalation message. ADR-0003: on escalate the
-# customer sees ONLY this generic deferral — never the gate `reason`, the
-# retrieval scores, or any access metadata. `_escalated` is the sole constructor
-# of an escalated result, so this invariant is structurally enforced.
+# The single customer-facing fail-closed deferral. ADR-0003: on either deliberate
+# escalation or a transient judge failure the customer sees ONLY this message —
+# never the gate `reason`, the retrieval scores, or any access metadata.
 GENERIC_DEFERRAL = (
     "Thanks for reaching out. I don't have enough information to answer this "
     "confidently, so I've passed it along to our team — a human will follow up "
@@ -1240,7 +1240,7 @@ async def run_deflection_pipeline(
     judge_model: str | None = None,
     workspace_id: str | None = None,
 ) -> DeflectionResult:
-    """Answer or escalate one support message via the ADR-0003 deflection pipeline.
+    """Answer, escalate, or defer one support message via the ADR-0003 pipeline.
 
     Control flow (deterministic, never a model `escalate()` tool, never the M1
     agentic loop):
