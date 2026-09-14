@@ -1,0 +1,26 @@
+# Dependencies for `python -m backend.run_offline_tests` in pull-request CI.
+# Keep this focused on imports exercised by the offline backend suite. Runtime-
+# only uvicorn/supabase packages and optional Redis are intentionally excluded.
+# The Docling tests exercise real local parsing, so its CPU ML stack is required.
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+asyncpg==0.31.0
+docling==2.69.1
+fastapi==0.115.6
+httpx==0.27.2
+langsmith==0.2.10
+numpy==1.26.4
+openai==1.109.1
+pydantic==2.10.4
+pypdfium2==4.30.0
+PyJWT==2.10.1
+python-dotenv==1.0.1
+PyYAML==6.0.1
+tiktoken==0.8.0
+
+# Avoid PyPI's CUDA dependency set on Linux CI; Docling's text-oriented tests do
+# not need GPU support. macOS wheels are CPU-only without a local-version suffix.
+torch==2.2.2+cpu; sys_platform == "linux"
+torchvision==0.17.2+cpu; sys_platform == "linux"
+torch==2.2.2; sys_platform == "darwin"
+torchvision==0.17.2; sys_platform == "darwin"

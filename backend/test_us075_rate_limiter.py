@@ -431,6 +431,9 @@ def main() -> None:
     test_decision_shape_and_abc()
     test_postgres_backend_over_mock_transport()
     test_redis_backend_over_fake_client()
+    if os.environ.get("PURVIA_OFFLINE_TESTS") == "1":
+        print("PASS: US-075 offline unit layer passed; live integration explicitly disabled")
+        return
     print("US-075 rate limiter — integration layer:")
     asyncio.run(_run_integration())
 

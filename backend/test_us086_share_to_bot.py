@@ -415,7 +415,7 @@ def _run() -> None:
     _run_unit(main)
     print("- http-surface layer:")
     _run_http_surface(main)
-    print("US-086: OK")
+    print("OK: US-086 offline share-to-bot checks passed")
 
 
 def main_entry() -> None:
