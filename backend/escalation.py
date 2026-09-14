@@ -209,8 +209,9 @@ class FaithfulnessJudgment(BaseModel):
     cheap, single round trip (the antithesis of RAGAS claim-decomposition). The
     `[0,1]` bound on `score` is stated in the description and enforced by
     clamping in `faithfulness_gate` rather than as a JSON-schema constraint, so
-    strict structured-output mode never rejects a slightly-out-of-range value
-    (matching the constraint-free `DocumentMetadata` convention).
+    strict structured-output mode never rejects a slightly-out-of-range value.
+    Non-finite values are rejected during schema validation because they cannot
+    represent judge confidence and must follow the malformed-response path.
     """
 
     supported: bool = Field(
@@ -223,6 +224,7 @@ class FaithfulnessJudgment(BaseModel):
     )
     score: float = Field(
         ...,
+        allow_inf_nan=False,
         description=(
             "Confidence in [0,1] that the ANSWER is fully grounded in the "
             "CONTEXT. 1.0 = every claim clearly supported; 0.0 = clearly "
@@ -326,10 +328,10 @@ def get_judge_model() -> str:
 DEFAULT_JUDGE_TEMPERATURE = 0.0
 
 # The range providers accept for a chat-completion `temperature`. A value outside
-# it is a 400 on every call, which fails both gates closed on every turn - and the
-# latch site cannot tell that from a deliberate escalate, so the conversations it
-# hits are permanently silenced (issue #105). Reachable by a fat-fingered digit, so
-# it falls back rather than shipping. This is OpenAI's range and stays that way: a
+# it is a 400 on every call, which fails each affected turn closed. Issue #105 keeps
+# that failure on the current-turn deferral path without latching the conversation.
+# Reachable by a fat-fingered digit, so it falls back rather than shipping. This is
+# OpenAI's range and stays that way: a
 # bring-your-own endpoint with a NARROWER one is a provider disagreement no
 # validator can enumerate, so clearing this bound is necessary and not sufficient -
 # an operator whose endpoint refuses the number they chose lowers it to one that
@@ -413,8 +415,8 @@ def get_judge_temperature() -> float | None:
 # space this module has to serve at once:
 #   * A non-reasoning judge (`gpt-4o-mini`, the shipped default) REJECTS
 #     `reasoning_effort` outright - sending it at all would 400 every judge call and,
-#     per issue #105, permanently latch the conversations it hits. It must never be
-#     sent unless an operator explicitly asks for it.
+#     per issue #105, defer every affected turn. It must never be sent unless an
+#     operator explicitly asks for it.
 #   * A reasoning judge that accepts the parameter but not a given VALUE
 #     (`gpt-5.4-mini` rejects `minimal`) is the operator's own value choice, so it is
 #     the operator's to correct - the same shape as an out-of-range temperature.
@@ -638,8 +640,9 @@ def warn_if_judge_rejects_temperature(*, support_configured: bool) -> None:
     It exists because the pin is a NEW request parameter on an upgrade path: an
     operator already running one of these models has a working deployment today, and
     if that judge does refuse the parameter then every call 400s, both gates fail
-    closed on every turn, and per issue #105 the latch site cannot tell that from a
-    deliberate escalate, so affected conversations latch to `escalated` permanently.
+    closed on every affected turn. Issue #105 carries those failures as current-turn
+    deferrals so the conversation remains active for a later retry. Conversations
+    latched before that fix remain `escalated` because the DB transition is one-way.
     Docs alone do not reach an operator mid-upgrade.
 
     Boot-time only, by construction: it is called from the startup hook, never from
@@ -662,10 +665,10 @@ def warn_if_judge_rejects_temperature(*, support_configured: bool) -> None:
         "observed refusal - this deployment may accept it perfectly well, so VERIFY "
         "before changing configuration. The faithfulness and answer gates send "
         "temperature=%s on every call; if this judge does refuse it, every judge "
-        "call 400s, both gates fail closed on every turn, and per issue #105 the "
-        "latch site cannot tell that from a deliberate escalate, so affected "
-        "conversations latch to status='escalated' permanently and repairing the "
-        "configuration does not un-latch them. Remedy IF it refuses: set "
+        "call 400s and both gates fail closed for that turn. Issue #105 keeps these "
+        "failures deferred, so affected conversations remain active for a later "
+        "retry. Conversations latched before this fix remain status='escalated' "
+        "because the DB transition is one-way. Remedy IF it refuses: set "
         "JUDGE_TEMPERATURE=none to omit the parameter; if it accepts, leave the pin "
         "alone. Best-effort and known names only - a refusing deployment under any "
         "other name, or under a name carrying the non-reasoning `-chat` marker that "
@@ -686,9 +689,10 @@ def warn_if_judge_rejects_reasoning_effort(*, support_configured: bool) -> None:
     that non-reasoning model, so the highly plausible migration slip is an operator
     who sets `JUDGE_REASONING_EFFORT=minimal` (the ADR-0013 config) but forgets to
     also point `JUDGE_MODEL` at a reasoning model: the parameter then 400s every
-    judge call, both gates fail closed on every turn, and per issue #105 the latch
-    site cannot tell that from a deliberate escalate, so affected conversations latch
-    to `escalated` permanently and repairing the config does not un-latch them.
+    judge call and both gates fail closed for each affected turn. Issue #105 carries
+    those failures as current-turn deferrals so the conversation remains active for
+    a later retry. Conversations latched before that fix remain `escalated` because
+    the DB transition is one-way.
 
     `support_configured` is the same widget-surface gate as
     `warn_if_judge_rejects_temperature` (AGENTS.md invariant 10): the two gates run
@@ -733,10 +737,11 @@ def warn_if_judge_rejects_reasoning_effort(*, support_configured: bool) -> None:
         "reasoning model under an unrecognised name accepts the parameter fine, so "
         "VERIFY before changing configuration. Non-reasoning judges (the shipped "
         "default gpt-4o-mini among them) refuse `reasoning_effort`; IF this judge "
-        "refuses it, every judge call 400s, both gates fail closed on every turn, and "
-        "per issue #105 the latch site cannot tell that from a deliberate escalate, "
-        "so affected conversations latch to status='escalated' permanently and "
-        "repairing the configuration does not un-latch them. Remedy IF it refuses: "
+        "refuses it, every judge call 400s and both gates fail closed for that turn. "
+        "Issue #105 keeps these failures deferred, so affected conversations remain "
+        "active for a later retry. Conversations latched before this fix remain "
+        "status='escalated' because the DB transition is one-way. Remedy IF it "
+        "refuses: "
         "unset JUDGE_REASONING_EFFORT, or point JUDGE_MODEL at a reasoning model that "
         "accepts it (the ADR-0013 config pairs JUDGE_REASONING_EFFORT=minimal with "
         "JUDGE_MODEL=gpt-5-mini). Best-effort and known names only - a reasoning "
@@ -926,6 +931,8 @@ class AnswerJudgment(BaseModel):
     round trip. The `[0,1]` bound on `score` is stated in the description and
     enforced by clamping in `answer_gate`, not as a JSON-schema constraint, so
     strict structured-output mode never rejects a slightly-out-of-range value.
+    Non-finite values are rejected during schema validation because they cannot
+    represent judge confidence and must follow the malformed-response path.
     """
 
     answers: bool = Field(
@@ -940,6 +947,7 @@ class AnswerJudgment(BaseModel):
     )
     score: float = Field(
         ...,
+        allow_inf_nan=False,
         description=(
             "Confidence in [0,1] that the QUESTION is fully and directly "
             "answered. 1.0 = fully answered; 0.0 = not answered at all."

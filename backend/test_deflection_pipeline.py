@@ -20,8 +20,9 @@ Covers the PRD validation test:
     entered);
 plus strong-but-unfaithful -> escalate (before the answer gate), empty-draft ->
 escalate (no judge call), faithfulness-judge and answer-judge failures -> defer
-this turn without a deliberate escalation (issue #105), and the invariant that a
-deferral's customer-facing message NEVER leaks the gate `reason` / scores.
+this turn without a deliberate escalation (issue #105), malformed non-finite
+scores -> the same typed deferral at both judge positions, and the invariant that
+a deferral's customer-facing message NEVER leaks the gate `reason` / scores.
 
 Run:
     python -m backend.test_deflection_pipeline
@@ -129,8 +130,8 @@ class _FakeAnswerer:
 class _JudgeCompletions:
     def __init__(
         self,
-        faithful_parsed: Any,
-        answer_parsed: Any,
+        faithful_payload: dict[str, Any],
+        answer_payload: dict[str, Any],
         *,
         failure: str | None = None,
     ) -> None:
@@ -139,8 +140,8 @@ class _JudgeCompletions:
         # the structured-output `response_format` so each gate is handed a payload
         # of its own schema, and counts the two gates' calls separately so a test
         # can assert exactly which gates ran.
-        self.faithful_parsed = faithful_parsed
-        self.answer_parsed = answer_parsed
+        self.faithful_payload = faithful_payload
+        self.answer_payload = answer_payload
         self.failure = failure
         self.faithfulness_calls = 0
         self.answer_calls = 0
@@ -156,12 +157,12 @@ class _JudgeCompletions:
             self.answer_calls += 1
             if self.failure == "answer":
                 raise RuntimeError("answer judge unavailable")
-            parsed = self.answer_parsed
+            parsed = response_format(**self.answer_payload)
         else:
             self.faithfulness_calls += 1
             if self.failure == "faithfulness":
                 raise RuntimeError("faithfulness judge unavailable")
-            parsed = self.faithful_parsed
+            parsed = response_format(**self.faithful_payload)
         message = types.SimpleNamespace(parsed=parsed, refusal=None)
         return types.SimpleNamespace(choices=[types.SimpleNamespace(message=message)])
 
@@ -176,13 +177,12 @@ class _FakeJudge:
         answer_score: float = 0.95,
         failure: str | None = None,
     ) -> None:
-        # Build the judgments lazily so we don't import the schemas at module top.
-        from escalation import AnswerJudgment, FaithfulnessJudgment
-
-        faithful = FaithfulnessJudgment(supported=supported, score=score)
-        answer = AnswerJudgment(answers=answers, score=answer_score)
         self.chat = types.SimpleNamespace(
-            completions=_JudgeCompletions(faithful, answer, failure=failure)
+            completions=_JudgeCompletions(
+                {"supported": supported, "score": score},
+                {"answers": answers, "score": answer_score},
+                failure=failure,
+            )
         )
 
     @property
@@ -429,6 +429,55 @@ def test_answer_judge_failure_defers_without_escalating() -> None:
     print("ok: answer-judge failure -> current-turn deferral, not deliberate escalation")
 
 
+def test_non_finite_judge_scores_defer_at_both_gate_positions() -> None:
+    """A non-finite score is a malformed judge response, never a passing verdict."""
+    for score in (float("nan"), float("inf"), float("-inf")):
+        faith_result, _, faith_judge, _ = _run(
+            match_rows=STRONG,
+            keyword_rows=KW,
+            draft="Our return window is 30 days from delivery.",
+            judge_score=score,
+        )
+        _check(
+            faith_result.action == "deferred",
+            f"faithfulness score {score!r} must defer, got {faith_result.action}",
+        )
+        _check(
+            faith_result.faithfulness is not None
+            and faith_result.faithfulness.judge_failed is True
+            and faith_result.faithfulness.score == 0.0,
+            f"faithfulness score {score!r} must be a fail-closed judge failure",
+        )
+        _check(
+            faith_judge._c.faithfulness_calls == 1 and faith_judge._c.answer_calls == 0,
+            f"faithfulness score {score!r} must stop before the answer gate",
+        )
+        _assert_no_reason_leak(faith_result)
+
+        answer_result, _, answer_judge, _ = _run(
+            match_rows=STRONG,
+            keyword_rows=KW,
+            draft="Our return window is 30 days from delivery.",
+            judge_answer_score=score,
+        )
+        _check(
+            answer_result.action == "deferred",
+            f"answer score {score!r} must defer, got {answer_result.action}",
+        )
+        _check(
+            answer_result.answer is not None
+            and answer_result.answer.judge_failed is True
+            and answer_result.answer.score == 0.0,
+            f"answer score {score!r} must be a fail-closed judge failure",
+        )
+        _check(
+            answer_judge._c.faithfulness_calls == 1 and answer_judge._c.answer_calls == 1,
+            f"answer score {score!r} must fail at the second judge position",
+        )
+        _assert_no_reason_leak(answer_result)
+    print("ok: non-finite scores defer at both judge positions and never auto-send")
+
+
 def test_empty_draft_escalates_without_judge() -> None:
     """A draft that comes back empty escalates (fail-closed) and never reaches the
     judge — no point grading an empty answer."""
@@ -461,6 +510,7 @@ def main() -> int:
         test_strong_but_unfaithful_escalates,
         test_faithfulness_judge_failure_defers_without_escalating,
         test_answer_judge_failure_defers_without_escalating,
+        test_non_finite_judge_scores_defer_at_both_gate_positions,
         test_empty_draft_escalates_without_judge,
         test_result_is_frozen,
     ]

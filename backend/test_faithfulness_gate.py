@@ -311,12 +311,11 @@ def test_judge_sampling_is_pinned_deterministic() -> None:
             "a malformed JUDGE_TEMPERATURE must fall back to the deterministic default",
         )
 
-        # A value the judge API would 400 on fails both gates closed on every turn,
-        # and the latch site cannot tell that from a deliberate escalate - so it
-        # permanently silences the conversations it hits. It falls back rather than
-        # shipping. (Unlike a model that rejects the PARAMETER, an out-of-range
-        # value is the operator's own typo, so it is corrected here rather than
-        # retried at call time.)
+        # A value the judge API would 400 on fails both gates closed on every turn.
+        # It falls back rather than shipping repeated current-turn deferrals.
+        # (Unlike a model that rejects the PARAMETER, an out-of-range value is the
+        # operator's own typo, so it is corrected here rather than retried at call
+        # time.)
         for rejected in ("nan", "inf", "-inf", "50", "-0.5", "2.5"):
             os.environ["JUDGE_TEMPERATURE"] = rejected
             _check(
@@ -475,8 +474,14 @@ def test_boot_warning_for_known_temperature_refusing_models() -> None:
                 )
                 _check(
                     "fail closed" in message.lower() and "#105" in message,
-                    "the warning must name the consequence (both gates fail closed; "
-                    f"issue #105 permanent latching), got {message!r}",
+                    "the warning must name the fail-closed issue #105 consequence, "
+                    f"got {message!r}",
+                )
+                _check(
+                    "remain active for a later retry" in message
+                    and "latched before this fix remain" in message,
+                    "the warning must distinguish recoverable current turns from "
+                    f"irreversible pre-fix rows, got {message!r}",
                 )
                 # A name match is a heuristic, not an observed refusal, so the
                 # message must stay conditional and tell the operator to verify
@@ -585,7 +590,7 @@ def test_boot_warning_for_reasoning_effort_on_non_reasoning_judge() -> None:
 
     Non-reasoning judges (the shipped default `gpt-4o-mini`) 400 on
     `reasoning_effort` the same way reasoning judges 400 on `temperature`, so this is
-    the symmetric issue #105 latch. It fires only when the value is explicitly set
+    the symmetric issue #105 deferral risk. It fires only when the value is explicitly set
     AND the model does NOT look like a known reasoning family; stays quiet when the
     value is unset/blank whatever the model, stays quiet when the model IS a known
     reasoning family, and - per AGENTS.md invariant 10 - stays quiet for EVERY
@@ -628,8 +633,14 @@ def test_boot_warning_for_reasoning_effort_on_non_reasoning_judge() -> None:
             )
             _check(
                 "fail closed" in message.lower() and "#105" in message,
-                "the warning must name the consequence (both gates fail closed; "
-                f"issue #105 permanent latching), got {message!r}",
+                "the warning must name the fail-closed issue #105 consequence, "
+                f"got {message!r}",
+            )
+            _check(
+                "remain active for a later retry" in message
+                and "latched before this fix remain" in message,
+                "the warning must distinguish recoverable current turns from "
+                f"irreversible pre-fix rows, got {message!r}",
             )
             _check(
                 "NOT an observed refusal" in message and "VERIFY" in message,

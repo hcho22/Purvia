@@ -274,8 +274,9 @@ selector falls back so a single-model setup sets only `OPENAI_MODEL`.
 > `backend/escalation.py`), the mirror of the temperature one: it fires when
 > `JUDGE_REASONING_EFFORT` is set **but** `JUDGE_MODEL` does **not** look like a
 > known reasoning family - the migration slip of setting the value while leaving the
-> non-reasoning default `gpt-4o-mini` in place, which 400s the parameter and latches
-> conversations via the same issue #105 path. It is the same widget-scoped
+> non-reasoning default `gpt-4o-mini` in place, which 400s the parameter and causes
+> issue #105's current-turn deferral without latching the conversation. Rows latched
+> before that fix remain irreversibly escalated. It is the same widget-scoped
 > best-effort name heuristic, wrong in both directions (a reasoning model under an
 > unrecognised name gets a spurious warning), so **verify before changing config**.
 > **The adopted
