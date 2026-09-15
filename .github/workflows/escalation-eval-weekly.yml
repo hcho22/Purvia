@@ -1,8 +1,9 @@
 # US-059: weekly E7 escalation-eval workflow. Runs the FULL deflection-pipeline
-# eval — the deterministic P1a/P1b legs PLUS the LLM-judged P2/P3 legs and the
-# knob sweep (deflection-vs-false-resolve curve + knee) — on a weekly schedule and
-# on manual `workflow_dispatch`. The LLM-judged legs draft answers and score their
-# faithfulness with the OFFLINE cross-family Claude judge, so they belong here
+# eval — the deterministic P1a/P1b legs PLUS the LLM-judged P2/P3 legs, the
+# offline/runtime answer-gate parity replay, and the knob sweep
+# (deflection-vs-false-resolve curve + knee) — on a weekly schedule and on manual
+# `workflow_dispatch`. The LLM-judged legs draft answers and score their
+# content gates with the OFFLINE cross-family Claude judge, so they belong here
 # (scheduled) and NEVER on the per-PR path: a judge wobble must not red-bar an
 # innocent merge. The deterministic P1a/P1b retrieval-gate tripwire + the US-058
 # non-disclosure assertion ALSO run per-PR (retrieval-eval.yml) and block merge
@@ -11,15 +12,15 @@
 # CI placement (US-059 AC3):
 #   * The false-resolve ceiling (the buyer's risk number,
 #     ESCALATION_FALSE_RESOLVE_CEILING) is a PINNED SAFETY invariant: a measured
-#     faithfulness-leg (P3) false-resolve rate above it exits the runner non-zero,
+#     content-gate (P3) false-resolve rate above it exits the runner non-zero,
 #     fails THIS workflow, and files an issue. It is never downgraded to a comment.
-#     That faithfulness leg IS the gated rate and is only scored here, so it carries
+#     That content-gate leg IS the gated rate and is only scored here, so it carries
 #     an accepted up-to-a-week detection latency (documented in docs/evals.md "E7 CI
 #     placement"; mitigated by the per-PR retrieval-leg tripwire, which hard-fails
 #     unconditionally on any P1a/P1b retrieval-leg false-resolve immediately).
 #     Because that ceiling is fed SOLELY by P3, a P3 leg that never EXERCISES the
-#     faithfulness gate ALSO exits the runner non-zero. The P3 positive control
-#     requires >=1 row to actually reach a faithfulness verdict (clear retrieval,
+#     content gates ALSO exits the runner non-zero. The P3 positive control
+#     requires >=1 row to actually reach a content-gate verdict (clear retrieval,
 #     draft, get judged), closing BOTH disarm paths gold drift could open: an empty
 #     P3 leg (rate None, unmeasured) AND a non-empty but entirely-mislabeled one
 #     (every row escalates before the gate -> a vacuous measured 0% that never
@@ -121,13 +122,24 @@ jobs:
           DATABASE_URL: ${{ env.DB_URL }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          JUDGE_PROVIDER: ${{ vars.JUDGE_PROVIDER }}
+          JUDGE_API_KEY: ${{ secrets.JUDGE_API_KEY }}
+          JUDGE_BASE_URL: ${{ vars.JUDGE_BASE_URL }}
+          JUDGE_AZURE_OPENAI_ENDPOINT: ${{ vars.JUDGE_AZURE_OPENAI_ENDPOINT }}
+          JUDGE_AZURE_OPENAI_API_VERSION: ${{ vars.JUDGE_AZURE_OPENAI_API_VERSION }}
+          JUDGE_AZURE_OPENAI_DEPLOYMENT: ${{ vars.JUDGE_AZURE_OPENAI_DEPLOYMENT }}
+          JUDGE_MODEL: ${{ vars.JUDGE_MODEL }}
+          JUDGE_TEMPERATURE: ${{ vars.JUDGE_TEMPERATURE }}
+          JUDGE_REASONING_EFFORT: ${{ vars.JUDGE_REASONING_EFFORT }}
         run: |
           python -m db_seed.corpus_seed
           # The FULL sweep: deterministic P1a + P1b (+ the US-058 non-disclosure
-          # assertion) AND the LLM-judged P2/P3 legs + the knob sweep. The runner
+          # assertion) AND the LLM-judged P2/P3 legs + runtime/offline answer-gate
+          # parity + the knob sweep. The runner
           # exits 1 on any PINNED safety invariant — a P1a/P1b gate clear, a
-          # non-disclosure byte mismatch, or a consolidated false-resolve rate above
-          # the buyer's ceiling — but writes the JSON + markdown FIRST, so a snapshot
+          # non-disclosure byte mismatch, an answer-gate parity mismatch/unmeasured
+          # runtime judge, or a consolidated false-resolve rate above the buyer's
+          # ceiling — but writes the JSON + markdown FIRST, so a snapshot
           # is publishable for any failure ON THE GATE PATH. It is NOT a guarantee
           # that a snapshot exists: anything that kills the process before scoring
           # (a bad API key, a seed failure) produces none, which the snapshot check
@@ -137,7 +149,7 @@ jobs:
           # logging goes to stderr and stays in the workflow log.
           set +e
           python -m evals.retrieval.e7_runner \
-            --include-p1b --include-p2 --include-p3 --sweep \
+            --include-p1b --include-p2 --include-p3 --include-parity --sweep \
             --out /tmp/e7-weekly.json | tee /tmp/e7-weekly.md
           code=${PIPESTATUS[0]}
           set -e
@@ -242,6 +254,7 @@ jobs:
             echo "::error title=E7 weekly snapshot NOT published - eval-publish App token is empty::The ${DATE} escalation snapshot was committed and pushed to \`${BRANCH}\` but no auto-merging PR was opened, so it is stranded there, unpublished to main. Ensure the EVAL_PUBLISH_APP_ID / EVAL_PUBLISH_APP_PRIVATE_KEY repo secrets (the eval-publish GitHub App) are set and valid, then re-run."
             exit 1
           fi
+          # shellcheck disable=SC2016  # Markdown backticks stay literal here.
           BODY=$(printf '%s\n' \
             "Automated docs-only eval snapshot from the \`Escalation eval (weekly)\` workflow (run ${GITHUB_RUN_ID})." \
             '' \
@@ -426,6 +439,29 @@ jobs:
                 (if (.e7_p1b_non_disclosure.passed == false) then
                   "- **P1b non-disclosure leak**: a no-access customer output differs from the generic deferral ("
                   + ((.e7_p1b_non_disclosure.n_leaks // 0)|tostring) + " row(s))."
+                else empty end),
+                (if ([.e7_answer_gate_parity.checks[]?
+                     | select(.matches == false)] | length) > 0 then
+                  "- **Answer-gate parity mismatch** (overall status "
+                  + ((.e7_answer_gate_parity.status // "unknown") | ascii_upcase)
+                  + "): "
+                  + ([.e7_answer_gate_parity.checks[]
+                      | select(.matches == false)
+                      | "`\(.question_id)` (offline=\(.offline_answered), runtime=\(.runtime_answered))"]
+                     | join(", "))
+                  + "."
+                else empty end),
+                (if (.e7_answer_gate_parity.status == "unmeasured") then
+                  "- **Answer-gate parity UNMEASURED**: "
+                  + (if (.e7_answer_gate_parity.n_eligible // 0) == 0 then
+                       "zero eligible rows reached the runtime replay"
+                     else
+                       ([.e7_answer_gate_parity.checks[]
+                         | select(.matches == null)
+                         | "`\(.question_id)` (\(.error // "unknown"))"]
+                        | join(", "))
+                     end)
+                  + "."
                 else empty end)
               ] | join("\n")
             ' /tmp/e7-weekly.json)
@@ -468,8 +504,20 @@ jobs:
         if: always() && steps.snapshot.outputs.present == 'true' && steps.e7.outputs.exit_code == '1'
         run: |
           echo "E7 runner exited 1 — a pinned safety invariant fired (false-resolve"
-          echo "ceiling breach, a P3 leg that never exercised the faithfulness gate"
+          echo "ceiling breach, a P3 leg that never exercised the content gates"
           echo "(empty or all-mislabeled), a P1a/P1b gate clear, or a non-disclosure"
-          echo "mismatch)."
+          echo "mismatch, or answer-gate parity failure/UNMEASURED status)."
+          parity_status=$(jq -r '.e7_answer_gate_parity.status // "not-run"' /tmp/e7-weekly.json)
+          echo "Answer-gate parity status: ${parity_status}"
+          jq -r '.e7_answer_gate_parity as $parity
+            | (if $parity.status == "unmeasured" and ($parity.n_eligible // 0) == 0 then
+                 "Parity UNMEASURED: zero eligible rows reached the runtime replay"
+               else empty end),
+              ($parity.checks[]?
+               | if .matches == false then
+                   "Parity mismatch: \(.question_id) — offline=\(.offline_answered), runtime=\(.runtime_answered)"
+                 elif .matches == null then
+                   "Parity UNMEASURED: \(.question_id) — \(.error // "unknown")"
+                 else empty end)' /tmp/e7-weekly.json
           echo "The finding has been filed as a GitHub issue; failing the workflow."
           exit 1

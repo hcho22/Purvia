@@ -1,6 +1,6 @@
 # E7 weekly escalation snapshots
 
-`<DATE>.md` and `<DATE>.json` in this directory are **generated** by `.github/workflows/escalation-eval-weekly.yml` (Sundays 06:00 UTC + `workflow_dispatch`) from `evals.retrieval.e7_runner --include-p1b --include-p2 --include-p3 --sweep`.
+`<DATE>.md` and `<DATE>.json` in this directory are **generated** by `.github/workflows/escalation-eval-weekly.yml` (Sundays 06:00 UTC + `workflow_dispatch`) from `evals.retrieval.e7_runner --include-p1b --include-p2 --include-p3 --include-parity --sweep`.
 They are the run's verbatim record, so they are never hand-edited, not even to correct a claim a later change proved wrong.
 Corrections go here instead, as dated errata.
 The full treatment of what the snapshots contain and which numbers are pinned lives in `docs/evals.md` § 6.
@@ -42,3 +42,4 @@ Fixed forward in two places, both of which land from the **next** weekly run onw
 
 - Each sweep point now carries `p3_n_questions` / `p3_n_exercised` / `p3_n_mislabeled` / `p3_mislabel_ratio` and a derived `p3_vacuous`, rendered as a **`P3 exercised`** column in the markdown and serialized on every sweep point in the JSON, with `p3_n_exercised` + `p3_vacuous` additionally riding on `curve_points` and on `recommended_defaults` so a script promoting the knee off the JSON alone still sees the warning, plus an explicit callout above the recommendation when the selected knee is vacuous or majority-mislabeled. This is reporting, not enforcement: `feasible` and `_select_knee` are unchanged, so the same knee is still selected - it is now labelled.
 - The P3 golden set was widened to 9 rows deliberately spanning the swept grid, four of which clear 0.5 (`e7-p3-04` 0.5339, `e7-p3-05` 0.5800, `e7-p3-10` 0.5288, `e7-p3-11` 0.5605), so raising τ_sim to the top of the grid can no longer silence the whole population. See the `P3 COSINE COVERAGE` block in `evals/retrieval/escalation_gold.yaml` and the authoring rule in `docs/golden-set-authoring.md`.
+- The current set has 11 rows: `e7-p3-12` and `e7-p3-13` add rephrased adjacent-fact traps for international-return fees and refurbished-electronics warranty periods. They are intentionally marked UNMEASURED until the first scheduled run records their own top-1 cosine; no value is borrowed from the earlier row they vary.

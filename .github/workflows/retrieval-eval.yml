@@ -170,7 +170,7 @@ jobs:
             guards:
               - 'evals/retrieval/**'
               - 'evals/permissions_scale/**'
-              # The answer-gate rubric guard reads BOTH rubrics, so a change to
+              # The answer-gate rubric guard executes BOTH rubrics, so a change to
               # either implementation must trigger it - the whole point is to
               # catch the two drifting apart (AGENTS.md invariant 8). The
               # eval-side rubric lives under evals/retrieval/ above.
@@ -231,13 +231,17 @@ jobs:
   # excludes the temperature-less 1.x major - offline, no anthropic import needed,
   # so it runs in this slim job and fails the PR that would re-open the crash.
   #
-  # All seven are offline by construction - no DB, no secrets, no network, inputs
+  # The E7 answer-gate parity guard pins the additive weekly check itself: it
+  # replays exact P2/P3 question/draft/context inputs, refuses runtime failures as
+  # UNMEASURED, and surfaces both verdicts on a mismatch.
+  #
+  # All eight are offline by construction - no DB, no secrets, no network, inputs
   # built in-process (the two gate modules drive fake judge clients, so there is
   # no network call to make) - which is what lets this job gate a PR without the
   # Supabase stack the two jobs below pay for. The rubric module's LIVE half
-  # skips cleanly when no API keys are present, and it reads the eval-side rubric
-  # via `ast` rather than importing evals.retrieval.runner, so only its offline
-  # half runs here. It is deliberately its own job so it still reports on a
+  # skips cleanly when no API keys are present; its deterministic fake clients
+  # execute both runtime and offline judge entry points and inspect the emitted
+  # prompts and schemas. It is deliberately its own job so it still reports on a
   # permissions-scale-only change, where `retrieval-eval` is skipped.
   eval-harness-guards:
     name: Eval-harness guards (offline, deterministic, may block)
@@ -259,7 +263,7 @@ jobs:
 
       - name: Install Python deps
         run: |
-          # Same slim install as the eval job: all seven guard modules import only
+          # Same slim install as the eval job: all eight guard modules import only
           # what requirements-ci.txt already covers (asyncpg / httpx / openai /
           # pyyaml / pyjwt), never the ML stack. The rubric guard reaches
           # backend/escalation.py -> retrieval -> embeddings, which stays inside
@@ -270,13 +274,14 @@ jobs:
           pip install -r evals/retrieval/requirements-ci.txt
 
       - name: Run the offline harness guards
-        # No `|| true`, no skip-on-unset-env: these seven modules must always run
+        # No `|| true`, no skip-on-unset-env: these eight modules must always run
         # and a non-zero exit must block the merge. A guard that can go quiet is
         # the failure mode it exists to catch.
         run: |
           python -m evals.retrieval.test_empty_gold_guard
           python -m evals.retrieval.test_us120_generation_guard
           python -m evals.retrieval.test_judge_sdk_compat
+          python -m evals.retrieval.test_e7_answer_gate_parity
           python -m evals.permissions_scale.test_degenerate_guard
           python -m backend.test_answer_gate_rubric
           python -m backend.test_answer_gate

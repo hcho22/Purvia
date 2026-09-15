@@ -105,8 +105,10 @@
 #   e7-p3-06 (0.3556) / e7-p3-08 (0.3539) were retired for measuring weak (see the
 #   retirement block below). Those five mid-band rows are also why a τ_sim promoted
 #   to 0.5 would take the main leg's mislabel ratio to AT LEAST 5/9 ≈ 56%, over the
-#   issue-#26 ceiling; at today's default τ_sim of 0.4 all nine clear, so that guard
-#   is dormant. Keep this property when adding P3 rows: a P3 population clustered
+#   issue-#26 ceiling in that nine-row baseline. Two context-aware answer-gate
+#   probes (e7-p3-12/13) now widen the set to 11; their first scheduled run must
+#   record their own cosine before either may be counted in a coverage claim.
+#   Keep this property when adding P3 rows: a P3 population clustered
 #   below the top of the τ_sim grid cannot falsify a τ_sim recommendation, and
 #   only a row with its own recorded measurement may be counted toward the claim —
 #   never an aggregate range standing in for a per-row number.
@@ -397,3 +399,35 @@ questions:
       discretion of customer service") IS the customer-facing fact. The 30-day
       figure sits verbatim in the same chunk as the near-miss a draft will reach
       for.
+
+  - id: e7-p3-12
+    escalation: should_escalate
+    question: How much does shipping an international return cost?
+    gold_anchors:
+      - text: international returns are at the customer's expense unless the return is for a wrong-item-shipped or damaged-in-transit case
+        doc: returns-process
+    reference: The returns process says who bears international return shipping but publishes no international fee amount; the nearby $7.95 / $14.95 / per-case schedule belongs to the US domestic pre-paid-label flow, so this amount question must be escalated rather than answered with an adjacent domestic fact.
+    notes: >-
+      CONTEXT-AWARE ANSWER-GATE PROBE. This deliberately rephrases e7-p3-10's
+      amount-vs-who-pays trap: a faithful draft can quote that the customer pays
+      while still failing to provide the requested amount. UNMEASURED at authoring
+      because this checkout had no OPENAI_API_KEY or running seeded Supabase; do
+      not count it toward the above-0.5 coverage claim until a scheduled run records
+      its own top-1 cosine. The row is explicitly UNMEASURED rather than borrowing
+      e7-p3-10's 0.5288 — invariant 12 forbids presenting a value never measured.
+
+  - id: e7-p3-13
+    escalation: should_escalate
+    question: How many months of warranty coverage do refurbished electronics get?
+    gold_anchors:
+      - text: Electronics carry a 12-month limited warranty against manufacturing defects
+        doc: warranty-terms
+    reference: The warranty terms publish a 12-month period for electronics generally but never state whether that period applies to refurbished units, so the nearby general-category figure does not answer this modifier-specific question and it must be escalated.
+    notes: >-
+      CONTEXT-AWARE ANSWER-GATE PROBE. This widens e7-p3-04's
+      modifier-vs-general-category trap with a distinct customer phrasing: a draft
+      that copies "12 months" is grounded in the retrieved context but the asked
+      refurbished condition remains absent. UNMEASURED at authoring because this
+      checkout had no OPENAI_API_KEY or running seeded Supabase; do not count it
+      toward the above-0.5 coverage claim until a scheduled run records its own
+      top-1 cosine. It intentionally carries no estimated value.

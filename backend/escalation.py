@@ -882,8 +882,12 @@ def _unfaithful(tag: str) -> FaithfulnessDecision:
 # customer got nothing. This is a SECOND, orthogonal judge call that verifies the
 # draft actually addresses the customer's question, and — like the faithfulness
 # gate — fails **closed**: any judge error / refusal / parse failure / timeout is
-# treated as a non-answer that defers this turn, never auto-sent. It compares the
-# QUESTION against the DRAFT (NOT the chunks — grounding is the other gate's job); it is
+# treated as a non-answer that defers this turn, never auto-sent. It receives the
+# QUESTION, the DRAFT, and the RETRIEVED CONTEXT the draft was written from — the
+# context is what lets it check the ASKED SLOT was filled rather than inferring so
+# from a draft that is merely about the topic (issue #104-residual). It is still
+# NOT a grounding check: whether the draft's claims are supported remains the
+# other gate's job. It is
 # the runtime companion to the OFFLINE-only `answer_relevancy` RAGAS metric
 # (`evals/retrieval/ragas.py`), which gates CI regressions, never an individual
 # customer reply.
@@ -904,26 +908,50 @@ def _unfaithful(tag: str) -> FaithfulnessDecision:
 # the added clause the gate keyed mostly on the first, which the drafter emits or
 # omits at its own sampling temperature — so the send/escalate decision partly rode
 # on a phrasing coin flip (`backend/test_answer_gate_rubric.py` pins both shapes).
+#
+# Issue #104-residual (decision-residual, 2026-08-03): the CLOSER residual shape
+# is the NEIGHBOURING FACT. Asked "what is the return shipping fee for an
+# international return?" (`e7-p3-10`), the corpus states only who pays
+# ("international returns are at the customer's expense",
+# `db_seed/corpus/returns-process.md:15`) and never a fee; a draft that restates
+# who-pays is faithful 5/5 and on-slot enough that the question+draft-only gate
+# read the fee slot as filled. The drafter's temperature-1.0 variance exposed this
+# roughly one run in four. Fix: the answer gate now also receives the RETRIEVED
+# CONTEXT the draft was written from, so it can check whether the ASKED VALUE (the
+# fee) is actually in play, not just whether the draft is about the topic. A draft
+# that supplies a fact ADJACENT to the question rather than the asked value does
+# NOT answer it: "who bears the cost" is not "how much the cost is", and when the
+# asked value is absent from the CONTEXT, no draft that merely restates what the
+# CONTEXT does contain can be that value. This deliberately widens the gate's
+# inputs under invariant 8: grounding (faithfulness_gate) and answering stay
+# ORTHOGONAL — the answer gate still never checks whether the draft's claims are
+# supported, it only checks whether the ASKED slot was filled, now with the
+# context needed to recognise when a grounded-looking restatement misses it.
 # -----------------------------------------------------------------------------
 
 _ANSWER_JUDGE_SYSTEM_PROMPT = (
     "You are a strict answer-completeness judge for an automated customer-support "
-    "reply. You are given the customer's QUESTION and a draft ANSWER. Decide "
-    "whether the ANSWER actually answers the QUESTION — that it provides the "
-    "specific information the customer asked for. A reply that says it does not "
-    "have the information, that it cannot help, that it is unsure, or that it is "
-    "deferring the customer to a human, or that answers only a DIFFERENT question "
-    "than the one asked, does NOT answer the question. A reply that only tells the "
-    "customer the answer is quoted case-by-case, is set at someone's discretion, is "
-    "decided by staff, or is otherwise not published does NOT answer the question "
-    "either: the customer still does not have the specific information they asked "
-    "for, however accurately or confidently the reply states that policy. Judge "
-    "ONLY whether the "
-    "question is answered — not grounding, tone, or politeness (a blunt but "
-    "responsive answer still answers; a warm apology that gives no information "
-    "does not). Return `answers` and a `score` in [0,1] for how completely the "
-    "QUESTION is answered (1.0 = fully and directly answered, 0.0 = not answered "
-    "at all)."
+    "reply. You are given the customer's QUESTION, a draft ANSWER, and the "
+    "RETRIEVED CONTEXT the answer was drafted from. Decide whether the ANSWER "
+    "actually answers the QUESTION — that it provides the specific information the "
+    "customer asked for. A reply that says it does not have the information, that "
+    "it cannot help, that it is unsure, or that it is deferring the customer to a "
+    "human, or that answers only a DIFFERENT question than the one asked, does NOT "
+    "answer the question. A reply that only tells the customer the answer is "
+    "quoted case-by-case, is set at someone's discretion, is decided by staff, or "
+    "is otherwise not published does NOT answer the question either: the customer "
+    "still does not have the specific information they asked for, however "
+    "accurately or confidently the reply states that policy. A reply that supplies "
+    "a fact ADJACENT to the question rather than the value asked for does NOT "
+    "answer the question either: when a customer asks for a fee amount, a draft "
+    "that states who pays or that no fee is published has not supplied a fee, and "
+    "when the value asked for is absent from the RETRIEVED CONTEXT, no draft that "
+    "merely restates what the CONTEXT does contain can be that value. Judge ONLY "
+    "whether the question is answered — not grounding, tone, or politeness (a "
+    "blunt but responsive answer still answers; a warm apology that gives no "
+    "information does not). Return `answers` and a `score` in [0,1] for how "
+    "completely the QUESTION is answered (1.0 = fully and directly answered, 0.0 "
+    "= not answered at all)."
 )
 
 
@@ -946,7 +974,10 @@ class AnswerJudgment(BaseModel):
             "True iff the ANSWER actually answers the customer's QUESTION with "
             "the specific information requested. False if it defers, says it "
             "lacks the information, cannot help, answers a different question, "
-            "or only reports that the requested value is case-by-case, "
+            "supplies a fact adjacent to the question rather than the value "
+            "asked for (e.g. who pays when a fee amount was requested), merely "
+            "restates RETRIEVED CONTEXT that does not contain the requested "
+            "value, or only reports that the requested value is case-by-case, "
             "discretionary, or unpublished."
         ),
     )
@@ -991,6 +1022,7 @@ async def answer_gate(
     draft: str,
     cutoff: float,
     *,
+    context: str,
     model: str | None = None,
 ) -> AnswerDecision:
     """Verify a drafted answer actually answers the question via ONE judge call.
@@ -1000,13 +1032,17 @@ async def answer_gate(
     score >= cutoff`. Any failure mode — SDK/API error, timeout, refusal, empty
     choices, missing parsed payload — fails **closed**: `answers=False` and
     `judge_failed=True` (defer this turn), never open. Compares the QUESTION
-    against the DRAFT only; grounding is `faithfulness_gate`'s job, not this
-    gate's.
+    against the DRAFT, using `context` (the rendered retrieved chunks the draft
+    was written from) to check whether the ASKED slot was filled — a draft that
+    restates a fact adjacent to the question (who pays, when it is paid) instead
+    of the value asked for is a non-answer (issue #104-residual), not a pass.
+    Grounding is `faithfulness_gate`'s job, not this gate's.
 
     Sampled at `JUDGE_TEMPERATURE` (default 0) - see `get_judge_temperature`.
     """
     resolved_model = model or get_judge_model()
     user_prompt = (
+        f"CONTEXT:\n{context}\n\n"
         f"QUESTION:\n{question}\n\n"
         f"ANSWER:\n{draft}\n\n"
         "Does the ANSWER actually answer the QUESTION?"
@@ -1321,7 +1357,12 @@ async def run_deflection_pipeline(
     # (after the draft cleared faithfulness), so it adds one judge call to a turn
     # that was about to auto-resolve and none to any escalate path.
     answer = await answer_gate(
-        judge_client, message, draft, answer_cutoff, model=judge_model
+        judge_client,
+        message,
+        draft,
+        answer_cutoff,
+        context=_render_context(chunks),
+        model=judge_model,
     )
     if not answer.answers:
         if answer.judge_failed:

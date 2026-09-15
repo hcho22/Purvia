@@ -21,7 +21,7 @@ three runtime roles, each resolved once at startup into a typed `ProviderConfig`
 | --- | --- | --- |
 | **answerer** | All text generation — the chat answer *and* the five auxiliary helpers (metadata extraction, query planner, text-to-SQL, document subagent, the `llm` reranker), which share the answerer's provider and only vary the *model* per call-site (US-023). | `openai_client` |
 | **embedder** | Embeds chunks at ingestion and queries at retrieval time. Guarded fail-closed against drift (US-027 — see [Embedder re-index](#embedder-re-index-procedure)). | `embedder_client` |
-| **judge** | The runtime faithfulness judge (Chat Completions contract). | `judge_client` |
+| **judge** | The runtime faithfulness and answer-completeness gates (Chat Completions contract). | `judge_client` |
 
 > The **offline cross-family Claude eval judge** is a different thing entirely —
 > a fixed measurement instrument owned by the eval harness (native
@@ -176,11 +176,11 @@ selector falls back so a single-model setup sets only `OPENAI_MODEL`.
 > **closed**, and a gate that returns a different verdict on identical input is
 > sampling one rather than deciding it - the 2026-08-03 E7 investigation measured
 > the answer gate returning `answers=true` on 2 of 5 identical calls for the same
-> (question, draft) pair (issue #104). Both gates therefore send `temperature=0`
+> then-current gate input (issue #104). Both gates therefore send `temperature=0`
 > by default. That **removes the sampler** as a source of variance in the
 > send/escalate verdict; it is best-effort, not a guarantee - no `seed` is passed
 > and provider-side temperature 0 is itself best-effort, so a differing verdict on
-> an identical pair is unlikely rather than impossible.
+> identical gate input is unlikely rather than impossible.
 >
 > **Two different rejections, two different remedies.** Do not reach for the
 > opt-out on both.

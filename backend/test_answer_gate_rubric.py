@@ -26,6 +26,19 @@ Keying on the first alone made the send/escalate verdict ride on whether
 `gpt-4o-mini` happened to append "Therefore, I don't have that information" — an
 observed coin flip across runs of the same row.
 
+THE RESIDUAL THIS FILE PINS (issue #104-residual / the retrieved-context fix)
+-----------------------------------------------------------------------------
+The two deferral shapes above are both announced by the DRAFT's own wording. The
+third shape needs the RETRIEVED CONTEXT: a draft that states a fact ADJACENT to
+the question — who pays, when it is paid, that no fee is published — when the
+ASKED value itself is absent from the context. The draft is faithful and fluent,
+stays exactly on the asked subject, and volunteers no disclaimer, so the old
+rubric read the slot as filled. Both rubrics now receive the retrieved context
+and state the rule: when the value asked for is absent from the RETRIEVED
+CONTEXT, no draft that merely restates what the CONTEXT does contain can be that
+value. The `_CASES` rows below carry the corpus slice each draft was written
+from, and the live layer threads it into both implementations.
+
 A KNOWN LIMITATION of the issue-#104 clause
 -------------------------------------------
 The clause is stated UNCONDITIONALLY: a reply that only reports the answer is
@@ -73,10 +86,10 @@ What that costs, stated plainly:
     from the provider rather than from the rubric. It fails the test either way,
     because both causes need looking at and neither should be retried away.
 
-The offline half stays fixture-free in a different sense: it reads the two rubric
-strings out of the source and asserts they carry the same rules. That needs no
-model at all, so it runs in the always-on layer and is what actually catches the
-two implementations drifting apart.
+The offline half stays fixture-free in a different sense: recording fake clients
+invoke both judge entry points and assert that the final emitted prompts and tool
+schemas carry the same rules. That needs no model at all, so it runs in the
+always-on layer and catches both rubric drift and an unwired prompt literal.
 
 Layers (the project convention — see CLAUDE.md "How to test"):
   * unit layer, ALWAYS runs, no network/keys/DB: rubric lockstep + rule presence,
@@ -95,6 +108,7 @@ import ast
 import asyncio
 import os
 import sys
+import types
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
@@ -102,7 +116,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from escalation import (  # noqa: E402
-    _ANSWER_JUDGE_SYSTEM_PROMPT,
     _non_answer,
     AnswerJudgment,
     DEFAULT_ANSWER_CUTOFF,
@@ -110,15 +123,10 @@ from escalation import (  # noqa: E402
     get_judge_model,
     get_judge_temperature,
 )
+from evals.retrieval.runner import judge_answering  # noqa: E402
 
 # How many times each live case is judged. Every case must come back UNANIMOUS.
 _REPS = 3
-
-# The offline mirror lives in the evals package, which pulls in asyncpg / yaml /
-# jwt at import time — dependencies the backend unit layer must not require. Read
-# its rubric out of the source with `ast` instead: these are plain literals, so
-# this needs nothing but the stdlib and still reads the REAL shipped text.
-_RUNNER_SRC = ROOT / "evals" / "retrieval" / "runner.py"
 
 # The app's own source, read the same way again for the boot-warning CALL-SITE
 # check below. Read, never imported: `main` pulls the ML stack and the whole
@@ -134,29 +142,6 @@ _WIDGET_SURFACE_ENV = "SUPABASE_SERVICE_ROLE_KEY"
 def _check(cond: bool, msg: str) -> None:
     if not cond:
         raise AssertionError(msg)
-
-
-def _literal_from_source(path: Path, name: str) -> Any:
-    """Evaluate a module-level literal assignment without importing the module."""
-    for node in ast.parse(path.read_text(encoding="utf-8")).body:
-        if isinstance(node, ast.Assign) and any(
-            isinstance(t, ast.Name) and t.id == name for t in node.targets
-        ):
-            return ast.literal_eval(node.value)
-    raise AssertionError(f"{name} not found as a literal assignment in {path}")
-
-
-def _offline_rubric() -> str:
-    return _literal_from_source(_RUNNER_SRC, "ANSWER_JUDGE_PROMPT_TEMPLATE")
-
-
-def _offline_tool_description() -> str:
-    tool = _literal_from_source(_RUNNER_SRC, "ANSWER_JUDGE_TOOL")
-    return tool["input_schema"]["properties"]["answers"]["description"]
-
-
-def _runtime_tool_description() -> str:
-    return AnswerJudgment.model_fields["answers"].description or ""
 
 
 def _calls_to(path: Path, func_name: str) -> list[ast.Call]:
@@ -212,7 +197,81 @@ _SHARED_RULES = {
     "accuracy of the deferral is irrelevant": (
         "however accurately or confidently the reply states that policy"
     ),
+    "an adjacent fact is not the asked value": (
+        "a fact ADJACENT to the question rather than the value asked for"
+    ),
+    "an absent context value cannot be supplied by restatement": (
+        "when the value asked for is absent from the RETRIEVED CONTEXT"
+    ),
+    "context restatement cannot invent the absent value": (
+        "merely restates what the CONTEXT does contain can be that value"
+    ),
 }
+
+_PROMPT_QUESTION = "How much is international return shipping?"
+_PROMPT_CONTEXT = "International returns are at the customer's expense."
+_PROMPT_DRAFT = "The customer pays for international return shipping."
+
+
+class _RecordingRuntimeCompletions:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
+    async def parse(self, **kwargs: Any) -> Any:
+        self.calls.append(kwargs)
+        message = types.SimpleNamespace(
+            parsed=AnswerJudgment(answers=True, score=1.0), refusal=None
+        )
+        return types.SimpleNamespace(
+            choices=[types.SimpleNamespace(message=message)]
+        )
+
+
+class _RecordingAnthropicMessages:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
+    async def create(self, **kwargs: Any) -> Any:
+        self.calls.append(kwargs)
+        block = types.SimpleNamespace(
+            type="tool_use", name="submit_answering", input={"answers": True}
+        )
+        return types.SimpleNamespace(content=[block])
+
+
+def _capture_runtime_call() -> dict[str, Any]:
+    completions = _RecordingRuntimeCompletions()
+    client = types.SimpleNamespace(
+        chat=types.SimpleNamespace(completions=completions)
+    )
+    decision = asyncio.run(
+        answer_gate(
+            client,
+            _PROMPT_QUESTION,
+            _PROMPT_DRAFT,
+            DEFAULT_ANSWER_CUTOFF,
+            context=_PROMPT_CONTEXT,
+        )
+    )
+    _check(decision.answers, f"recording runtime judge did not pass: {decision!r}")
+    _check(len(completions.calls) == 1, "runtime rubric capture must make one call")
+    return completions.calls[0]
+
+
+def _capture_offline_call() -> dict[str, Any]:
+    messages = _RecordingAnthropicMessages()
+    client = types.SimpleNamespace(messages=messages)
+    verdict = asyncio.run(
+        judge_answering(
+            client,
+            _PROMPT_QUESTION,
+            _PROMPT_CONTEXT,
+            _PROMPT_DRAFT,
+        )
+    )
+    _check(verdict is True, f"recording offline judge returned {verdict!r}")
+    _check(len(messages.calls) == 1, "offline rubric capture must make one call")
+    return messages.calls[0]
 
 
 # --- unit layer (always runs) ---------------------------------------------
@@ -227,8 +286,17 @@ def test_both_rubrics_state_every_shared_rule() -> None:
     E7 false-resolve number into a measurement of something the buyer does not
     ship, which is how the two were found disagreeing on 5 of 17 probes.
     """
-    runtime = _ANSWER_JUDGE_SYSTEM_PROMPT
-    offline = _offline_rubric()
+    runtime_call = _capture_runtime_call()
+    offline_call = _capture_offline_call()
+    runtime = "\n".join(message["content"] for message in runtime_call["messages"])
+    offline = "\n".join(message["content"] for message in offline_call["messages"])
+    for label, value in (
+        ("question", _PROMPT_QUESTION),
+        ("context", _PROMPT_CONTEXT),
+        ("draft", _PROMPT_DRAFT),
+    ):
+        _check(value in runtime, f"runtime emitted prompt lost the {label}")
+        _check(value in offline, f"offline emitted prompt lost the {label}")
     for label, fragment in _SHARED_RULES.items():
         _check(
             fragment in runtime,
@@ -248,11 +316,31 @@ def test_both_tool_schemas_describe_the_disposition_case() -> None:
     """The structured-output description the model reads must agree with the
     rubric, in both implementations — a schema that still says a deferral counts
     as an answer would pull against the prompt."""
+    runtime_call = _capture_runtime_call()
+    offline_call = _capture_offline_call()
+    runtime_schema = runtime_call["response_format"]
+    offline_tool = offline_call["tools"][0]
+    _check(
+        offline_call["tool_choice"] == {"type": "tool", "name": "submit_answering"},
+        f"offline judge must force submit_answering, got {offline_call['tool_choice']!r}",
+    )
     for what, description in (
-        ("runtime AnswerJudgment.answers", _runtime_tool_description()),
-        ("offline submit_answering.answers", _offline_tool_description()),
+        (
+            "runtime AnswerJudgment.answers",
+            runtime_schema.model_fields["answers"].description or "",
+        ),
+        (
+            "offline submit_answering.answers",
+            offline_tool["input_schema"]["properties"]["answers"]["description"],
+        ),
     ):
-        for fragment in ("case-by-case", "discretionary", "unpublished"):
+        for fragment in (
+            "case-by-case",
+            "discretionary",
+            "unpublished",
+            "fact adjacent to the question rather than the value asked for",
+            "RETRIEVED CONTEXT that does not contain the requested value",
+        ):
             _check(
                 fragment in description,
                 f"{what} must describe the issue-#104 disposition case "
@@ -348,13 +436,21 @@ def test_boot_warning_call_site_is_wired_to_the_widget_surface() -> None:
 
 # --- integration layer (skips cleanly without keys) ------------------------
 
-# question, draft, must_answer, why. The drafts are the ones actually observed in
-# the 2026-08-03 sweep and its local re-runs, not invented paraphrases.
-_CASES: list[tuple[str, str, str, bool, str]] = [
+# question, draft, context, must_answer, why. The drafts are the ones actually
+# observed in the 2026-08-03 sweep and its local re-runs, not invented
+# paraphrases. `context` is the RETRIEVED CONTEXT the draft would have been
+# written from (the corpus text a grounded drafter sees) — the adjacent-fact
+# residual (issue #104) only discriminates when the judge can see that the asked
+# value is absent from it, so each row carries the corpus slice its draft
+# restates.
+_CASES: list[tuple[str, str, str, str, bool, str]] = [
     (
         "p3-05 quoted-per-case",
         "What is the return shipping fee for a return over 20 lbs?",
         "The return shipping fee for returns over 20 lbs is quoted on a per-case basis.",
+        "US domestic returns use USPS or UPS Ground depending on package weight. "
+        "The deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns "
+        "5-20 lbs; quoted per-case for returns over 20 lbs.",
         False,
         "the corpus's own answer is a deferral; the customer still has no fee",
     ),
@@ -363,6 +459,8 @@ _CASES: list[tuple[str, str, str, bool, str]] = [
         "What is the return shipping fee for a return over 20 lbs?",
         "The return shipping fee for returns over 20 lbs is quoted per-case, meaning "
         "the specific amount is not fixed and will vary based on the situation.",
+        "The deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns "
+        "5-20 lbs; quoted per-case for returns over 20 lbs.",
         False,
         "same shape, restated at length; length must not buy a pass",
     ),
@@ -374,6 +472,9 @@ _CASES: list[tuple[str, str, str, bool, str]] = [
         "the discretion of customer service. Therefore, the warranty period for a "
         "book with a printing defect after 30 days is not specified and is subject "
         "to customer service judgment.",
+        "Books carry a 30-day warranty against printing defects (missing pages, "
+        "blurred ink, binding failure). Beyond 30 days, book warranty claims are at "
+        "the discretion of customer service.",
         False,
         "the second flavour: the document names a human decision-maker",
     ),
@@ -382,14 +483,41 @@ _CASES: list[tuple[str, str, str, bool, str]] = [
         "What is the warranty period for a book with a printing defect after 30 days?",
         "Books carry a 30-day warranty against printing defects. Beyond 30 days, "
         "book warranty claims are at the discretion of customer service.",
+        "Books carry a 30-day warranty against printing defects (missing pages, "
+        "blurred ink, binding failure). Beyond 30 days, book warranty claims are at "
+        "the discretion of customer service.",
         False,
         "THE REGRESSION GUARD: identical substance, no volunteered disclaimer. If "
         "this one passes, the gate is back to keying on the drafter's phrasing",
     ),
     (
+        "p3-10 adjacent fact: who pays is not the fee amount",
+        "What is the return shipping fee for an international return?",
+        "International returns are at the customer's expense.",
+        "The RMA includes a pre-paid shipping label for US domestic returns; "
+        "international returns are at the customer's expense unless the return is "
+        "for a wrong-item-shipped or damaged-in-transit case. The domestic "
+        "deduction is $7.95 under 5 lbs and $14.95 for 5-20 lbs.",
+        False,
+        "the draft faithfully states who pays, but the customer asked how much",
+    ),
+    (
+        "p3-04 adjacent fact: general warranty is not refurbished warranty",
+        "How long is the warranty on a refurbished electronics item?",
+        "Electronics carry a 12-month limited warranty against manufacturing defects.",
+        "Electronics carry a 12-month limited warranty against manufacturing defects. "
+        "Coverage excludes physical damage and unauthorized modifications; the "
+        "document does not mention refurbished items.",
+        False,
+        "the general electronics period is adjacent to, not an answer for, the "
+        "missing refurbished-item condition",
+    ),
+    (
         "announced ignorance (the original issue-#97 shape)",
         "What is the warranty period for jewelry?",
         "I don't have that information.",
+        "Electronics carry a 12-month limited warranty against manufacturing "
+        "defects. The warranty starts on the order's shipped_at date.",
         False,
         "the shape the gate was built for; must stay caught",
     ),
@@ -399,6 +527,8 @@ _CASES: list[tuple[str, str, str, bool, str]] = [
         "changed my mind about?",
         "The return shipping fee for an item between 5 and 20 pounds that you "
         "changed your mind about is $14.95.",
+        "The deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns "
+        "5-20 lbs; quoted per-case for returns over 20 lbs.",
         True,
         "OPPOSITE DIRECTION: a real published figure must still auto-resolve, so "
         "an over-tightened rubric fails here instead of quietly killing deflection",
@@ -407,18 +537,24 @@ _CASES: list[tuple[str, str, str, bool, str]] = [
         "answerable: a published warranty period",
         "How long is the electronics warranty?",
         "The electronics warranty is 12 months against manufacturing defects, "
-        "starting on the order's `shipped_at` date.",
+        "starting on the order's shipped_at date.",
+        "Electronics carry a 12-month limited warranty against manufacturing "
+        "defects. The warranty starts on the order's shipped_at date, not the "
+        "paid_at date.",
         True,
         "opposite direction, second instance",
     ),
     (
         "answerable: a published window",
         "Within how many days of the shipped_at date can I request a refund?",
-        "You may request a refund within 30 days of the order's `shipped_at` date.",
+        "You may request a refund within 30 days of the order's shipped_at date.",
+        "Customers may request a refund within 30 days of the order's shipped_at "
+        "date. Orders that have not shipped follow the cancellation policy instead.",
         True,
         "opposite direction, third instance",
     ),
     # KNOWN LIMITATION, pinned at CURRENT behaviour - not at desired behaviour.
+
     #
     # Here the disposition IS the requested information: the customer asked WHO
     # decides, and the draft tells them who. By invariant 8's own test - does the
@@ -445,6 +581,9 @@ _CASES: list[tuple[str, str, str, bool, str]] = [
         "Who decides a book warranty claim after 30 days?",
         "Beyond 30 days, book warranty claims are decided by customer service, at "
         "their discretion.",
+        "Books carry a 30-day warranty against printing defects (missing pages, "
+        "blurred ink, binding failure). Beyond 30 days, book warranty claims are at "
+        "the discretion of customer service.",
         False,
         "the customer asked WHO decides and the draft says who, so invariant 8's "
         "test says auto-send; the unconditional issue-#104 clause escalates it "
@@ -521,7 +660,7 @@ def test_live_rubric_discrimination() -> None:
 
     failures: list[str] = []
 
-    Judge = Callable[[str, str], Awaitable[tuple[bool, bool]]]
+    Judge = Callable[[str, str, str], Awaitable[tuple[bool, bool]]]
 
     def _build_impls() -> list[tuple[str, Judge]]:
         impls: list[tuple[str, Judge]] = []
@@ -530,7 +669,9 @@ def test_live_rubric_discrimination() -> None:
 
             oc = AsyncOpenAI(api_key=openai_key)
 
-            async def runtime(question: str, draft: str) -> tuple[bool, bool]:
+            async def runtime(
+                question: str, context: str, draft: str
+            ) -> tuple[bool, bool]:
                 # `answer_gate` fails CLOSED, so an expired key, a rate limit, a
                 # timeout or a network blip all return answers=False - the same
                 # value a correct non-answer verdict returns. Reading only
@@ -539,27 +680,18 @@ def test_live_rubric_discrimination() -> None:
                 # invariant-12 shape the project forbids. The structured failure
                 # signal separates the two, independently of diagnostic wording.
                 decision = await answer_gate(
-                    oc, question, draft, DEFAULT_ANSWER_CUTOFF
+                    oc,
+                    question,
+                    draft,
+                    DEFAULT_ANSWER_CUTOFF,
+                    context=context,
                 )
                 return decision.answers, decision.judge_failed
 
             impls.append(("runtime", runtime))
         if anthropic_key:
-            # BOTH imports are guarded, not just `anthropic`. The offline mirror is
-            # only imported HERE, inside the live layer, so the always-run unit
-            # layer above never needs the eval deps - but `evals.retrieval.runner`
-            # itself pulls asyncpg / yaml / jwt at module scope, so leaving it
-            # outside the guard would let a missing EVAL dep raise an uncaught
-            # ImportError that aborts the whole module, taking the always-run unit
-            # layer's result reporting down with it. That is the invariant-12 shape
-            # this file argues hardest against, so the promise in the docstring -
-            # "skips cleanly when a key or package is absent" - has to cover every
-            # package the half needs, not just the first one.
             try:
                 import anthropic
-
-                sys.path.insert(0, str(ROOT))
-                from evals.retrieval.runner import judge_answering
             except ImportError as exc:
                 print(
                     "note: ANTHROPIC_API_KEY is set but the OFFLINE mirror's "
@@ -572,8 +704,10 @@ def test_live_rubric_discrimination() -> None:
                 # The offline mirror RAISES on a failed/unparseable judge call
                 # rather than failing closed, so it cannot silently report a dead
                 # judge as a verdict and never needs a failure tag.
-                async def offline(question: str, draft: str) -> tuple[bool, bool]:
-                    return await judge_answering(ac, question, draft), False
+                async def offline(
+                    question: str, context: str, draft: str
+                ) -> tuple[bool, bool]:
+                    return await judge_answering(ac, question, context, draft), False
 
                 impls.append(("offline", offline))
         return impls
@@ -590,10 +724,10 @@ def test_live_rubric_discrimination() -> None:
             f"{get_judge_model()!r} at temperature {get_judge_temperature()!r}"
         )
 
-        for label, question, draft, must_answer, why in _CASES:
+        for label, question, draft, context, must_answer, why in _CASES:
             for impl_name, judge in impls:
                 results = await asyncio.gather(
-                    *[judge(question, draft) for _ in range(_REPS)]
+                    *[judge(question, context, draft) for _ in range(_REPS)]
                 )
 
                 # A judge that was called and failed measured NOTHING, so this case

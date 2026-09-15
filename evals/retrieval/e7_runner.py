@@ -135,10 +135,13 @@ from escalation import (  # noqa: E402
     EscalationConfig,
     RetrievalGateDecision,
     _escalated,
+    answer_gate,
     draft_support_answer,
     get_false_resolve_ceiling,
+    get_judge_model,
     retrieval_gate,
 )
+from model_config import ProviderConfig, build_openai_client  # noqa: E402
 from retrieval import (  # noqa: E402
     DEFAULT_TOP_K,
     SearchDocumentsResult,
@@ -180,14 +183,13 @@ DEFAULT_FAITHFULNESS_JUDGE_MIN = 4
 # governs the PARTIAL case: when the mislabeled FRACTION over the full presented P3
 # population exceeds it, the leg is failed/flagged low-confidence so heavy gold drift
 # trips the gate instead of quietly diluting the false-resolve rate. This guard is
-# DORMANT at today's main leg, not firing: at the default τ_sim of 0.4
-# (`backend.escalation.DEFAULT_TAU_SIM`) all 9 P3 rows clear the retrieval gate, so the
-# measured ratio is 0/9. It becomes REACHABLE the moment ESCALATION_TAU_SIM is promoted
-# to 0.5 — the 5 rows measuring below that (e7-p3-01 0.4607, e7-p3-02 0.4214, e7-p3-03
-# 0.4298, e7-p3-07 0.4234, e7-p3-09 0.4570) then fall out at the retrieval gate, so the
-# ratio is AT LEAST 5/9 ≈ 56% (a lower bound — rows can additionally fall out on
-# n_cleared < n_min) — over this ceiling. Default 0.5 (a majority-mislabeled P3 leg
-# is a gold defect); override via E7_P3_MISLABEL_RATIO_MAX or
+# The original nine-row baseline made this guard reachable at τ_sim=0.5: five
+# individually measured mid-band rows fell out for 5/9 ≈ 56%. The set now has 11
+# rows; the two new context-aware answer-gate probes are explicitly UNMEASURED
+# until a scheduled run records their own cosine, so no current 0/11 or 5/11 claim
+# is inferred from the older measurements (invariant 12). Default 0.5 (a
+# majority-mislabeled P3 leg is a gold defect); override via
+# E7_P3_MISLABEL_RATIO_MAX or
 # --p3-mislabel-ratio-max. The denominator is the full presented population
 # (`n_questions`), matching the false-resolve rate's — NOT `len(exercised)`.
 DEFAULT_P3_MISLABEL_RATIO_MAX = 0.5
@@ -224,17 +226,29 @@ Retrieve = Callable[[str], Awaitable[list[SearchDocumentsResult]]]
 #   Draft: (question, chunks) -> drafted answer text.
 #   Judge: (question, reference, chunks, draft) -> {"faithfulness", "helpfulness"}
 #          integer 1-5 scores from the OFFLINE cross-family Claude judge.
-#   AnswerJudge: (question, draft) -> bool — whether the draft ANSWERS the
-#          question, the OFFLINE mirror of the runtime `escalation.answer_gate`
+#   AnswerJudge: (question, context, draft) -> bool — whether the draft ANSWERS
+#          the question, the OFFLINE mirror of the runtime `escalation.answer_gate`
 #          (issue #97). Orthogonal to faithfulness: a grounded "I don't have that
 #          information" is faithful yet answers nothing, so a faithful P3 draft
 #          that does not answer must escalate at THIS gate, not auto-resolve
-#          (issue #96). Sees only the question + draft, like the runtime gate.
+#          (issue #96). `context` is the rendered retrieved chunks the draft was
+#          written from, so the judge can check the ASKED slot was filled rather
+#          than that the draft is merely about the topic (issue #104-residual:
+#          "who bears the cost" is not "how much the cost is").
 Draft = Callable[[str, list[SearchDocumentsResult]], Awaitable[str]]
 Judge = Callable[
     [str, str, list[SearchDocumentsResult], str], Awaitable[dict[str, int]]
 ]
-AnswerJudge = Callable[[str, str], Awaitable[bool]]
+AnswerJudge = Callable[[str, str, str], Awaitable[bool]]
+
+# The RUNTIME answer-completeness gate, injected into the parity leg
+# (`escalation.answer_gate`, ONE call per eligible row, no retry). Returns the
+# executable fail-closed signal `(answers, judge_failed)` — NOT just `answers`:
+# a dead judge fails closed to `answers=False`, which is the same value as a
+# correct non-answer verdict, so the second element is what keeps a parity
+# comparison from reading a judge outage as an agreement with the offline judge
+# (invariant 12 — an UNMEASURED row must never be reportable as a clean verdict).
+RuntimeAnswerGate = Callable[[str, str, str], Awaitable[tuple[bool, bool]]]
 
 # The P1b (US-057) no-access retrieval callable: it takes the FULL question dict
 # (not just the text) because replaying a P2 question as the no-access viewer must
@@ -475,7 +489,10 @@ class _JudgedLeg:
     escalated before reaching that gate — i.e. at retrieval, draft, or the
     faithfulness leg); `answer_judge_calls` is the actual answer-judge calls made
     (only ever 0 or 1), tracked separately from `judge_calls` (the faithfulness
-    judge) so each gate's LLM cost stays independently auditable.
+    judge) so each gate's LLM cost stays independently auditable. `context` is the
+    rendered retrieved chunks shown to the answer judge (``None`` on the legs that
+    never reach it) — carried so the runtime-vs-offline parity leg can replay the
+    exact same prompt inputs through the runtime `escalation.answer_gate`.
     """
 
     decision: Literal["auto_resolve", "escalate"]
@@ -490,6 +507,7 @@ class _JudgedLeg:
     draft_calls: int
     judge_calls: int
     answer_judge_calls: int
+    context: str | None = None
 
 
 async def _run_judged_leg(
@@ -531,7 +549,8 @@ async def _run_judged_leg(
     measurement stays independent of the gates it validates. Only the faithfulness
     judge receives the row's `reference` gold answer (validated by
     `e7.load_escalation_questions`); the answer judge, like its runtime mirror,
-    compares the question against the draft only. Call counts are pinned per branch
+    receives the question, the draft, and the retrieved context so it can check
+    the ASKED slot was filled. Call counts are pinned per branch
     so each gate's LLM cost stays auditable.
     """
     rows = await retrieve(q["question"])
@@ -576,7 +595,8 @@ async def _run_judged_leg(
     # Issue #97: a faithful draft still may not ANSWER — a grounded deferral is
     # trivially faithful. The answer gate is the second, orthogonal operand on the
     # send path; a non-answer escalates rather than auto-resolving.
-    answered = await answer_judge(q["question"], draft_text)
+    context = _render_judge_context(rows)
+    answered = await answer_judge(q["question"], context, draft_text)
     return _JudgedLeg(
         decision="auto_resolve" if answered else "escalate",
         escalate_leg=None if answered else "answer",
@@ -590,6 +610,7 @@ async def _run_judged_leg(
         draft_calls=1,
         judge_calls=1,
         answer_judge_calls=1,
+        context=context,
     )
 
 
@@ -626,6 +647,7 @@ class P2Decision:
     """
 
     question_id: str
+    question: str
     decision: Literal["auto_resolve", "escalate"]
     expected: Literal["auto_resolve"]
     correct: bool
@@ -645,6 +667,7 @@ class P2Decision:
     draft_calls: int
     judge_calls: int
     answer_judge_calls: int
+    context: str | None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -798,6 +821,7 @@ async def run_e7_p2(
         result.decisions.append(
             P2Decision(
                 question_id=q["id"],
+                question=q["question"],
                 decision=leg.decision,
                 expected="auto_resolve",
                 correct=(leg.decision == "auto_resolve"),
@@ -817,6 +841,7 @@ async def run_e7_p2(
                 draft_calls=leg.draft_calls,
                 judge_calls=leg.judge_calls,
                 answer_judge_calls=leg.answer_judge_calls,
+                context=leg.context,
             )
         )
     return result
@@ -937,6 +962,7 @@ class P3Decision:
     """
 
     question_id: str
+    question: str
     decision: Literal["escalate", "auto_resolve"]
     expected: Literal["escalate"]
     correct: bool
@@ -957,6 +983,7 @@ class P3Decision:
     draft_calls: int
     judge_calls: int
     answer_judge_calls: int
+    context: str | None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -1177,6 +1204,7 @@ async def run_e7_p3(
         result.decisions.append(
             P3Decision(
                 question_id=q["id"],
+                question=q["question"],
                 decision=leg.decision,
                 expected="escalate",
                 correct=escalated_at_content,
@@ -1197,6 +1225,7 @@ async def run_e7_p3(
                 draft_calls=leg.draft_calls,
                 judge_calls=leg.judge_calls,
                 answer_judge_calls=leg.answer_judge_calls,
+                context=leg.context,
             )
         )
     return result
@@ -2229,15 +2258,18 @@ def _memoize_answer_judge(answer_judge: AnswerJudge) -> AnswerJudge:
 
     The draft is fixed per question (memoized) and the answer verdict is a knob-
     independent boolean (unlike the faithfulness floor, the answer gate has no
-    swept threshold in this grid), so caching on the question text is sufficient
-    and the whole sweep costs one answer-judge call per question.
+    swept threshold in this grid), so caching on the (question, context) pair —
+    context is derived from the question's memoized retrieval and is therefore
+    fixed per question within a sweep — is sufficient and the whole sweep costs
+    one answer-judge call per question.
     """
-    cache: dict[str, bool] = {}
+    cache: dict[tuple[str, str], bool] = {}
 
-    async def cached(question: str, draft_text: str) -> bool:
-        if question not in cache:
-            cache[question] = await answer_judge(question, draft_text)
-        return cache[question]
+    async def cached(question: str, context: str, draft_text: str) -> bool:
+        key = (question, context)
+        if key not in cache:
+            cache[key] = await answer_judge(question, context, draft_text)
+        return cache[key]
 
     return cached
 
@@ -2591,6 +2623,243 @@ async def run_e7_sweep(
     )
 
 
+@dataclass
+class ParityCheck:
+    """One replay of an existing offline answer-gate decision at runtime."""
+
+    population: str
+    question_id: str
+    offline_answered: bool
+    runtime_answered: bool | None
+    runtime_judge_failed: bool
+    matches: bool | None
+    error: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class E7ParityResult:
+    """Outcome of the runtime-vs-offline answer-gate parity leg.
+
+    P2/P3 already performed retrieval, drafting, and offline judging. This leg
+    consumes those exact decisions and replays only their question, draft, and
+    rendered context through the runtime gate, so each eligible row adds exactly
+    one runtime judge call and no duplicate offline work.
+    """
+
+    population: str = "parity"
+    label: str = "offline_vs_runtime_answer_gate"
+    offline_judge_model: str = ""
+    runtime_judge_model: str = ""
+    n_questions: int = 0
+    checks: list[ParityCheck] = field(default_factory=list)
+
+    @property
+    def n_eligible(self) -> int:
+        return len(self.checks)
+
+    @property
+    def unmeasured_rows(self) -> list[ParityCheck]:
+        return [check for check in self.checks if check.matches is None]
+
+    @property
+    def n_unmeasured(self) -> int:
+        return len(self.unmeasured_rows)
+
+    @property
+    def mismatches(self) -> list[ParityCheck]:
+        return [check for check in self.checks if check.matches is False]
+
+    @property
+    def status(self) -> Literal["pass", "fail", "unmeasured"]:
+        if self.n_eligible == 0 or self.n_unmeasured:
+            return "unmeasured"
+        return "fail" if self.mismatches else "pass"
+
+    @property
+    def passed(self) -> bool:
+        return self.status == "pass"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "population": self.population,
+            "label": self.label,
+            "offline_judge_model": self.offline_judge_model,
+            "runtime_judge_model": self.runtime_judge_model,
+            "n_questions": self.n_questions,
+            "n_eligible": self.n_eligible,
+            "n_unmeasured": self.n_unmeasured,
+            "status": self.status,
+            "checks": [check.to_dict() for check in self.checks],
+            "mismatch_ids": [check.question_id for check in self.mismatches],
+            "passed": self.passed,
+        }
+
+
+async def run_e7_parity(
+    *,
+    results: list[E7P2Result | E7P3Result],
+    runtime_answer_gate: RuntimeAnswerGate,
+    offline_judge_model: str = "",
+    runtime_judge_model: str = "",
+) -> E7ParityResult:
+    """Pin OFFLINE-judge / RUNTIME-gate agreement on the golden rows (additive).
+
+    This is the decision-gate-parity invariant: the OFFLINE cross-family judge
+    (which scores the weekly false-resolve rate, deliberately independent of the
+    runtime family) and the RUNTIME `escalation.answer_gate` (which ships the
+    send/escalate verdict) must agree on the golden set. It is ASSERTED here,
+    never scored — the scored rate stays the offline judge's, and a divergence
+    fails the run (the 2026-08-03 blind spot: 5/17 runtime cells masked a
+    crossing that never surfaced).
+
+    Rows that never reached the offline answer judge are ineligible. Every other
+    row is replayed exactly once with the original question, draft, and context.
+    Missing inputs, a raised runtime call, or `judge_failed=True` is UNMEASURED,
+    never an agreement with the runtime gate's fail-closed `answers=False`.
+    """
+    decisions = [decision for result in results for decision in result.decisions]
+    result = E7ParityResult(
+        offline_judge_model=offline_judge_model,
+        runtime_judge_model=runtime_judge_model,
+        n_questions=len(decisions),
+    )
+
+    for scored_result in results:
+        for decision in scored_result.decisions:
+            if decision.answered is None:
+                continue
+            if not decision.question.strip():
+                result.checks.append(
+                    ParityCheck(
+                        population=scored_result.population,
+                        question_id=decision.question_id,
+                        offline_answered=decision.answered,
+                        runtime_answered=None,
+                        runtime_judge_failed=False,
+                        matches=None,
+                        error="missing_question",
+                    )
+                )
+                continue
+            if decision.draft is None or not decision.draft.strip():
+                result.checks.append(
+                    ParityCheck(
+                        population=scored_result.population,
+                        question_id=decision.question_id,
+                        offline_answered=decision.answered,
+                        runtime_answered=None,
+                        runtime_judge_failed=False,
+                        matches=None,
+                        error="missing_draft",
+                    )
+                )
+                continue
+            if decision.context is None or not decision.context.strip():
+                result.checks.append(
+                    ParityCheck(
+                        population=scored_result.population,
+                        question_id=decision.question_id,
+                        offline_answered=decision.answered,
+                        runtime_answered=None,
+                        runtime_judge_failed=False,
+                        matches=None,
+                        error="missing_context",
+                    )
+                )
+                continue
+
+            try:
+                runtime_answered, judge_failed = await runtime_answer_gate(
+                    decision.question, decision.context, decision.draft
+                )
+            except Exception as exc:  # noqa: BLE001 - an outage is UNMEASURED
+                result.checks.append(
+                    ParityCheck(
+                        population=scored_result.population,
+                        question_id=decision.question_id,
+                        offline_answered=decision.answered,
+                        runtime_answered=None,
+                        runtime_judge_failed=True,
+                        matches=None,
+                        error=f"runtime_gate_raised:{type(exc).__name__}",
+                    )
+                )
+                continue
+
+            result.checks.append(
+                ParityCheck(
+                    population=scored_result.population,
+                    question_id=decision.question_id,
+                    offline_answered=decision.answered,
+                    runtime_answered=runtime_answered,
+                    runtime_judge_failed=judge_failed,
+                    matches=(
+                        None
+                        if judge_failed
+                        else runtime_answered == decision.answered
+                    ),
+                    error="runtime_judge_failed" if judge_failed else None,
+                )
+            )
+    return result
+
+
+def render_e7_parity_section(result: E7ParityResult) -> list[str]:
+    """Markdown lines for the runtime-vs-offline answer-gate parity block."""
+    if result.n_eligible == 0:
+        verdict = (
+            "UNMEASURED — zero golden rows reached the answer gate, so the "
+            "offline-vs-runtime agreement was measured on nothing (invariant 12)."
+        )
+    elif result.n_unmeasured:
+        verdict = (
+            f"UNMEASURED on {result.n_unmeasured} eligible row(s) — judge "
+            "failure / missing context, reported below (a dead runtime judge "
+            "fail-closed to answers=False and must never read as agreement)."
+        )
+    elif result.mismatches:
+        verdict = (
+            "DISAGREE — the offline judge that scores the weekly rate and the "
+            "runtime gate that ships diverged on "
+            f"{len(result.mismatches)}/{result.n_eligible} row(s); the weekly "
+            "number was therefore computed by a judge the shipped gate does not "
+            "always agree with."
+        )
+    else:
+        verdict = (
+            f"AGREE — offline and runtime answer gates matched on all "
+            f"{result.n_eligible} eligible golden rows."
+        )
+
+    lines = [
+        "",
+        "## E7 parity leg: offline vs runtime answer gate",
+        "",
+        f"**Verdict:** {verdict}",
+        f"golden rows {result.n_questions} | eligible (faithful, reached answer gate) "
+        f"{result.n_eligible} | unmeasured {result.n_unmeasured}",
+        f"offline judge {result.offline_judge_model or 'n/a'} vs runtime judge "
+        f"{result.runtime_judge_model or 'n/a'}.",
+        "",
+        "| Population | Question | Offline answers | Runtime answers | Result |",
+        "|---|---|---|---|---|",
+    ]
+    for check in result.checks:
+        runtime = "—" if check.runtime_answered is None else str(check.runtime_answered)
+        if check.matches is None:
+            outcome = f"UNMEASURED ({check.error or 'unknown'})"
+        else:
+            outcome = "match" if check.matches else "MISMATCH"
+        lines.append(
+            f"| {check.population} | `{check.question_id}` | "
+            f"{check.offline_answered} | {runtime} | {outcome} |"
+        )
+    return lines
+
+
 def render_e7_sweep_section(
     sweep: E7Sweep,
     *,
@@ -2730,6 +2999,7 @@ def e7_pinned_invariants_failed(
     p3_result: E7P3Result | None,
     ceiling_verdict: FalseResolveCeilingVerdict,
     p3_mislabel_ratio_max: float = DEFAULT_P3_MISLABEL_RATIO_MAX,
+    parity_result: E7ParityResult | None = None,
 ) -> bool:
     """US-059: the E7 runner's pinned exit-code decision — pure over the scored
     legs so the per-PR and weekly fail conditions are unit-testable (amain only
@@ -2764,7 +3034,14 @@ def e7_pinned_invariants_failed(
         faithfulness gate as the P3 gold grows. This guard fails the run when the
         mislabeled fraction over the full presented population exceeds
         `p3_mislabel_ratio_max`, catching that partial dilution;
-      * a MEASURED faithfulness-leg (P3) false-resolve rate above the buyer's ceiling.
+      * a MEASURED faithfulness-leg (P3) false-resolve rate above the buyer's ceiling;
+      * the offline-vs-runtime answer-gate PARITY leg (decision-gate-parity): the
+        weekly rate is scored by the OFFLINE judge, so an agreement between that
+        judge and the RUNTIME gate `escalation.answer_gate` (what actually ships
+        the send/escalate verdict) is a pinned invariant, asserted independently
+        and NEVER scored into the rate. Refuses to certify on zero eligible rows,
+        judge failure, or missing context (each UNMEASURED, invariant 12), and
+        fails hard on any mismatch (offline judge = shipped gate disagreement).
 
     A per-PR run carries no P3 leg (p3_result is None), so the P3 guards never trip
     it there — only the deterministic P1a/P1b gate + non-disclosure invariants gate a
@@ -2877,10 +3154,10 @@ def e7_pinned_invariants_failed(
     # positive control above. That control fails closed only when EVERY P3 row is
     # mislabeled (zero exercised); a leg that is heavily but not entirely mislabeled
     # still exercises ≥1 row (so `passed` is True) yet runs the false-resolve ceiling
-    # over a shrunken sample. At the main leg's default τ_sim of 0.4 all 9 P3 rows clear
-    # retrieval, so this guard is dormant (0/9); it becomes reachable if
-    # ESCALATION_TAU_SIM is promoted to 0.5, where the 5 rows measuring below that fall
-    # out for a ratio of AT LEAST 5/9 ≈ 56%.
+    # over a shrunken sample. In the original nine-row baseline this became reachable
+    # at τ_sim=0.5 (five individually measured rows fell out: 5/9 ≈ 56%). The two
+    # newly widened context-aware probes carry no borrowed cosine; their first
+    # scheduled measurement decides the current 11-row ratio.
     # Gated on `passed` so the empty / all-mislabeled cases stay
     # owned by the positive control above (one clear failure reason each); fires only
     # when the mislabeled FRACTION over the full presented population STRICTLY exceeds
@@ -2907,6 +3184,56 @@ def e7_pinned_invariants_failed(
                 f"{d.question_id}({d.escalate_leg})" for d in p3_result.mislabeled
             ),
         )
+        failed = True
+
+    # Decision-gate-parity: the pinned offline-vs-runtime answer-gate agreement.
+    # The weekly false-resolve rate is scored by the OFFLINE judge; this leg
+    # asserts — independently, never scored into the rate — that the RUNTIME gate
+    # that actually ships agrees on the same (question, draft, context). Fail
+    # CLOSED on every UNMEASURED shape (zero eligible rows / offline or runtime
+    # judge failure / missing context — a dead runtime judge fail-closes to
+    # answers=False and must never read as agreement, invariant 12) and on any
+    # MISMATCH (surfaced with row id + both verdicts). None per-PR (no parity
+    # leg requested → parity_result is None) → inert, never trips.
+    if parity_result is not None and not parity_result.passed:
+        if parity_result.n_eligible == 0:
+            log.error(
+                "E7 PARITY UNMEASURED — zero eligible golden rows reached the "
+                "answer gate (faithful drafts), so the offline-vs-runtime "
+                "agreement was measured on nothing. Derived-and-published on "
+                "nothing would be indistinguishable from a clean pass — failing "
+                "closed (invariant 12)."
+            )
+        if parity_result.n_unmeasured > 0:
+            log.error(
+                "E7 PARITY UNMEASURED on %d eligible row(s) — judge failure or "
+                "missing context; the runtime gate fails CLOSED to answers=False "
+                "on a dead judge, which must never be reported as agreement:",
+                parity_result.n_unmeasured,
+            )
+            for row in parity_result.unmeasured_rows:
+                log.error(
+                    "  %s (%s)",
+                    row.question_id,
+                    row.error,
+                )
+        if parity_result.mismatches:
+            log.error(
+                "E7 PARITY MISMATCH — %d/%d eligible golden row(s): the OFFLINE "
+                "judge that scores the weekly false-resolve rate and the RUNTIME "
+                "gate that ships the send/escalate verdict DISAGREE on the same "
+                "(question, draft, context). The weekly number is therefore "
+                "computed by a judge the shipped gate does not always agree with:",
+                len(parity_result.mismatches),
+                parity_result.n_eligible,
+            )
+            for m in parity_result.mismatches:
+                log.error(
+                    "  %s — offline answers=%s vs runtime answers=%s",
+                    m.question_id,
+                    m.offline_answered,
+                    m.runtime_answered,
+                )
         failed = True
 
     # US-059: the false-resolve ceiling is a pinned SAFETY invariant — a MEASURED
@@ -3062,7 +3389,25 @@ async def amain() -> int:
             "get_p3_mislabel_ratio_max() (0.5)."
         ),
     )
+    parser.add_argument(
+        "--include-parity",
+        action="store_true",
+        help=(
+            "Decision-gate-parity: additionally pin OFFLINE-judge vs RUNTIME-gate "
+            "agreement on the golden rows — the scored weekly rate is computed by "
+            "the OFFLINE cross-family judge, so this leg asserts (separately, never "
+            "scored) that the RUNTIME escalation.answer_gate that actually ships "
+            "agrees on the same (question, draft, context), costing ONE extra "
+            "runtime gate call per eligible row while reusing the P2/P3 decisions "
+            "already produced (no duplicate retrieval, draft, or offline judge). "
+            "Refuses to certify on zero eligible rows / judge failure / missing "
+            "context (UNMEASURED) and fails hard on any mismatch. Requires "
+            "ANTHROPIC_API_KEY + OPENAI_API_KEY (offline judge + runtime gate)."
+        ),
+    )
     args = parser.parse_args()
+    if args.include_parity and not (args.include_p2 or args.include_p3):
+        parser.error("--include-parity requires --include-p2 and/or --include-p3")
     if not 1 <= args.faithfulness_judge_min <= 5:
         parser.error("--faithfulness-judge-min must be in [1,5]")
     p3_mislabel_ratio_max = (
@@ -3137,20 +3482,24 @@ async def amain() -> int:
     # The OFFLINE Claude judge for the P2/P3 legs + the knob sweep. Lazy-imported
     # so the deterministic P1a-only path keeps zero Anthropic dependency (mirrors
     # runner._get_anthropic). Built once and shared by the LLM-judged legs/sweep.
-    include_judged = args.include_p2 or args.include_p3 or args.sweep
+    include_judged = (
+        args.include_p2 or args.include_p3 or args.sweep or args.include_parity
+    )
     anthropic_client: Any | None = None
     if include_judged:
         anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not anthropic_api_key:
             raise RuntimeError(
-                "--include-p2/--include-p3/--sweep require ANTHROPIC_API_KEY (the "
-                "offline cross-family Claude judge cannot use the OpenAI key)"
+                "--include-p2/--include-p3/--sweep/--include-parity require "
+                "ANTHROPIC_API_KEY (the offline cross-family Claude judge cannot use "
+                "the OpenAI key)"
             )
         try:
             import anthropic
         except ImportError as e:  # pragma: no cover
             raise RuntimeError(
-                "--include-p2/--include-p3/--sweep require the `anthropic` package. "
+                "--include-p2/--include-p3/--sweep/--include-parity require the "
+                "`anthropic` package. "
                 "Run `pip install -r evals/retrieval/requirements.txt`."
             ) from e
         anthropic_client = anthropic.AsyncAnthropic(api_key=anthropic_api_key)
@@ -3164,6 +3513,11 @@ async def amain() -> int:
         anon_key,
     )
     openai_client = AsyncOpenAI(api_key=openai_api_key)
+    runtime_judge_client = (
+        build_openai_client(ProviderConfig.from_env("judge"))
+        if args.include_parity
+        else None
+    )
     started_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
     # US-057: P1b infrastructure (the DB-backed no-access replay). Resolved only
@@ -3217,6 +3571,7 @@ async def amain() -> int:
     p2_result: E7P2Result | None = None
     p3_result: E7P3Result | None = None
     sweep_result: E7Sweep | None = None
+    parity_result: E7ParityResult | None = None
     async with httpx.AsyncClient(timeout=30.0) as http:
 
         async def retrieve(question: str) -> list[SearchDocumentsResult]:
@@ -3315,13 +3670,14 @@ async def amain() -> int:
                     anthropic_client, question, reference, context, draft_text
                 )
 
-            async def answer_judge(question: str, draft_text: str) -> bool:
+            async def answer_judge(question: str, context: str, draft_text: str) -> bool:
                 # The OFFLINE cross-family answer-completeness judge (issue #97) —
                 # NOT the runtime one-call answer_gate. Like its runtime mirror it
-                # compares the question against the draft only (grounding is the
-                # faithfulness judge's job).
+                # receives the question, the draft, and the retrieved context so it
+                # can check the ASKED slot was filled (grounding is the faithfulness
+                # judge's job).
                 return await r.judge_answering(
-                    anthropic_client, question, draft_text
+                    anthropic_client, question, context, draft_text
                 )
 
             if args.include_p2:
@@ -3348,6 +3704,40 @@ async def amain() -> int:
                     match_threshold=match_threshold,
                     judge_model=r.JUDGE_MODEL,
                     faithfulness_judge_min=args.faithfulness_judge_min,
+                )
+
+            if args.include_parity:
+                # Decision-gate-parity: the parity leg is the ONLY place the runtime
+                # and offline rubrics face each other. The closure calls the real
+                # `escalation.answer_gate`,
+                # ONE call per eligible row, no retry, deterministic JUDGE_TEMPERATURE
+                # (escalation owns the pin); a raised call fails the row closed to
+                # UNMEASURED in run_e7_parity rather than escaping.
+                async def runtime_answer_gate(
+                    question: str, context: str, draft_text: str
+                ) -> tuple[bool, bool]:
+                    assert runtime_judge_client is not None
+                    try:
+                        judged = await answer_gate(
+                            runtime_judge_client,
+                            question,
+                            draft_text,
+                            config.answer_cutoff,
+                            context=context,
+                        )
+                        return bool(judged.answers), judged.judge_failed
+                    except Exception:  # noqa: BLE001 - fail closed, never a verdict
+                        return False, True
+
+                parity_result = await run_e7_parity(
+                    results=[
+                        result
+                        for result in (p2_result, p3_result)
+                        if result is not None
+                    ],
+                    runtime_answer_gate=runtime_answer_gate,
+                    offline_judge_model=r.JUDGE_MODEL,
+                    runtime_judge_model=get_judge_model(),
                 )
 
             if args.sweep:
@@ -3413,6 +3803,8 @@ async def amain() -> int:
         payload["e7_p3"] = p3_result.to_dict()
     if sweep_result is not None:
         payload["e7_sweep"] = sweep_result.to_dict()
+    if parity_result is not None:
+        payload["e7_answer_gate_parity"] = parity_result.to_dict()
     out_path = args.out
     if out_path is None:
         results_dir = Path(__file__).resolve().parent / "results"
@@ -3443,6 +3835,8 @@ async def amain() -> int:
                 )
             )
         )
+    if parity_result is not None:
+        print("\n".join(render_e7_parity_section(parity_result)))
     print(f"\n→ {out_path}")
 
     # P2 is a tunable quality metric, not a per-PR hard block (US-059): a
@@ -3504,6 +3898,7 @@ async def amain() -> int:
         p3_result=p3_result,
         ceiling_verdict=ceiling_verdict,
         p3_mislabel_ratio_max=p3_mislabel_ratio_max,
+        parity_result=parity_result,
     )
     return 1 if failed else 0
 

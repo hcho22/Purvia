@@ -484,20 +484,22 @@ class _FakeJudge:
 class _FakeAnswerJudge:
     """Call-counting fake offline `AnswerJudge`: maps question -> answers bool.
 
-    Mirrors the issue-#97 runtime answer gate: sees only the question + draft (no
-    reference, no chunks) so a test can prove the answer leg is orthogonal to
-    faithfulness. Default verdict is `True` (the draft answers) so a faithful P2
-    still auto-resolves; a P3 grounded-deferral test sets `False` to prove the
-    answer leg escalates a faithful-but-non-answering draft (issue #96)."""
+    Mirrors the issue-#97 runtime answer gate: receives question + draft + the
+    RETRIEVED CONTEXT the draft was written from (issue #104-residual — the gate
+    checks the ASKED slot was filled, and an empty context would make that check
+    structurally blind), never a reference. Default verdict is `True` (the draft
+    answers) so a faithful P2 still auto-resolves; a P3 grounded-deferral test
+    sets `False` to prove the answer leg escalates a faithful-but-non-answering
+    draft (issue #96)."""
 
     def __init__(self, answers_by_question: dict[str, bool] | None = None) -> None:
         self.answers_by_question = answers_by_question or {}
         self.calls = 0
-        self.seen: list[tuple[str, str]] = []
+        self.seen: list[tuple[str, str, str]] = []
 
-    async def __call__(self, question: str, draft_text: str) -> bool:
+    async def __call__(self, question: str, context: str, draft_text: str) -> bool:
         self.calls += 1
-        self.seen.append((question, draft_text))
+        self.seen.append((question, context, draft_text))
         return self.answers_by_question.get(question, True)
 
 
@@ -553,6 +555,12 @@ def test_p2_auto_resolves_when_faithful() -> None:
     _check(retriever.calls == 1 and answerer.calls == 1 and judge.calls == 1,
            f"exactly 1 retrieve/draft/judge call, got {retriever.calls}/{answerer.calls}/{judge.calls}")
     _check(answer_judge.calls == 1, f"a faithful draft is answer-judged exactly once, got {answer_judge.calls}")
+    _check(
+        answer_judge.seen[0][1] == "[1] content a\n\n[2] content b",
+        "the answer judge must receive the RETRIEVED CONTEXT the draft was written "
+        "from (issue #104-residual — an empty context would make the ASKED-slot "
+        f"check structurally blind), got {answer_judge.seen[0][1]!r}",
+    )
     d = result.decisions[0]
     _check(d.decision == "auto_resolve", f"a faithful P2 that answers must auto-resolve, got {d.decision}")
     _check(d.correct is True and d.false_escalate is False, "auto-resolve is the correct, non-false-escalate P2 outcome")
