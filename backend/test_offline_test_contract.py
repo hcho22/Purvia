@@ -12,7 +12,10 @@ from typing import Any
 import tiktoken
 import yaml
 
-from backend.offline_test_bootstrap import OfflineNetworkError, install_offline_runtime
+from backend.offline_test_bootstrap import (
+    BlockedSocketPathError,
+    install_offline_runtime,
+)
 from backend.run_offline_tests import (
     INTEGRATION_ONLY,
     discover_test_modules,
@@ -145,17 +148,19 @@ def test_workflow_runs_the_discovery_command_on_every_pr() -> None:
     assert run_steps[0].commands == (discovery_command,)
 
 
-def test_offline_runtime_uses_local_tokenizer_and_blocks_network() -> None:
+def test_offline_runtime_uses_local_tokenizer_and_blocks_python_socket_path() -> None:
     install_offline_runtime()
     encoding = tiktoken.get_encoding("cl100k_base")
     text = "offline tokenizer — 世界"
     assert encoding.decode(encoding.encode(text)) == text
     try:
         socket.create_connection(("example.com", 443))
-    except OfflineNetworkError as exc:
-        assert str(exc) == "offline test network disabled: socket.create_connection"
+    except BlockedSocketPathError as exc:
+        assert str(exc) == (
+            "offline test blocked Python socket path: socket.create_connection"
+        )
     else:
-        raise AssertionError("offline runtime allowed a network connection")
+        raise AssertionError("offline runtime allowed the guarded socket path")
 
 
 def main() -> int:
@@ -164,7 +169,7 @@ def main() -> int:
         test_integration_only_classifications_have_no_offline_verdict,
         test_offline_environment_removes_live_credentials,
         test_workflow_runs_the_discovery_command_on_every_pr,
-        test_offline_runtime_uses_local_tokenizer_and_blocks_network,
+        test_offline_runtime_uses_local_tokenizer_and_blocks_python_socket_path,
     )
     for test in tests:
         test()

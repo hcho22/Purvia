@@ -1,4 +1,8 @@
-"""Run one backend test module with deterministic offline dependencies."""
+"""Run one backend test module with guarded current-suite dependencies.
+
+This provides deterministic local seams for the dependency paths exercised by
+the discovered suite. It is not an OS-level egress sandbox for child processes.
+"""
 
 from __future__ import annotations
 
@@ -9,7 +13,7 @@ from collections.abc import Callable
 from typing import Any
 
 
-class OfflineNetworkError(OSError):
+class BlockedSocketPathError(OSError):
     pass
 
 
@@ -42,8 +46,10 @@ def _install_dotenv_guard() -> None:
     dotenv.load_dotenv = lambda *args, **kwargs: False
 
 
-def _blocked(operation: str) -> OfflineNetworkError:
-    return OfflineNetworkError(f"offline test network disabled: socket.{operation}")
+def _blocked(operation: str) -> BlockedSocketPathError:
+    return BlockedSocketPathError(
+        f"offline test blocked Python socket path: socket.{operation}"
+    )
 
 
 def _guard_socket_method(name: str) -> None:
@@ -57,7 +63,7 @@ def _guard_socket_method(name: str) -> None:
     setattr(socket.socket, name, guarded)
 
 
-def _install_network_guard() -> None:
+def _install_python_socket_guards() -> None:
     for name in ("bind", "connect", "connect_ex", "sendto"):
         _guard_socket_method(name)
 
@@ -77,7 +83,7 @@ def install_offline_runtime() -> None:
         return
     _install_local_tokenizer()
     _install_dotenv_guard()
-    _install_network_guard()
+    _install_python_socket_guards()
     _runtime_installed = True
 
 

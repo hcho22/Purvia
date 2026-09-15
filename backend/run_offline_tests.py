@@ -86,7 +86,7 @@ def discover_test_modules(
 
 
 def offline_environment(source: Mapping[str, str] | None = None) -> dict[str, str]:
-    """Return a subprocess environment configured for local-only execution."""
+    """Configure the current suite's known offline dependency paths."""
     env = dict(os.environ if source is None else source)
     for key in tuple(env):
         if (
