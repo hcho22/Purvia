@@ -304,7 +304,8 @@ def check_operational_gates(
     constants), so an unbound call is byte-identical to the legacy behavior. Two
     fixed-threshold checks run:
 
-      * ``coverage < coverage_floor`` per (metric × cell) → red ``coverage-pipeline-failure``
+      * missing cell/metric/coverage, or ``coverage < coverage_floor``, per
+        (metric × cell) → red ``coverage-pipeline-failure``
       * ``api_errors > api_error_ceiling`` per cell → red ``coverage-operational-failure``
 
     See the module docstring for why coverage is per-metric but ``api_errors``
@@ -316,13 +317,51 @@ def check_operational_gates(
     for cell_id in b.cell_ids:
         cell = by_cell.get(cell_id)
         if not cell:
+            for metric in RAGAS_METRICS:
+                findings.append(
+                    GateFinding(
+                        severity="red",
+                        tag=TAG_COVERAGE_PIPELINE,
+                        metric=metric,
+                        cell=cell_id,
+                        message=(
+                            f"coverage unavailable for {metric} × {cell_id}; "
+                            "the expected RAGAS cell produced no rows"
+                        ),
+                    )
+                )
             continue
         for metric in RAGAS_METRICS:
             block = cell.get(metric)
             if block is None:
+                findings.append(
+                    GateFinding(
+                        severity="red",
+                        tag=TAG_COVERAGE_PIPELINE,
+                        metric=metric,
+                        cell=cell_id,
+                        message=(
+                            f"coverage unavailable for {metric} × {cell_id}; "
+                            "the expected metric aggregate is missing"
+                        ),
+                    )
+                )
                 continue
             coverage = block.get("coverage")
-            if coverage is not None and coverage < b.coverage_floor:
+            if coverage is None:
+                findings.append(
+                    GateFinding(
+                        severity="red",
+                        tag=TAG_COVERAGE_PIPELINE,
+                        metric=metric,
+                        cell=cell_id,
+                        message=(
+                            f"coverage unavailable for {metric} × {cell_id}; "
+                            "refusing a gate with no denominator"
+                        ),
+                    )
+                )
+            elif coverage < b.coverage_floor:
                 findings.append(
                     GateFinding(
                         severity="red",
@@ -336,7 +375,20 @@ def check_operational_gates(
                     )
                 )
         api_errors = _cell_api_errors(cell)
-        if api_errors is not None and api_errors > b.api_error_ceiling:
+        if api_errors is None:
+            findings.append(
+                GateFinding(
+                    severity="red",
+                    tag=TAG_COVERAGE_OPERATIONAL,
+                    metric="",
+                    cell=cell_id,
+                    message=(
+                        f"API-error count unavailable for {cell_id}; refusing "
+                        "an operational gate with no error telemetry"
+                    ),
+                )
+            )
+        elif api_errors > b.api_error_ceiling:
             findings.append(
                 GateFinding(
                     severity="red",

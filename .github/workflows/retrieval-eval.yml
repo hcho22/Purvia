@@ -235,7 +235,12 @@ jobs:
   # replays exact P2/P3 question/draft/context inputs, refuses runtime failures as
   # UNMEASURED, and surfaces both verdicts on a mismatch.
   #
-  # All eight are offline by construction - no DB, no secrets, no network, inputs
+  # The RAGAS scoring guard adds the ninth module: paid/provider calls are
+  # replaced by deterministic doubles while the real dataset mapping,
+  # partial/error handling, aggregation, dependency pin, and non-vacuous
+  # operational gate are exercised end to end.
+  #
+  # All nine are offline by construction - no DB, no secrets, no network, inputs
   # built in-process (the two gate modules drive fake judge clients, so there is
   # no network call to make) - which is what lets this job gate a PR without the
   # Supabase stack the two jobs below pay for. The rubric module's LIVE half
@@ -263,7 +268,7 @@ jobs:
 
       - name: Install Python deps
         run: |
-          # Same slim install as the eval job: all eight guard modules import only
+          # Same slim install as the eval job: all nine guard modules import only
           # what requirements-ci.txt already covers (asyncpg / httpx / openai /
           # pyyaml / pyjwt), never the ML stack. The rubric guard reaches
           # backend/escalation.py -> retrieval -> embeddings, which stays inside
@@ -274,13 +279,14 @@ jobs:
           pip install -r evals/retrieval/requirements-ci.txt
 
       - name: Run the offline harness guards
-        # No `|| true`, no skip-on-unset-env: these eight modules must always run
+        # No `|| true`, no skip-on-unset-env: these nine modules must always run
         # and a non-zero exit must block the merge. A guard that can go quiet is
         # the failure mode it exists to catch.
         run: |
           python -m evals.retrieval.test_empty_gold_guard
           python -m evals.retrieval.test_us120_generation_guard
           python -m evals.retrieval.test_judge_sdk_compat
+          python -m evals.retrieval.test_ragas_scoring
           python -m evals.retrieval.test_e7_answer_gate_parity
           python -m evals.permissions_scale.test_degenerate_guard
           python -m backend.test_answer_gate_rubric

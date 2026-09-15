@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-05-20
+- **Amended:** 2026-09-15 — real scoring adapter and non-vacuous gates shipped
 
 ## Context
 
@@ -36,12 +37,22 @@ custom Claude judge — explicitly **not** as a replacement.
   cross-family corroboration required for a red Faithfulness / Answer Relevancy
   regression; `single-judge-red` for Context Precision / Recall. The full
   rationale lives in `docs/evals.md` § "RAGAS comparison" → "Methodology".
+- The supported evaluator surface is RAGAS 0.4's collections API, pinned at
+  `ragas==0.4.3`; Answer Relevancy uses `text-embedding-3-small`. Collector rows
+  map to `EvaluationDataset` without changing repository question/cell identity.
+- Empty input/results and missing expected cells or metric aggregates are
+  UNMEASURED/non-green. Metric-level failures remain explicit NaNs in the
+  denominator so the fixed coverage gate, rather than a shrinking sample, owns
+  the verdict.
 
 ## Consequences
 
 - A weekly time series of RAGAS snapshots is committed to
   `docs/ragas-weekly/<DATE>.{json,md}`, giving the drift and score-regression
   gates the rolling history they compare against.
+- Pre-scorer snapshots through 2026-09-06 are retained as historical artifacts
+  but have no RAGAS rows/cells and are not measurement baselines. The workflow
+  rejects any new structurally empty snapshot before publication.
 - Cost is accepted and bounded: roughly 1,200 `gpt-4o-mini` calls per weekly
   run (well under $1), kept down by the hybrid-only, two-cell,
   weekly-not-nightly scoping.
