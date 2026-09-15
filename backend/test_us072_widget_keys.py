@@ -559,6 +559,9 @@ async def _run_integration() -> int:
 async def _run() -> None:
     unit = _run_unit()
     print(f"  ({unit} unit checks passed)")
+    if os.environ.get("PURVIA_OFFLINE_TESTS") == "1":
+        print("PASS: US-072 offline unit layer passed; live integration explicitly disabled")
+        return
     await _run_integration()
 
 

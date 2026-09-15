@@ -419,6 +419,10 @@ def _run() -> None:
     unit_total = run_unit_layer()
     print(f"OK: US-069 unit layer — {unit_total} assertions on the provisioning primitive")
 
+    if os.environ.get("PURVIA_OFFLINE_TESTS") == "1":
+        print("PASS: US-069 offline unit layer passed; live integration explicitly disabled")
+        return
+
     integ_total = asyncio.run(_run_integration())
     if integ_total is None:
         print(

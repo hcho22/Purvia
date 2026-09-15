@@ -415,6 +415,10 @@ def _run() -> None:
     unit_total = run_unit_layer()
     print(f"OK: US-068 unit layer — {unit_total} assertions on the minting primitive")
 
+    if os.environ.get("PURVIA_OFFLINE_TESTS") == "1":
+        print("PASS: US-068 offline unit layer passed; live integration explicitly disabled")
+        return
+
     integ_total = asyncio.run(_run_integration())
     if integ_total is None:
         print(
