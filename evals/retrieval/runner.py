@@ -918,8 +918,9 @@ ANSWER_JUDGE_TOOL = {
                     "lacks the information, cannot help, answers a different "
                     "question, supplies a fact adjacent to the question rather "
                     "than the value asked for (e.g. who pays when a fee amount "
-                    "was requested), or only reports that the requested value is "
-                    "case-by-case, discretionary, or unpublished."
+                    "was requested), merely restates RETRIEVED CONTEXT that does "
+                    "not contain the requested value, or only reports that the "
+                    "requested value is case-by-case, discretionary, or unpublished."
                 ),
             },
         },

@@ -197,6 +197,15 @@ _SHARED_RULES = {
     "accuracy of the deferral is irrelevant": (
         "however accurately or confidently the reply states that policy"
     ),
+    "an adjacent fact is not the asked value": (
+        "a fact ADJACENT to the question rather than the value asked for"
+    ),
+    "an absent context value cannot be supplied by restatement": (
+        "when the value asked for is absent from the RETRIEVED CONTEXT"
+    ),
+    "context restatement cannot invent the absent value": (
+        "merely restates what the CONTEXT does contain can be that value"
+    ),
 }
 
 _PROMPT_QUESTION = "How much is international return shipping?"
@@ -325,7 +334,13 @@ def test_both_tool_schemas_describe_the_disposition_case() -> None:
             offline_tool["input_schema"]["properties"]["answers"]["description"],
         ),
     ):
-        for fragment in ("case-by-case", "discretionary", "unpublished"):
+        for fragment in (
+            "case-by-case",
+            "discretionary",
+            "unpublished",
+            "fact adjacent to the question rather than the value asked for",
+            "RETRIEVED CONTEXT that does not contain the requested value",
+        ):
             _check(
                 fragment in description,
                 f"{what} must describe the issue-#104 disposition case "
