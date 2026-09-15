@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import tiktoken
-import yaml
+import yaml  # type: ignore[import-untyped]
 
 from backend.offline_test_bootstrap import (
     BlockedSocketPathError,

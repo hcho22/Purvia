@@ -32,10 +32,10 @@ def _install_local_tokenizer() -> None:
     )
     original = tiktoken.get_encoding
 
-    def get_encoding(name: str) -> tiktoken.Encoding:
-        if name == "cl100k_base":
+    def get_encoding(encoding_name: str) -> tiktoken.Encoding:
+        if encoding_name == "cl100k_base":
             return encoding
-        return original(name)
+        return original(encoding_name)
 
     tiktoken.get_encoding = get_encoding
 
@@ -74,7 +74,7 @@ def _install_python_socket_guards() -> None:
         raise _blocked("getaddrinfo")
 
     socket.create_connection = blocked_create_connection
-    socket.getaddrinfo = blocked_getaddrinfo
+    socket.getaddrinfo = blocked_getaddrinfo  # type: ignore[assignment]
 
 
 def install_offline_runtime() -> None:

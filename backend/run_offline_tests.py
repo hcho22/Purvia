@@ -19,6 +19,7 @@ from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parent
 
+
 class IntegrationDependency(str, Enum):
     LLAMA_CLOUD = "LlamaCloud credential and live API"
     OPENAI = "OpenAI credential and live API"
