@@ -26,6 +26,19 @@ Keying on the first alone made the send/escalate verdict ride on whether
 `gpt-4o-mini` happened to append "Therefore, I don't have that information" — an
 observed coin flip across runs of the same row.
 
+THE RESIDUAL THIS FILE PINS (issue #104-residual / the retrieved-context fix)
+-----------------------------------------------------------------------------
+The two deferral shapes above are both announced by the DRAFT's own wording. The
+third shape needs the RETRIEVED CONTEXT: a draft that states a fact ADJACENT to
+the question — who pays, when it is paid, that no fee is published — when the
+ASKED value itself is absent from the context. The draft is faithful and fluent,
+stays exactly on the asked subject, and volunteers no disclaimer, so the old
+rubric read the slot as filled. Both rubrics now receive the retrieved context
+and state the rule: when the value asked for is absent from the RETRIEVED
+CONTEXT, no draft that merely restates what the CONTEXT does contain can be that
+value. The `_CASES` rows below carry the corpus slice each draft was written
+from, and the live layer threads it into both implementations.
+
 A KNOWN LIMITATION of the issue-#104 clause
 -------------------------------------------
 The clause is stated UNCONDITIONALLY: a reply that only reports the answer is
@@ -348,13 +361,21 @@ def test_boot_warning_call_site_is_wired_to_the_widget_surface() -> None:
 
 # --- integration layer (skips cleanly without keys) ------------------------
 
-# question, draft, must_answer, why. The drafts are the ones actually observed in
-# the 2026-08-03 sweep and its local re-runs, not invented paraphrases.
-_CASES: list[tuple[str, str, str, bool, str]] = [
+# question, draft, context, must_answer, why. The drafts are the ones actually
+# observed in the 2026-08-03 sweep and its local re-runs, not invented
+# paraphrases. `context` is the RETRIEVED CONTEXT the draft would have been
+# written from (the corpus text a grounded drafter sees) — the adjacent-fact
+# residual (issue #104) only discriminates when the judge can see that the asked
+# value is absent from it, so each row carries the corpus slice its draft
+# restates.
+_CASES: list[tuple[str, str, str, str, bool, str]] = [
     (
         "p3-05 quoted-per-case",
         "What is the return shipping fee for a return over 20 lbs?",
         "The return shipping fee for returns over 20 lbs is quoted on a per-case basis.",
+        "US domestic returns use USPS or UPS Ground depending on package weight. "
+        "The deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns "
+        "5-20 lbs; quoted per-case for returns over 20 lbs.",
         False,
         "the corpus's own answer is a deferral; the customer still has no fee",
     ),
@@ -363,6 +384,8 @@ _CASES: list[tuple[str, str, str, bool, str]] = [
         "What is the return shipping fee for a return over 20 lbs?",
         "The return shipping fee for returns over 20 lbs is quoted per-case, meaning "
         "the specific amount is not fixed and will vary based on the situation.",
+        "The deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns "
+        "5-20 lbs; quoted per-case for returns over 20 lbs.",
         False,
         "same shape, restated at length; length must not buy a pass",
     ),
@@ -374,6 +397,9 @@ _CASES: list[tuple[str, str, str, bool, str]] = [
         "the discretion of customer service. Therefore, the warranty period for a "
         "book with a printing defect after 30 days is not specified and is subject "
         "to customer service judgment.",
+        "Books carry a 30-day warranty against printing defects (missing pages, "
+        "blurred ink, binding failure). Beyond 30 days, book warranty claims are at "
+        "the discretion of customer service.",
         False,
         "the second flavour: the document names a human decision-maker",
     ),
@@ -382,14 +408,41 @@ _CASES: list[tuple[str, str, str, bool, str]] = [
         "What is the warranty period for a book with a printing defect after 30 days?",
         "Books carry a 30-day warranty against printing defects. Beyond 30 days, "
         "book warranty claims are at the discretion of customer service.",
+        "Books carry a 30-day warranty against printing defects (missing pages, "
+        "blurred ink, binding failure). Beyond 30 days, book warranty claims are at "
+        "the discretion of customer service.",
         False,
         "THE REGRESSION GUARD: identical substance, no volunteered disclaimer. If "
         "this one passes, the gate is back to keying on the drafter's phrasing",
     ),
     (
+        "p3-10 adjacent fact: who pays is not the fee amount",
+        "What is the return shipping fee for an international return?",
+        "International returns are at the customer's expense.",
+        "The RMA includes a pre-paid shipping label for US domestic returns; "
+        "international returns are at the customer's expense unless the return is "
+        "for a wrong-item-shipped or damaged-in-transit case. The domestic "
+        "deduction is $7.95 under 5 lbs and $14.95 for 5-20 lbs.",
+        False,
+        "the draft faithfully states who pays, but the customer asked how much",
+    ),
+    (
+        "p3-04 adjacent fact: general warranty is not refurbished warranty",
+        "How long is the warranty on a refurbished electronics item?",
+        "Electronics carry a 12-month limited warranty against manufacturing defects.",
+        "Electronics carry a 12-month limited warranty against manufacturing defects. "
+        "Coverage excludes physical damage and unauthorized modifications; the "
+        "document does not mention refurbished items.",
+        False,
+        "the general electronics period is adjacent to, not an answer for, the "
+        "missing refurbished-item condition",
+    ),
+    (
         "announced ignorance (the original issue-#97 shape)",
         "What is the warranty period for jewelry?",
         "I don't have that information.",
+        "Electronics carry a 12-month limited warranty against manufacturing "
+        "defects. The warranty starts on the order's shipped_at date.",
         False,
         "the shape the gate was built for; must stay caught",
     ),
@@ -399,6 +452,8 @@ _CASES: list[tuple[str, str, str, bool, str]] = [
         "changed my mind about?",
         "The return shipping fee for an item between 5 and 20 pounds that you "
         "changed your mind about is $14.95.",
+        "The deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns "
+        "5-20 lbs; quoted per-case for returns over 20 lbs.",
         True,
         "OPPOSITE DIRECTION: a real published figure must still auto-resolve, so "
         "an over-tightened rubric fails here instead of quietly killing deflection",
@@ -407,18 +462,24 @@ _CASES: list[tuple[str, str, str, bool, str]] = [
         "answerable: a published warranty period",
         "How long is the electronics warranty?",
         "The electronics warranty is 12 months against manufacturing defects, "
-        "starting on the order's `shipped_at` date.",
+        "starting on the order's shipped_at date.",
+        "Electronics carry a 12-month limited warranty against manufacturing "
+        "defects. The warranty starts on the order's shipped_at date, not the "
+        "paid_at date.",
         True,
         "opposite direction, second instance",
     ),
     (
         "answerable: a published window",
         "Within how many days of the shipped_at date can I request a refund?",
-        "You may request a refund within 30 days of the order's `shipped_at` date.",
+        "You may request a refund within 30 days of the order's shipped_at date.",
+        "Customers may request a refund within 30 days of the order's shipped_at "
+        "date. Orders that have not shipped follow the cancellation policy instead.",
         True,
         "opposite direction, third instance",
     ),
     # KNOWN LIMITATION, pinned at CURRENT behaviour - not at desired behaviour.
+
     #
     # Here the disposition IS the requested information: the customer asked WHO
     # decides, and the draft tells them who. By invariant 8's own test - does the
@@ -445,6 +506,9 @@ _CASES: list[tuple[str, str, str, bool, str]] = [
         "Who decides a book warranty claim after 30 days?",
         "Beyond 30 days, book warranty claims are decided by customer service, at "
         "their discretion.",
+        "Books carry a 30-day warranty against printing defects (missing pages, "
+        "blurred ink, binding failure). Beyond 30 days, book warranty claims are at "
+        "the discretion of customer service.",
         False,
         "the customer asked WHO decides and the draft says who, so invariant 8's "
         "test says auto-send; the unconditional issue-#104 clause escalates it "
@@ -521,7 +585,7 @@ def test_live_rubric_discrimination() -> None:
 
     failures: list[str] = []
 
-    Judge = Callable[[str, str], Awaitable[tuple[bool, bool]]]
+    Judge = Callable[[str, str, str], Awaitable[tuple[bool, bool]]]
 
     def _build_impls() -> list[tuple[str, Judge]]:
         impls: list[tuple[str, Judge]] = []
@@ -530,7 +594,9 @@ def test_live_rubric_discrimination() -> None:
 
             oc = AsyncOpenAI(api_key=openai_key)
 
-            async def runtime(question: str, draft: str) -> tuple[bool, bool]:
+            async def runtime(
+                question: str, context: str, draft: str
+            ) -> tuple[bool, bool]:
                 # `answer_gate` fails CLOSED, so an expired key, a rate limit, a
                 # timeout or a network blip all return answers=False - the same
                 # value a correct non-answer verdict returns. Reading only
@@ -539,7 +605,11 @@ def test_live_rubric_discrimination() -> None:
                 # invariant-12 shape the project forbids. The structured failure
                 # signal separates the two, independently of diagnostic wording.
                 decision = await answer_gate(
-                    oc, question, draft, DEFAULT_ANSWER_CUTOFF
+                    oc,
+                    question,
+                    draft,
+                    DEFAULT_ANSWER_CUTOFF,
+                    context=context,
                 )
                 return decision.answers, decision.judge_failed
 
@@ -572,8 +642,10 @@ def test_live_rubric_discrimination() -> None:
                 # The offline mirror RAISES on a failed/unparseable judge call
                 # rather than failing closed, so it cannot silently report a dead
                 # judge as a verdict and never needs a failure tag.
-                async def offline(question: str, draft: str) -> tuple[bool, bool]:
-                    return await judge_answering(ac, question, draft), False
+                async def offline(
+                    question: str, context: str, draft: str
+                ) -> tuple[bool, bool]:
+                    return await judge_answering(ac, question, context, draft), False
 
                 impls.append(("offline", offline))
         return impls
@@ -590,10 +662,10 @@ def test_live_rubric_discrimination() -> None:
             f"{get_judge_model()!r} at temperature {get_judge_temperature()!r}"
         )
 
-        for label, question, draft, must_answer, why in _CASES:
+        for label, question, draft, context, must_answer, why in _CASES:
             for impl_name, judge in impls:
                 results = await asyncio.gather(
-                    *[judge(question, draft) for _ in range(_REPS)]
+                    *[judge(question, context, draft) for _ in range(_REPS)]
                 )
 
                 # A judge that was called and failed measured NOTHING, so this case

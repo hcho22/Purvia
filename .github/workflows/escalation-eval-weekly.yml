@@ -124,10 +124,12 @@ jobs:
         run: |
           python -m db_seed.corpus_seed
           # The FULL sweep: deterministic P1a + P1b (+ the US-058 non-disclosure
-          # assertion) AND the LLM-judged P2/P3 legs + the knob sweep. The runner
+          # assertion) AND the LLM-judged P2/P3 legs + runtime/offline answer-gate
+          # parity + the knob sweep. The runner
           # exits 1 on any PINNED safety invariant — a P1a/P1b gate clear, a
-          # non-disclosure byte mismatch, or a consolidated false-resolve rate above
-          # the buyer's ceiling — but writes the JSON + markdown FIRST, so a snapshot
+          # non-disclosure byte mismatch, an answer-gate parity mismatch/unmeasured
+          # runtime judge, or a consolidated false-resolve rate above the buyer's
+          # ceiling — but writes the JSON + markdown FIRST, so a snapshot
           # is publishable for any failure ON THE GATE PATH. It is NOT a guarantee
           # that a snapshot exists: anything that kills the process before scoring
           # (a bad API key, a seed failure) produces none, which the snapshot check
@@ -137,7 +139,7 @@ jobs:
           # logging goes to stderr and stays in the workflow log.
           set +e
           python -m evals.retrieval.e7_runner \
-            --include-p1b --include-p2 --include-p3 --sweep \
+            --include-p1b --include-p2 --include-p3 --include-parity --sweep \
             --out /tmp/e7-weekly.json | tee /tmp/e7-weekly.md
           code=${PIPESTATUS[0]}
           set -e

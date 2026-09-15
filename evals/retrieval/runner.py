@@ -854,43 +854,51 @@ async def judge_answer(
 # gate too or every grounded P3 deferral scores as a false-resolve (issue #96).
 # It is deliberately the OFFLINE cross-family Claude judge (like `judge_answer`),
 # NOT the runtime one-call `answer_gate` — so the E7 measurement stays independent
-# of the very gate it validates. Like the runtime gate it compares the QUESTION
-# against the DRAFT only (grounding is `judge_answer`'s job), so it needs neither
-# the reference nor the retrieved context.
+# of the very gate it validates. Like the runtime gate it receives the QUESTION,
+# the DRAFT, and the RETRIEVED CONTEXT the draft was written from (the issue-
+# #104-residual widening): the context is what lets both judges check that the
+# ASKED slot was filled rather than that the draft is merely about the topic —
+# "who bears the cost" is not "how much the cost is". It is still NOT a grounding
+# check — grounding is `judge_answer`'s job.
 #
 # Issue #104: the rubric below is the OFFLINE mirror of
 # `escalation._ANSWER_JUDGE_SYSTEM_PROMPT` and the two must be changed in LOCKSTEP
 # — a drift between them silently makes the weekly E7 false-resolve number a
 # measurement of something the buyer does not ship. The "case-by-case /
-# discretionary / unpublished" sentence is the issue-#104 addition; the rationale
-# for it lives in full at that runtime prompt's block comment. The independence
+# discretionary / unpublished" and "ADJACENT fact / absent-from-CONTEXT" rules
+# must move together; the rationale for both lives in full at the runtime
+# prompt's block comment. The independence
 # that makes this a *mirror* rather than the same object is deliberate, but it is
 # NOT free: it is what let the two implementations disagree unnoticed until the
 # 2026-08-03 sweep.
 #
-# `backend/test_answer_gate_rubric.test_both_rubrics_state_every_shared_rule` now
-# guards that drift, gated per-PR by the `eval-harness-guards` job. Know its exact
-# scope before leaning on it: it asserts rule PRESENCE in each rubric against the
-# hand-curated `_SHARED_RULES` list, NOT textual parity. So it catches a rule
-# DROPPED from one side and it does NOT catch a rule ADDED to only one - a rule
-# nobody has entered in `_SHARED_RULES` is a rule it cannot see. That residual is
-# the remaining by-hand obligation: a new rule goes into this prompt, the runtime
-# prompt, AND `_SHARED_RULES`, in the same change.
+# `backend/test_answer_gate_rubric` exercises both implementations against the
+# same labelled live cases when keys are available, while the weekly parity leg
+# replays identical question/draft/context inputs and pins agreement. The older
+# `_SHARED_RULES` source check remains narrow, but prompt text is not treated as
+# behavioral proof: the live cases and parity result are the executable contract.
 ANSWER_JUDGE_PROMPT_TEMPLATE = (
     "You are a strict answer-completeness judge for an automated customer-support "
-    "reply. You are given the customer's QUESTION and a draft ANSWER. Decide "
-    "whether the ANSWER actually answers the QUESTION — that it provides the "
-    "specific information the customer asked for. A reply that says it does not "
-    "have the information, that it cannot help, that it is unsure, that it defers "
-    "the customer to a human, or that answers only a DIFFERENT question than the "
-    "one asked, does NOT answer the question. A reply that only tells the customer "
-    "the answer is quoted case-by-case, is set at someone's discretion, is decided "
-    "by staff, or is otherwise not published does NOT answer the question either: "
-    "the customer still does not have the specific information they asked for, "
-    "however accurately or confidently the reply states that policy. Judge ONLY "
+    "reply. You are given the customer's QUESTION, a draft ANSWER, and the "
+    "RETRIEVED CONTEXT the answer was drafted from. Decide whether the ANSWER "
+    "actually answers the QUESTION — that it provides the specific information the "
+    "customer asked for. A reply that says it does not have the information, that "
+    "it cannot help, that it is unsure, that it defers the customer to a human, "
+    "or that answers only a DIFFERENT question than the one asked, does NOT "
+    "answer the question. A reply that only tells the customer the answer is "
+    "quoted case-by-case, is set at someone's discretion, is decided by staff, or "
+    "is otherwise not published does NOT answer the question either: the customer "
+    "still does not have the specific information they asked for, however "
+    "accurately or confidently the reply states that policy. A reply that supplies "
+    "a fact ADJACENT to the question rather than the value asked for does NOT "
+    "answer the question either: when a customer asks for a fee amount, a draft "
+    "that states who pays or that no fee is published has not supplied a fee, and "
+    "when the value asked for is absent from the RETRIEVED CONTEXT, no draft that "
+    "merely restates what the CONTEXT does contain can be that value. Judge ONLY "
     "whether the question is "
     "answered — not grounding, tone, or politeness (a blunt but responsive answer "
     "still answers; a warm apology that gives no information does not).\n\n"
+    "CONTEXT:\n{context}\n\n"
     "QUESTION:\n{question}\n\n"
     "ANSWER:\n{answer}\n\n"
     "Submit your verdict via the submit_answering tool."
@@ -908,7 +916,9 @@ ANSWER_JUDGE_TOOL = {
                     "True iff the ANSWER actually answers the QUESTION with the "
                     "specific information requested; False if it defers, says it "
                     "lacks the information, cannot help, answers a different "
-                    "question, or only reports that the requested value is "
+                    "question, supplies a fact adjacent to the question rather "
+                    "than the value asked for (e.g. who pays when a fee amount "
+                    "was requested), or only reports that the requested value is "
                     "case-by-case, discretionary, or unpublished."
                 ),
             },
@@ -921,14 +931,17 @@ ANSWER_JUDGE_TOOL = {
 async def judge_answering(
     anthropic_client: Any,
     question: str,
+    context: str,
     answer: str,
 ) -> bool:
     """Score whether `answer` actually answers `question` via Claude. Returns a bool.
 
     The OFFLINE cross-family mirror of the runtime `escalation.answer_gate` (issue
     #97): tool-use rather than freeform JSON guarantees a schema-validated boolean.
-    Sees only the QUESTION and the DRAFT — grounding is `judge_answer`'s concern,
-    exactly as the runtime answer gate keeps the two dimensions orthogonal.
+    Receives the QUESTION, the DRAFT, and the RETRIEVED CONTEXT the draft was
+    written from, so it can check the ASKED slot was filled (issue #104-residual);
+    it is still not a grounding check, which is `judge_answer`'s concern, exactly
+    as the runtime answer gate keeps the two dimensions orthogonal.
     """
     response = await anthropic_client.messages.create(
         model=JUDGE_MODEL,
@@ -940,7 +953,7 @@ async def judge_answering(
             {
                 "role": "user",
                 "content": ANSWER_JUDGE_PROMPT_TEMPLATE.format(
-                    question=question, answer=answer
+                    question=question, context=context, answer=answer
                 ),
             }
         ],

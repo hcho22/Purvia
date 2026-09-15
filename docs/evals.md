@@ -110,12 +110,16 @@ python -m evals.retrieval.runner --mode hybrid --reranker llm
 # which measured nothing refuses to publish a number for it, while a genuine miss
 # still scores 0.000.
 python -m evals.retrieval.test_empty_gold_guard          # authored gold (E4/E6 scorers)
+python -m evals.retrieval.test_us120_generation_guard    # truncated/empty generated answer guard
+python -m evals.retrieval.test_judge_sdk_compat          # offline judge dependency contract
 python -m evals.permissions_scale.test_degenerate_guard  # derived gold (scale runner)
 
 # Answer/faithfulness-gate guards (issue #104), offline for the same reason - the
 # two gate modules drive fake judge clients, and the rubric module reads the
 # eval-side rubric via `ast` rather than importing the runner. These three plus
-# the two above are the five modules the per-PR `eval-harness-guards` job runs.
+# the guards above and below are the eight modules the per-PR
+# `eval-harness-guards` job runs.
+python -m evals.retrieval.test_e7_answer_gate_parity     # exact-input offline/runtime parity; judge failure is UNMEASURED
 python -m backend.test_answer_gate_rubric   # runtime/offline answer rubrics stay in LOCKSTEP (§6)
 python -m backend.test_answer_gate          # answer gate: JUDGE_TEMPERATURE pin sent, fail-closed paths
 python -m backend.test_faithfulness_gate    # same for the faithfulness gate + the boot-warning scoping
@@ -286,7 +290,7 @@ Because the decision is pure arithmetic on cosine scores, a real verdict can't f
 
 ### Weekly sweep (LLM-judged, files an issue, never blocks a merge)
 
-The weekly workflow (`.github/workflows/escalation-eval-weekly.yml`, Sundays 06:00 UTC + `workflow_dispatch`) runs the **full** sweep — `e7_runner --include-p1b --include-p2 --include-p3 --sweep` — with the offline Claude judge, alongside the weekly RAGAS workflow.
+The weekly workflow (`.github/workflows/escalation-eval-weekly.yml`, Sundays 06:00 UTC + `workflow_dispatch`) runs the **full** sweep — `e7_runner --include-p1b --include-p2 --include-p3 --include-parity --sweep` — with the offline Claude judge, alongside the weekly RAGAS workflow. The parity leg replays the exact question, draft, and rendered context already scored by the offline answer judge through the runtime answer gate once per eligible P2/P3 row. It is additive rather than scored into the false-resolve rate: a mismatch fails the weekly, and a missing input or runtime judge failure is **UNMEASURED**, never a false agreement with the runtime gate's fail-closed `answers=False`.
 It publishes a snapshot to `docs/escalation-weekly/<DATE>.{json,md}`.
 A judge wobble must never red-bar an innocent merge, so this **never blocks**; on a red verdict it files one deduped GitHub issue and fails the *scheduled* workflow so a maintainer is paged.
 
@@ -297,8 +301,7 @@ In either case the runner exits non-zero rather than reporting green with the pi
 
 The positive control only catches **total** dilution — a leg where *every* row is mislabeled (or empty), so zero rows exercise the gate and the rate is `None` or a vacuous 0%.
 A leg that is **heavily but not entirely** mislabeled still exercises ≥1 row, so it *passes* the positive control, yet it measures the false-resolve ceiling over a shrunken sample that can mask a bad content gate.
-On the main leg that path is **dormant today but reachable**, not permanently latent: at the default τ_sim of 0.4 (`backend/escalation.py`) all 9 P3 rows clear the retrieval gate, so the measured ratio is 0/9 and the guard never fires.
-Promote `ESCALATION_TAU_SIM` to 0.5 and the 5 rows measuring below it (`e7-p3-01` 0.4607, `e7-p3-02` 0.4214, `e7-p3-03` 0.4298, `e7-p3-07` 0.4234, `e7-p3-09` 0.4570) fall out at the retrieval gate, taking the ratio to **at least** 5/9 ≈ 56% — a lower bound, since rows can additionally fall out on `n_cleared < n_min` — over the default ceiling.
+In the original nine-row baseline that path was demonstrably reachable: at τ_sim=0.5 the five individually measured mid-band rows (`e7-p3-01` 0.4607, `e7-p3-02` 0.4214, `e7-p3-03` 0.4298, `e7-p3-07` 0.4234, `e7-p3-09` 0.4570) fell out at the retrieval gate, taking the ratio to 5/9 ≈ 56%. The set now has 11 rows: `e7-p3-12` and `e7-p3-13` widen the adjacent-fact/context-aware answer-gate cases and remain explicitly UNMEASURED until their first scheduled run records their own cosine, so the current ratio is not inferred from the nine-row baseline.
 The **mislabel-ratio guard** (issue #26) closes that partial case *on the main leg*: gated on the positive control passing, it fails the run when the mislabeled **fraction over the full presented P3 population** strictly exceeds `E7_P3_MISLABEL_RATIO_MAX` (default `0.5` — a majority-mislabeled P3 leg is a gold defect; override via that env var or the `--p3-mislabel-ratio-max` flag, an unparseable or out-of-range value failing **closed** so a misconfigured ceiling never reads as "no ceiling").
 The two guards partition the space cleanly — the positive control owns the empty / all-mislabeled cases (one clear failure reason each), the ratio guard owns the partial dilution.
 Both the gated `false_resolve_rate` and the surfaced `mislabel_ratio` (additive in the P3 result JSON) use the **full presented population** (`n_questions`) as the denominator, INCLUDING mislabeled rows, never the exercised-only subset: that is the operating-metric meaning ("of all unanswerable questions presented, what fraction did we wrongly auto-resolve") and it keeps the sum-based consolidated rate from mixing per-population denominators.

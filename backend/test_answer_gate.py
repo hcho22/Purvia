@@ -21,8 +21,11 @@ Covers:
     including a 400 that names `temperature`, whose remedy is the typed-out
     `JUDGE_TEMPERATURE=none` rather than anything inferred at call time;
   * the cutoff `>=` boundary, refusal / empty-choices / missing-payload
-    fail-closed paths, score clamping to [0,1], and that the QUESTION + DRAFT (but
-    NOT the chunks) reach the judge — grounding is the other gate's job.
+    fail-closed paths, score clamping to [0,1], and that the QUESTION + DRAFT +
+    RETRIEVED CONTEXT reach the judge — the context is there SOLELY so the judge
+    can check the ASKED slot (issue #104 residual: a fee AMOUNT requested is not
+    answered by who pays or that it is unpublished); grounding stays the other
+    gate's job, this gate never scores support.
 
 Run:
     python -m backend.test_answer_gate
@@ -50,6 +53,10 @@ from escalation import (  # noqa: E402
 
 CUTOFF = 0.5
 QUESTION = "What is the warranty period on a refurbished unit?"
+CONTEXT = (
+    "Refurbished units carry a 90-day warranty. Parts and labor are covered. "
+    "The full one-year warranty applies to new units only."
+)
 
 
 def _check(cond: bool, msg: str) -> None:
@@ -131,10 +138,13 @@ def _run(
     draft: str,
     *,
     question: str = QUESTION,
+    context: str = CONTEXT,
     cutoff: float = CUTOFF,
 ) -> tuple[AnswerDecision, _FakeJudge]:
     client, fake = _client(behavior)
-    decision = asyncio.run(answer_gate(client, question, draft, cutoff))
+    decision = asyncio.run(
+        answer_gate(client, question, draft, cutoff, context=context)
+    )
     return decision, fake
 
 
@@ -229,21 +239,31 @@ def test_score_clamped_to_unit_interval() -> None:
     print("ok: judge score clamped to [0,1] before the cutoff comparison")
 
 
-def test_question_and_draft_reach_the_judge() -> None:
-    """The judge receives the QUESTION and the DRAFT (so a 'zero' isn't a
-    structurally-blind pass), under the AnswerJudgment schema — and grounding is
-    NOT this gate's concern, so no chunk context is threaded here."""
+def test_question_draft_and_context_reach_the_judge() -> None:
+    """The judge receives the QUESTION, the DRAFT, and the RETRIEVED CONTEXT.
+
+    The context exists so the judge can check the ASKED slot was actually
+    filled (issue #104 residual: "who pays" is not "how much the fee is"; a
+    value absent from the context cannot appear in a faithful draft). Grounding
+    is still NOT this gate's concern — the faithfulness gate owns support — but
+    the context must be present or the residual-check is structurally blind.
+    """
     _, fake = _run(_judgment(True, 0.9), "Refurbished units carry a 90-day warranty.")
     comp = cast(_FakeCompletions, fake.chat.completions)
     messages = comp.messages_used or []
     user = next((m["content"] for m in messages if m["role"] == "user"), "")
+    _check("CONTEXT:" in user, "the gate prompt must carry a CONTEXT block")
+    _check(CONTEXT in user, "the retrieved context must reach the judge prompt")
     _check(QUESTION in user, "the customer question must be in the judge prompt")
     _check("90-day warranty" in user, "the draft must be in the judge prompt")
     _check(
         comp.response_format_used is AnswerJudgment,
         "the gate must request the AnswerJudgment schema (not FaithfulnessJudgment)",
     )
-    print("ok: question + draft reach the judge under the AnswerJudgment schema")
+    print(
+        "ok: question + draft + retrieved context reach the judge under the "
+        "AnswerJudgment schema"
+    )
 
 
 def test_judge_sampling_is_pinned_deterministic() -> None:
@@ -374,7 +394,7 @@ def main() -> int:
         test_cutoff_is_inclusive_and_enforced,
         test_refusal_and_malformed_responses_fail_closed,
         test_score_clamped_to_unit_interval,
-        test_question_and_draft_reach_the_judge,
+        test_question_draft_and_context_reach_the_judge,
         test_judge_sampling_is_pinned_deterministic,
         test_reasoning_effort_reaches_this_gate,
         test_every_judge_failure_fails_closed_in_one_call,
