@@ -1,6 +1,6 @@
 # E7 weekly escalation snapshots
 
-`<DATE>.md` and `<DATE>.json` in this directory are **generated** by `.github/workflows/escalation-eval-weekly.yml` (Sundays 06:00 UTC + `workflow_dispatch`) from `evals.retrieval.e7_runner --include-p1b --include-p2 --include-p3 --sweep`.
+`<DATE>.md` and `<DATE>.json` in this directory are **generated** by `.github/workflows/escalation-eval-weekly.yml` (Sundays 06:00 UTC + `workflow_dispatch`) from `evals.retrieval.e7_runner --include-p1b --include-p2 --include-p3 --include-parity --sweep`.
 They are the run's verbatim record, so they are never hand-edited, not even to correct a claim a later change proved wrong.
 Corrections go here instead, as dated errata.
 The full treatment of what the snapshots contain and which numbers are pinned lives in `docs/evals.md` § 6.
