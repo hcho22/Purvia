@@ -115,8 +115,8 @@ python -m evals.retrieval.test_judge_sdk_compat          # offline judge depende
 python -m evals.permissions_scale.test_degenerate_guard  # derived gold (scale runner)
 
 # Answer/faithfulness-gate guards (issue #104), offline for the same reason - the
-# two gate modules drive fake judge clients, and the rubric module reads the
-# eval-side rubric via `ast` rather than importing the runner. These three plus
+# gate modules drive fake judge clients, and the rubric module invokes both judge
+# entry points and inspects their emitted prompts and schemas. These three plus
 # the guards above and below are the eight modules the per-PR
 # `eval-harness-guards` job runs.
 python -m evals.retrieval.test_e7_answer_gate_parity     # exact-input offline/runtime parity; judge failure is UNMEASURED

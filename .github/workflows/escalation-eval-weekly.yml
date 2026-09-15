@@ -121,6 +121,15 @@ jobs:
           DATABASE_URL: ${{ env.DB_URL }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          JUDGE_PROVIDER: ${{ vars.JUDGE_PROVIDER }}
+          JUDGE_API_KEY: ${{ secrets.JUDGE_API_KEY }}
+          JUDGE_BASE_URL: ${{ vars.JUDGE_BASE_URL }}
+          JUDGE_AZURE_OPENAI_ENDPOINT: ${{ vars.JUDGE_AZURE_OPENAI_ENDPOINT }}
+          JUDGE_AZURE_OPENAI_API_VERSION: ${{ vars.JUDGE_AZURE_OPENAI_API_VERSION }}
+          JUDGE_AZURE_OPENAI_DEPLOYMENT: ${{ vars.JUDGE_AZURE_OPENAI_DEPLOYMENT }}
+          JUDGE_MODEL: ${{ vars.JUDGE_MODEL }}
+          JUDGE_TEMPERATURE: ${{ vars.JUDGE_TEMPERATURE }}
+          JUDGE_REASONING_EFFORT: ${{ vars.JUDGE_REASONING_EFFORT }}
         run: |
           python -m db_seed.corpus_seed
           # The FULL sweep: deterministic P1a + P1b (+ the US-058 non-disclosure
@@ -428,6 +437,29 @@ jobs:
                 (if (.e7_p1b_non_disclosure.passed == false) then
                   "- **P1b non-disclosure leak**: a no-access customer output differs from the generic deferral ("
                   + ((.e7_p1b_non_disclosure.n_leaks // 0)|tostring) + " row(s))."
+                else empty end),
+                (if ([.e7_answer_gate_parity.checks[]?
+                     | select(.matches == false)] | length) > 0 then
+                  "- **Answer-gate parity mismatch** (overall status "
+                  + ((.e7_answer_gate_parity.status // "unknown") | ascii_upcase)
+                  + "): "
+                  + ([.e7_answer_gate_parity.checks[]
+                      | select(.matches == false)
+                      | "`\(.question_id)` (offline=\(.offline_answered), runtime=\(.runtime_answered))"]
+                     | join(", "))
+                  + "."
+                else empty end),
+                (if (.e7_answer_gate_parity.status == "unmeasured") then
+                  "- **Answer-gate parity UNMEASURED**: "
+                  + (if (.e7_answer_gate_parity.n_eligible // 0) == 0 then
+                       "zero eligible rows reached the runtime replay"
+                     else
+                       ([.e7_answer_gate_parity.checks[]
+                         | select(.matches == null)
+                         | "`\(.question_id)` (\(.error // "unknown"))"]
+                        | join(", "))
+                     end)
+                  + "."
                 else empty end)
               ] | join("\n")
             ' /tmp/e7-weekly.json)
@@ -472,6 +504,18 @@ jobs:
           echo "E7 runner exited 1 — a pinned safety invariant fired (false-resolve"
           echo "ceiling breach, a P3 leg that never exercised the faithfulness gate"
           echo "(empty or all-mislabeled), a P1a/P1b gate clear, or a non-disclosure"
-          echo "mismatch)."
+          echo "mismatch, or answer-gate parity failure/UNMEASURED status)."
+          parity_status=$(jq -r '.e7_answer_gate_parity.status // "not-run"' /tmp/e7-weekly.json)
+          echo "Answer-gate parity status: ${parity_status}"
+          jq -r '.e7_answer_gate_parity as $parity
+            | (if $parity.status == "unmeasured" and ($parity.n_eligible // 0) == 0 then
+                 "Parity UNMEASURED: zero eligible rows reached the runtime replay"
+               else empty end),
+              ($parity.checks[]?
+               | if .matches == false then
+                   "Parity mismatch: \(.question_id) — offline=\(.offline_answered), runtime=\(.runtime_answered)"
+                 elif .matches == null then
+                   "Parity UNMEASURED: \(.question_id) — \(.error // "unknown")"
+                 else empty end)' /tmp/e7-weekly.json
           echo "The finding has been filed as a GitHub issue; failing the workflow."
           exit 1

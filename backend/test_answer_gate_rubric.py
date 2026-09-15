@@ -86,10 +86,10 @@ What that costs, stated plainly:
     from the provider rather than from the rubric. It fails the test either way,
     because both causes need looking at and neither should be retried away.
 
-The offline half stays fixture-free in a different sense: it reads the two rubric
-strings out of the source and asserts they carry the same rules. That needs no
-model at all, so it runs in the always-on layer and is what actually catches the
-two implementations drifting apart.
+The offline half stays fixture-free in a different sense: recording fake clients
+invoke both judge entry points and assert that the final emitted prompts and tool
+schemas carry the same rules. That needs no model at all, so it runs in the
+always-on layer and catches both rubric drift and an unwired prompt literal.
 
 Layers (the project convention — see CLAUDE.md "How to test"):
   * unit layer, ALWAYS runs, no network/keys/DB: rubric lockstep + rule presence,
@@ -108,6 +108,7 @@ import ast
 import asyncio
 import os
 import sys
+import types
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
@@ -115,7 +116,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from escalation import (  # noqa: E402
-    _ANSWER_JUDGE_SYSTEM_PROMPT,
     _non_answer,
     AnswerJudgment,
     DEFAULT_ANSWER_CUTOFF,
@@ -123,15 +123,10 @@ from escalation import (  # noqa: E402
     get_judge_model,
     get_judge_temperature,
 )
+from evals.retrieval.runner import judge_answering  # noqa: E402
 
 # How many times each live case is judged. Every case must come back UNANIMOUS.
 _REPS = 3
-
-# The offline mirror lives in the evals package, which pulls in asyncpg / yaml /
-# jwt at import time — dependencies the backend unit layer must not require. Read
-# its rubric out of the source with `ast` instead: these are plain literals, so
-# this needs nothing but the stdlib and still reads the REAL shipped text.
-_RUNNER_SRC = ROOT / "evals" / "retrieval" / "runner.py"
 
 # The app's own source, read the same way again for the boot-warning CALL-SITE
 # check below. Read, never imported: `main` pulls the ML stack and the whole
@@ -147,29 +142,6 @@ _WIDGET_SURFACE_ENV = "SUPABASE_SERVICE_ROLE_KEY"
 def _check(cond: bool, msg: str) -> None:
     if not cond:
         raise AssertionError(msg)
-
-
-def _literal_from_source(path: Path, name: str) -> Any:
-    """Evaluate a module-level literal assignment without importing the module."""
-    for node in ast.parse(path.read_text(encoding="utf-8")).body:
-        if isinstance(node, ast.Assign) and any(
-            isinstance(t, ast.Name) and t.id == name for t in node.targets
-        ):
-            return ast.literal_eval(node.value)
-    raise AssertionError(f"{name} not found as a literal assignment in {path}")
-
-
-def _offline_rubric() -> str:
-    return _literal_from_source(_RUNNER_SRC, "ANSWER_JUDGE_PROMPT_TEMPLATE")
-
-
-def _offline_tool_description() -> str:
-    tool = _literal_from_source(_RUNNER_SRC, "ANSWER_JUDGE_TOOL")
-    return tool["input_schema"]["properties"]["answers"]["description"]
-
-
-def _runtime_tool_description() -> str:
-    return AnswerJudgment.model_fields["answers"].description or ""
 
 
 def _calls_to(path: Path, func_name: str) -> list[ast.Call]:
@@ -227,6 +199,71 @@ _SHARED_RULES = {
     ),
 }
 
+_PROMPT_QUESTION = "How much is international return shipping?"
+_PROMPT_CONTEXT = "International returns are at the customer's expense."
+_PROMPT_DRAFT = "The customer pays for international return shipping."
+
+
+class _RecordingRuntimeCompletions:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
+    async def parse(self, **kwargs: Any) -> Any:
+        self.calls.append(kwargs)
+        message = types.SimpleNamespace(
+            parsed=AnswerJudgment(answers=True, score=1.0), refusal=None
+        )
+        return types.SimpleNamespace(
+            choices=[types.SimpleNamespace(message=message)]
+        )
+
+
+class _RecordingAnthropicMessages:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
+    async def create(self, **kwargs: Any) -> Any:
+        self.calls.append(kwargs)
+        block = types.SimpleNamespace(
+            type="tool_use", name="submit_answering", input={"answers": True}
+        )
+        return types.SimpleNamespace(content=[block])
+
+
+def _capture_runtime_call() -> dict[str, Any]:
+    completions = _RecordingRuntimeCompletions()
+    client = types.SimpleNamespace(
+        chat=types.SimpleNamespace(completions=completions)
+    )
+    decision = asyncio.run(
+        answer_gate(
+            client,
+            _PROMPT_QUESTION,
+            _PROMPT_DRAFT,
+            DEFAULT_ANSWER_CUTOFF,
+            context=_PROMPT_CONTEXT,
+        )
+    )
+    _check(decision.answers, f"recording runtime judge did not pass: {decision!r}")
+    _check(len(completions.calls) == 1, "runtime rubric capture must make one call")
+    return completions.calls[0]
+
+
+def _capture_offline_call() -> dict[str, Any]:
+    messages = _RecordingAnthropicMessages()
+    client = types.SimpleNamespace(messages=messages)
+    verdict = asyncio.run(
+        judge_answering(
+            client,
+            _PROMPT_QUESTION,
+            _PROMPT_CONTEXT,
+            _PROMPT_DRAFT,
+        )
+    )
+    _check(verdict is True, f"recording offline judge returned {verdict!r}")
+    _check(len(messages.calls) == 1, "offline rubric capture must make one call")
+    return messages.calls[0]
+
 
 # --- unit layer (always runs) ---------------------------------------------
 
@@ -240,8 +277,17 @@ def test_both_rubrics_state_every_shared_rule() -> None:
     E7 false-resolve number into a measurement of something the buyer does not
     ship, which is how the two were found disagreeing on 5 of 17 probes.
     """
-    runtime = _ANSWER_JUDGE_SYSTEM_PROMPT
-    offline = _offline_rubric()
+    runtime_call = _capture_runtime_call()
+    offline_call = _capture_offline_call()
+    runtime = "\n".join(message["content"] for message in runtime_call["messages"])
+    offline = "\n".join(message["content"] for message in offline_call["messages"])
+    for label, value in (
+        ("question", _PROMPT_QUESTION),
+        ("context", _PROMPT_CONTEXT),
+        ("draft", _PROMPT_DRAFT),
+    ):
+        _check(value in runtime, f"runtime emitted prompt lost the {label}")
+        _check(value in offline, f"offline emitted prompt lost the {label}")
     for label, fragment in _SHARED_RULES.items():
         _check(
             fragment in runtime,
@@ -261,9 +307,23 @@ def test_both_tool_schemas_describe_the_disposition_case() -> None:
     """The structured-output description the model reads must agree with the
     rubric, in both implementations — a schema that still says a deferral counts
     as an answer would pull against the prompt."""
+    runtime_call = _capture_runtime_call()
+    offline_call = _capture_offline_call()
+    runtime_schema = runtime_call["response_format"]
+    offline_tool = offline_call["tools"][0]
+    _check(
+        offline_call["tool_choice"] == {"type": "tool", "name": "submit_answering"},
+        f"offline judge must force submit_answering, got {offline_call['tool_choice']!r}",
+    )
     for what, description in (
-        ("runtime AnswerJudgment.answers", _runtime_tool_description()),
-        ("offline submit_answering.answers", _offline_tool_description()),
+        (
+            "runtime AnswerJudgment.answers",
+            runtime_schema.model_fields["answers"].description or "",
+        ),
+        (
+            "offline submit_answering.answers",
+            offline_tool["input_schema"]["properties"]["answers"]["description"],
+        ),
     ):
         for fragment in ("case-by-case", "discretionary", "unpublished"):
             _check(
@@ -615,21 +675,8 @@ def test_live_rubric_discrimination() -> None:
 
             impls.append(("runtime", runtime))
         if anthropic_key:
-            # BOTH imports are guarded, not just `anthropic`. The offline mirror is
-            # only imported HERE, inside the live layer, so the always-run unit
-            # layer above never needs the eval deps - but `evals.retrieval.runner`
-            # itself pulls asyncpg / yaml / jwt at module scope, so leaving it
-            # outside the guard would let a missing EVAL dep raise an uncaught
-            # ImportError that aborts the whole module, taking the always-run unit
-            # layer's result reporting down with it. That is the invariant-12 shape
-            # this file argues hardest against, so the promise in the docstring -
-            # "skips cleanly when a key or package is absent" - has to cover every
-            # package the half needs, not just the first one.
             try:
                 import anthropic
-
-                sys.path.insert(0, str(ROOT))
-                from evals.retrieval.runner import judge_answering
             except ImportError as exc:
                 print(
                     "note: ANTHROPIC_API_KEY is set but the OFFLINE mirror's "

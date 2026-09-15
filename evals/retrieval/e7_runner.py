@@ -141,6 +141,7 @@ from escalation import (  # noqa: E402
     get_judge_model,
     retrieval_gate,
 )
+from model_config import ProviderConfig, build_openai_client  # noqa: E402
 from retrieval import (  # noqa: E402
     DEFAULT_TOP_K,
     SearchDocumentsResult,
@@ -3512,6 +3513,11 @@ async def amain() -> int:
         anon_key,
     )
     openai_client = AsyncOpenAI(api_key=openai_api_key)
+    runtime_judge_client = (
+        build_openai_client(ProviderConfig.from_env("judge"))
+        if args.include_parity
+        else None
+    )
     started_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
     # US-057: P1b infrastructure (the DB-backed no-access replay). Resolved only
@@ -3710,9 +3716,10 @@ async def amain() -> int:
                 async def runtime_answer_gate(
                     question: str, context: str, draft_text: str
                 ) -> tuple[bool, bool]:
+                    assert runtime_judge_client is not None
                     try:
                         judged = await answer_gate(
-                            openai_client,
+                            runtime_judge_client,
                             question,
                             draft_text,
                             config.answer_cutoff,

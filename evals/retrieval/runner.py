@@ -874,9 +874,9 @@ async def judge_answer(
 #
 # `backend/test_answer_gate_rubric` exercises both implementations against the
 # same labelled live cases when keys are available, while the weekly parity leg
-# replays identical question/draft/context inputs and pins agreement. The older
-# `_SHARED_RULES` source check remains narrow, but prompt text is not treated as
-# behavioral proof: the live cases and parity result are the executable contract.
+# replays identical question/draft/context inputs and pins agreement. Its offline
+# `_SHARED_RULES` check invokes both judge entry points and inspects their emitted
+# prompts; the live cases and parity result remain the behavioral contract.
 ANSWER_JUDGE_PROMPT_TEMPLATE = (
     "You are a strict answer-completeness judge for an automated customer-support "
     "reply. You are given the customer's QUESTION, a draft ANSWER, and the "

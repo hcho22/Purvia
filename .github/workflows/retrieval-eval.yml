@@ -170,7 +170,7 @@ jobs:
             guards:
               - 'evals/retrieval/**'
               - 'evals/permissions_scale/**'
-              # The answer-gate rubric guard reads BOTH rubrics, so a change to
+              # The answer-gate rubric guard executes BOTH rubrics, so a change to
               # either implementation must trigger it - the whole point is to
               # catch the two drifting apart (AGENTS.md invariant 8). The
               # eval-side rubric lives under evals/retrieval/ above.
@@ -239,9 +239,9 @@ jobs:
   # built in-process (the two gate modules drive fake judge clients, so there is
   # no network call to make) - which is what lets this job gate a PR without the
   # Supabase stack the two jobs below pay for. The rubric module's LIVE half
-  # skips cleanly when no API keys are present, and it reads the eval-side rubric
-  # via `ast` rather than importing evals.retrieval.runner, so only its offline
-  # half runs here. It is deliberately its own job so it still reports on a
+  # skips cleanly when no API keys are present; its deterministic fake clients
+  # execute both runtime and offline judge entry points and inspect the emitted
+  # prompts and schemas. It is deliberately its own job so it still reports on a
   # permissions-scale-only change, where `retrieval-eval` is skipped.
   eval-harness-guards:
     name: Eval-harness guards (offline, deterministic, may block)
