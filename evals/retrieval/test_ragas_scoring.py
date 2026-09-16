@@ -46,9 +46,14 @@ from evals.retrieval.ragas import (  # noqa: E402
     score_with_ragas,
 )
 from evals.retrieval.ragas_gates import (  # noqa: E402
+    TAG_API_ERROR_DRIFT,
+    TAG_COVERAGE_DRIFT,
     TAG_COVERAGE_OPERATIONAL,
     TAG_COVERAGE_PIPELINE,
+    TAG_SINGLE_JUDGE_RED,
+    check_diagnostic_gates,
     check_operational_gates,
+    check_score_regressions,
 )
 from evals.retrieval.validate_ragas_snapshot import (  # noqa: E402
     InvalidRagasSnapshot,
@@ -405,6 +410,67 @@ def _gate_non_vacuity_check() -> None:
     print("  gates: missing structure or one failed metric/provider call is red")
 
 
+def _history_baseline_eligibility_check() -> None:
+    cell_id = "full_access:pre_filter"
+
+    def cell(
+        context_precision: float,
+        *,
+        coverage: float = 1.0,
+        api_errors: int = 0,
+    ) -> dict[str, dict[str, float | int]]:
+        return {
+            metric: {
+                "mean_strict": context_precision
+                if metric == "context_precision"
+                else 0.9,
+                "coverage": coverage,
+                "api_errors": api_errors,
+            }
+            for metric in RAGAS_METRICS
+        }
+
+    current = {
+        "ragas": {"aggregates": {"by_cell": {cell_id: cell(0.8)}}},
+        "aggregates": {},
+    }
+    eligible = {"by_cell": {cell_id: cell(0.9)}}
+    partial_low = {"by_cell": {cell_id: cell(0.4, coverage=0.5)}}
+    findings = check_score_regressions(
+        current,
+        [eligible for _ in range(4)] + [partial_low for _ in range(4)],
+        [],
+    )
+    assert any(
+        finding.tag == TAG_SINGLE_JUDGE_RED
+        and finding.metric == "context_precision"
+        for finding in findings
+    ), "partial low scores must not depress an eligible regression baseline"
+
+    insufficient = [eligible for _ in range(3)] + [partial_low]
+    assert check_score_regressions(current, insufficient, []) == []
+
+    provider_error = {"by_cell": {cell_id: cell(0.9, api_errors=1)}}
+    assert check_score_regressions(
+        current, [provider_error for _ in range(4)], []
+    ) == []
+
+    diagnostic_current = {
+        "by_cell": {cell_id: cell(0.8, coverage=0.8, api_errors=1)}
+    }
+    missing = {"by_cell": {}}
+    assert check_diagnostic_gates(
+        diagnostic_current, [eligible, missing, missing, missing]
+    ) == []
+
+    diagnostic_findings = check_diagnostic_gates(
+        diagnostic_current, [eligible, eligible, eligible, missing]
+    )
+    assert any(f.tag == TAG_COVERAGE_DRIFT for f in diagnostic_findings)
+    assert any(f.tag == TAG_API_ERROR_DRIFT for f in diagnostic_findings)
+    print("  history: only enough complete zero-error runs form a baseline")
+
+
 def _snapshot_publishability_check() -> None:
     rows = [
         RagasRow(
@@ -500,6 +566,7 @@ async def amain() -> int:
     await _mapping_partial_and_error_check()
     await _empty_and_malformed_checks()
     _gate_non_vacuity_check()
+    _history_baseline_eligibility_check()
     _snapshot_publishability_check()
     _dependency_contract_check()
     print("\nPASS: RAGAS scoring emits real-shaped rows and cannot pass empty")

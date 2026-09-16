@@ -265,24 +265,57 @@ def _cell_api_errors(cell: dict[str, Any]) -> int | None:
     Returns ``None`` for a cell with no metric blocks.
     """
     for block in cell.values():
+        if not isinstance(block, dict):
+            continue
         err = block.get("api_errors")
         if err is not None:
             return err
     return None
 
 
-def _collect_metric_history(
-    history: list[dict[str, Any]], cell_id: str, metric: str, key: str
-) -> list[float]:
-    """Collect a per-(cell × metric) numeric field across prior snapshots.
+def _eligible_metric_block(
+    cell: dict[str, Any], metric: str, bindings: GateBindings
+) -> dict[str, Any] | None:
+    block = cell.get(metric)
+    if not isinstance(block, dict):
+        return None
+    coverage = block.get("coverage")
+    api_errors = _cell_api_errors(cell)
+    if (
+        coverage is None
+        or coverage < bindings.coverage_floor
+        or api_errors is None
+        or api_errors > bindings.api_error_ceiling
+    ):
+        return None
+    return block
 
-    Each ``history`` entry is a prior run's ``ragas.aggregates``. Snapshots
-    missing the cell, the metric, or the value are skipped — the result holds
-    only the values actually present, the rolling window the gates median over.
+
+def _eligible_cell(cell: dict[str, Any], bindings: GateBindings) -> bool:
+    return all(
+        _eligible_metric_block(cell, metric, bindings) is not None
+        for metric in RAGAS_METRICS
+    )
+
+
+def _collect_metric_history(
+    history: list[dict[str, Any]],
+    cell_id: str,
+    metric: str,
+    key: str,
+    bindings: GateBindings,
+) -> list[float]:
+    """Collect eligible per-(cell × metric) values across prior snapshots.
+
+    Historical blocks enter a rolling baseline only when they meet the same
+    coverage and API-error thresholds as a green current measurement.
     """
     values: list[float] = []
     for h in history:
-        block = h.get("by_cell", {}).get(cell_id, {}).get(metric)
+        cell = h.get("by_cell", {}).get(cell_id)
+        if not isinstance(cell, dict):
+            continue
+        block = _eligible_metric_block(cell, metric, bindings)
         if block is None:
             continue
         value = block.get(key)
@@ -467,10 +500,9 @@ def check_diagnostic_gates(
       * ``api_errors`` above the rolling **mean** and non-zero, per cell →
         yellow ``api-error-drift``
 
-    When fewer than ``min_drift_history`` prior snapshots are available the
-    check is skipped with a single log line and returns ``[]`` — early-rollout
-    runs do not have enough history to tell drift from noise. Yellow findings
-    never fail the workflow.
+    Each series requires at least ``min_drift_history`` prior blocks that meet
+    the operational coverage and API-error thresholds. Yellow findings never
+    fail the workflow.
     """
     b = bindings if bindings is not None else default_bindings()
     if len(history) < b.min_drift_history:
@@ -495,9 +527,16 @@ def check_diagnostic_gates(
             if current_cov is None:
                 continue
             past_cov = _collect_metric_history(
-                history, cell_id, metric, "coverage"
+                history, cell_id, metric, "coverage", b
             )
-            if not past_cov:
+            if len(past_cov) < b.min_drift_history:
+                log.info(
+                    "coverage-drift check skipped for (%s × %s): "
+                    "insufficient eligible history (%d runs)",
+                    metric,
+                    cell_id,
+                    len(past_cov),
+                )
                 continue
             median_cov = statistics.median(past_cov)
             if current_cov < median_cov - b.coverage_drift_pp:
@@ -522,11 +561,17 @@ def check_diagnostic_gates(
         past_err: list[int] = []
         for h in history:
             h_cell = h.get("by_cell", {}).get(cell_id)
-            if h_cell:
+            if isinstance(h_cell, dict) and _eligible_cell(h_cell, b):
                 err = _cell_api_errors(h_cell)
                 if err is not None:
                     past_err.append(err)
-        if not past_err:
+        if len(past_err) < b.min_drift_history:
+            log.info(
+                "api-error-drift check skipped for %s: "
+                "insufficient eligible history (%d runs)",
+                cell_id,
+                len(past_err),
+            )
             continue
         mean_err = statistics.mean(past_err)
         if current_err > 0 and current_err > mean_err:
@@ -616,9 +661,10 @@ def check_score_regressions(
 
     Coverage-guard (FR-12): a (metric × cell) whose current ``coverage`` is
     below ``coverage_floor`` is skipped with a log line — a degraded-sample
-    mean is not comparable to a full-sample rolling median. When fewer than
-    ``min_regression_history`` prior snapshots exist (FR-13) the whole check is
-    skipped with a log line and returns ``[]``.
+    mean is not comparable to a full-sample rolling median. Historical blocks
+    enter that median only when they meet the operational coverage and API-error
+    thresholds, and at least ``min_regression_history`` eligible values are
+    required.
     """
     b = bindings if bindings is not None else default_bindings()
     if len(history) < b.min_regression_history:
@@ -665,9 +711,16 @@ def check_score_regressions(
             if current_strict is None:
                 continue
             past_strict = _collect_metric_history(
-                history, cell_id, metric, "mean_strict"
+                history, cell_id, metric, "mean_strict", b
             )
             if len(past_strict) < b.min_regression_history:
+                log.info(
+                    "score-regression check skipped for (%s × %s): "
+                    "insufficient eligible history (%d runs)",
+                    metric,
+                    cell_id,
+                    len(past_strict),
+                )
                 continue
             ragas_median = statistics.median(past_strict)
             ragas_dropped = current_strict < ragas_median - b.ragas_drop

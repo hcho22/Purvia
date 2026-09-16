@@ -53,7 +53,9 @@ custom Claude judge — explicitly **not** as a replacement.
 
 - A weekly time series of RAGAS snapshots is committed to
   `docs/ragas-weekly/<DATE>.{json,md}`, giving the drift and score-regression
-  gates the rolling history they compare against.
+  gates the rolling history they compare against. Only historical metric blocks
+  with complete coverage and zero provider errors enter a baseline, and the
+  configured minimum number of eligible runs is required before comparison.
 - Pre-scorer snapshots through 2026-09-06 are retained as historical artifacts
   but have no RAGAS rows/cells and are not measurement baselines. The workflow
   rejects any new structurally empty snapshot before publication.
