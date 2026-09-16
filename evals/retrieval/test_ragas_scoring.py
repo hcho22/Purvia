@@ -20,9 +20,14 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from packaging.requirements import Requirement
-from packaging.specifiers import SpecifierSet
-from packaging.utils import canonicalize_name
+try:
+    from packaging.requirements import Requirement
+    from packaging.specifiers import SpecifierSet
+    from packaging.utils import canonicalize_name
+except ImportError:  # pragma: no cover - depends on the ambient slim environment
+    from pip._vendor.packaging.requirements import Requirement  # type: ignore
+    from pip._vendor.packaging.specifiers import SpecifierSet  # type: ignore
+    from pip._vendor.packaging.utils import canonicalize_name  # type: ignore
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -49,7 +54,14 @@ from evals.retrieval.validate_ragas_snapshot import (  # noqa: E402
 )
 
 REQUIREMENTS = ROOT / "evals" / "retrieval" / "requirements.txt"
-PINNED_RAGAS = "0.4.3"
+PINNED_RAGAS_STACK = {
+    "ragas": "0.4.3",
+    "langchain": "0.3.25",
+    "langchain-core": "0.3.63",
+    "langchain-community": "0.3.24",
+    "langchain-openai": "0.3.19",
+    "langchain-text-splitters": "0.3.8",
+}
 
 
 class _FakeAPIError(Exception):
@@ -367,45 +379,56 @@ def _snapshot_publishability_check() -> None:
 
 
 def _dependency_contract_check() -> None:
-    requirements: list[Requirement] = []
+    requirements: dict[str, list[Requirement]] = {}
     for raw in REQUIREMENTS.read_text(encoding="utf-8").splitlines():
         line = raw.split("#", 1)[0].strip()
         if line and not line.startswith("-"):
             requirement = Requirement(line)
-            if canonicalize_name(requirement.name) == "ragas":
-                requirements.append(requirement)
-    assert len(requirements) == 1, (
-        "evals/retrieval/requirements.txt must declare RAGAS exactly once; "
-        f"got {requirements!r}"
-    )
-    requirement = requirements[0]
-    assert (
-        requirement.specifier == SpecifierSet(f"=={PINNED_RAGAS}")
-        and not requirement.extras
-        and requirement.marker is None
-        and requirement.url is None
-    ), (
-        "evals/retrieval/requirements.txt must exactly pin the RAGAS collections "
-        f"API exercised here to {PINNED_RAGAS}; got {requirement!r}"
-    )
+            name = canonicalize_name(requirement.name)
+            requirements.setdefault(name, []).append(requirement)
 
-    # The slim per-PR env deliberately omits RAGAS. When a full local/weekly env
-    # has it, verify the pin resolves to the exact API the adapter imports.
+    for name, pinned_version in PINNED_RAGAS_STACK.items():
+        declared = requirements.get(name, [])
+        assert len(declared) == 1, (
+            "evals/retrieval/requirements.txt must declare the RAGAS "
+            f"compatibility dependency {name} exactly once; got {declared!r}"
+        )
+        requirement = declared[0]
+        assert (
+            requirement.specifier == SpecifierSet(f"=={pinned_version}")
+            and not requirement.extras
+            and requirement.marker is None
+            and requirement.url is None
+        ), (
+            "evals/retrieval/requirements.txt must exactly pin the verified "
+            f"RAGAS compatibility dependency {name} to {pinned_version}; "
+            f"got {requirement!r}"
+        )
+
     if importlib.util.find_spec("ragas") is not None:
         from importlib.metadata import version
 
-        assert version("ragas") == PINNED_RAGAS
-        from ragas import EvaluationDataset  # noqa: F401
-        from ragas.metrics.collections import (  # noqa: F401
-            AnswerRelevancy,
-            ContextPrecisionWithReference,
-            ContextRecall,
-            Faithfulness,
+        for name, pinned_version in PINNED_RAGAS_STACK.items():
+            assert version(name) == pinned_version, (
+                f"installed {name} must match the verified RAGAS compatibility "
+                f"version {pinned_version}; got {version(name)}"
+            )
+        runtime = ragas_mod._load_ragas_runtime()
+        assert callable(runtime.evaluation_dataset.from_list)
+        assert all(
+            callable(component)
+            for component in (
+                runtime.llm_factory,
+                runtime.embeddings,
+                runtime.faithfulness,
+                runtime.answer_relevancy,
+                runtime.context_precision,
+                runtime.context_recall,
+            )
         )
-
-        print(f"  dependency: installed RAGAS {PINNED_RAGAS} exposes pinned API")
+        print("  dependency: installed compatibility set exposes all four metrics")
     else:
-        print(f"  dependency: exact RAGAS {PINNED_RAGAS} pin present (import skipped)")
+        print("  dependency: exact compatibility set declared (import skipped)")
 
 
 async def amain() -> int:

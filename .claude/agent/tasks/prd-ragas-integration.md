@@ -33,7 +33,7 @@ The original nine stories were marked complete while US-001 deliberately shipped
 
 **Acceptance Criteria:**
 
-- [x] `evals/retrieval/requirements.txt` pins `ragas==0.4.3`, the collections API this adapter uses, with an inline comment explaining lazy loading and the compatibility boundary.
+- [x] `evals/retrieval/requirements.txt` pins `ragas==0.4.3` plus the verified compatible LangChain distributions used by that collections API, with an inline comment explaining lazy loading and the compatibility boundary.
 - [x] New file `evals/retrieval/ragas.py` exists with:
   - An `async def score_with_ragas(rows, judge_model: str) -> list[RagasRow]` function that constructs a supported `EvaluationDataset`, runs Faithfulness / Answer Relevancy / Context Precision with reference / Context Recall, and maps results back without changing question/cell identity.
   - A module-level docstring explaining the same-family bias trade-off (judge is `gpt-4o-mini`, same family as the generator) and why the Claude judge remains independent.
@@ -44,7 +44,7 @@ The original nine stories were marked complete while US-001 deliberately shipped
 - [x] Importing `evals.retrieval.runner` continues to succeed with only `pip install -r evals/retrieval/requirements-ci.txt` (no RAGAS installed) — verified by an explicit import test.
 - [x] Typecheck/lint passes.
 
-**Validation:** `python -m evals.retrieval.test_ragas_scoring` executes the repository adapter with deterministic dataset/metric/provider doubles and asserts real-shaped rows, partial and failed metric mapping, empty-context coverage, exact judge/embedding configuration, aggregation, the exact 0.4.3 dependency contract, and red findings for missing cells/metrics. The slim import contract remains: importing the runner needs no RAGAS install, while a non-empty scoring call without the package raises an actionable install error.
+**Validation:** `python -m evals.retrieval.test_ragas_scoring` executes the repository adapter with deterministic dataset/metric/provider doubles and asserts real-shaped rows, partial and failed metric mapping, empty-context coverage, exact judge/embedding configuration, aggregation, the exact RAGAS/LangChain compatibility contract, and red findings for missing cells/metrics. In a full environment it loads the real runtime and verifies all four metric implementations are callable; in slim PR CI it parses the normalized requirement model through `packaging` or pip's vendored fallback without installing RAGAS. Importing the runner still needs no RAGAS install, while a non-empty scoring call without the package raises an actionable install error.
 
 **Validation Test:**
 
@@ -454,7 +454,7 @@ The original nine stories were marked complete while US-001 deliberately shipped
 
 ## Technical Considerations
 
-- **Lazy import.** RAGAS pulls in `instructor`, `langchain-core`, `langchain-openai`, `datasets`, and `pandas`. Heavy. Hard import would break PR CI install (which only installs `requirements-ci.txt` without RAGAS).
+- **Lazy import and compatibility boundary.** RAGAS pulls in `instructor`, LangChain, `datasets`, and `pandas`. Heavy. Hard import would break PR CI install (which only installs `requirements-ci.txt` without RAGAS). RAGAS 0.4.3 also imports the legacy `langchain_community.chat_models.vertexai` module at load time, so the full working LangChain set is pinned rather than allowing a fresh install to select the incompatible 0.4.x community package.
 - **Cost envelope (per weekly run).** 60 questions × 1 mode × 2 cells × 4 metrics × ~3 LLM calls/metric budgets approximately 1,440 `gpt-4o-mini` calls per weekly RAGAS run. Actual spend depends on token usage and provider pricing.
 - **Snapshot byte stability.** Existing consumers of `docs/nightly/<DATE>.json` (e.g., `_embed_eval_summaries.py`, the diff_results.py CI comment script) must remain byte-stable when `ragas` is added. New `ragas` key alone, no rearrangement of existing keys.
 - **Determinism caveat.** Same as the existing runner — OpenAI embeddings and LLM outputs are not strictly bit-deterministic across calls. RAGAS scores will jitter within a few percentage points across runs even on unchanged inputs. The methodology paragraph in `docs/evals.md` should note this.

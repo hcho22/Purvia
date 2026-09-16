@@ -444,7 +444,7 @@ python -m evals.retrieval.e7_runner --include-p1b     # E7 escalation tripwire -
 python -m evals.retrieval.test_empty_gold_guard        # authored gold: the E4/E6 scorers refuse an empty gold set
 python -m evals.retrieval.test_us120_generation_guard  # generation: a truncated/empty answer is not scored as a real result
 python -m evals.retrieval.test_judge_sdk_compat        # dependency drift: the Anthropic SDK pin retains the judge contract
-python -m evals.retrieval.test_ragas_scoring           # RAGAS mapping, partial/error coverage, exact pin, non-vacuous gates
+python -m evals.retrieval.test_ragas_scoring           # RAGAS mapping, errors, exact compatibility set, non-vacuous gates
 python -m evals.retrieval.test_e7_answer_gate_parity   # exact-input offline/runtime replay; runtime failure is UNMEASURED
 python -m evals.permissions_scale.test_degenerate_guard # derived gold: the scale runner refuses a no-signal run
 python -m backend.test_answer_gate_rubric              # the runtime answer rubric and its offline E7 mirror state the same rules (live-judge layer skips without OPENAI_API_KEY + ANTHROPIC_API_KEY)

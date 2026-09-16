@@ -38,8 +38,11 @@ custom Claude judge — explicitly **not** as a replacement.
   regression; `single-judge-red` for Context Precision / Recall. The full
   rationale lives in `docs/evals.md` § "RAGAS comparison" → "Methodology".
 - The supported evaluator surface is RAGAS 0.4's collections API, pinned at
-  `ragas==0.4.3`; Answer Relevancy uses `text-embedding-3-small`. Collector rows
-  map to `EvaluationDataset` without changing repository question/cell identity.
+  `ragas==0.4.3` with the exact compatible LangChain distribution set. RAGAS
+  imports a legacy `langchain-community` module removed in 0.4.x, so pinning only
+  RAGAS does not make a fresh install reproducible. Answer Relevancy uses
+  `text-embedding-3-small`. Collector rows map to `EvaluationDataset` without
+  changing repository question/cell identity.
 - Empty input/results and missing expected cells or metric aggregates are
   UNMEASURED/non-green. Metric-level failures remain explicit NaNs in the
   denominator so the fixed coverage gate, rather than a shrinking sample, owns
