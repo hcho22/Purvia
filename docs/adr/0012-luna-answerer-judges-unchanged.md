@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-20
+- **Amended:** 2026-09-15 — the RAGAS scorer is now active
 - **On:** ADR-0006 (model-role separation), ADR-0001 (RAGAS as a parallel eval), ADR-0003 (deterministic escalate-vs-answer control flow)
 
 ## Context
@@ -15,19 +16,18 @@ customer traffic, so they are where a cheaper-per-token reasoning model
 (`gpt-5.6-luna`, $0.20/$1.20 per MTok) earns its keep.
 
 The original framing - swap the *judge* - does not hold. The judge populations
-are tiny (single-digit rows, output capped by `JUDGE_MAX_TOKENS`), so the
-offline judge costs roughly $2/month; there is no saving to capture there. More
-importantly, the roles are not interchangeable: three of them cannot take a
-reasoning model at all, and the two judges are load-bearing safety/measurement
-surfaces that a reasoning model would actively break. This ADR records why the
-answerer moves to Luna while both judges and four helpers stay on
-`gpt-4o-mini`, so the split reads as a decision rather than an oversight.
+are tiny, so there is no meaningful saving to capture there. More importantly,
+the roles are not interchangeable: the runtime and RAGAS judges require their
+temperature-zero configuration, while the offline eval judge must remain
+cross-family on Claude. This ADR records why the answerer moves to Luna while
+those three judge roles and the four helpers keep their existing models, so the
+split reads as a decision rather than an oversight.
 
 ## Decision
 
-Serve the answerer and support drafter from `gpt-5.6-luna`, and keep the
-runtime judge, the offline eval judge, and the four temperature-hardcoded
-helpers on `gpt-4o-mini`.
+Serve the answerer and support drafter from `gpt-5.6-luna`; keep the runtime
+judge and RAGAS judge on `gpt-4o-mini`, the cross-family offline eval judge on
+Claude, and the four temperature-hardcoded helpers on `gpt-4o-mini`.
 
 The role separation is what makes this safe with almost no code:
 `get_judge_model()` (`backend/escalation.py:245`) deliberately does **not**
@@ -75,11 +75,13 @@ provides (`OPENAI_PLANNER_MODEL`, `OPENAI_SQL_MODEL`, `OPENAI_RERANK_MODEL`,
 `OPENAI_SUBAGENT_MODEL`); US-121 adds a boot-time warning when an unpinned
 helper would inherit a temperature-refusing answerer.
 
-**`RAGAS_JUDGE_MODEL` is dead.** `RAGAS_JUDGE_MODEL = "gpt-4o-mini"` exists
-(`evals/retrieval/ragas.py:75`) but `score_with_ragas` is a scaffold that
-returns `[]` (`evals/retrieval/ragas.py:157`). There is no judge call to move,
-so the value stays put pending a real implementation; the corroboration and
-drift gates remain inert until then.
+**Why the RAGAS judge also stays on `gpt-4o-mini`.** `score_with_ragas` now
+runs the genuine RAGAS 0.4 collections metrics with
+`RAGAS_JUDGE_MODEL = "gpt-4o-mini"` at temperature 0. This judge is deliberately
+same-family with the Luna generator: ADR-0001 accepts that bias for standardized
+metric vocabulary and keeps the Claude judge as the independent cross-family
+observation. Moving RAGAS to Luna would also discard the stable, temperature-zero
+measurement configuration chosen for the weekly time series.
 
 ## Consequences
 

@@ -1223,11 +1223,10 @@ async def run_eval(
                     include_ragas
                     and ragas_cell_enabled(mode, viewer, "pre_filter")
                     and reference_answer is not None
-                    and pre_corpus_chunks
                 ):
                     ragas_chunks = pre_corpus_chunks[:TOP_K_FOR_GENERATION]
                     ragas_answer = pre_block.get("generated_answer")
-                    if ragas_answer is None:
+                    if ragas_answer is None and ragas_chunks:
                         ragas_context = _format_generation_context(
                             ragas_chunks, stable_id_map
                         )
@@ -1241,7 +1240,10 @@ async def run_eval(
                             "mode": mode,
                             "question": question,
                             "contexts": [r.content for r in ragas_chunks],
-                            "answer": ragas_answer,
+                            # Empty retrieval stays in the RAGAS denominator.
+                            # The scorer records all metrics as empty_contexts;
+                            # it must not disappear and inflate coverage.
+                            "answer": ragas_answer or "",
                             "reference": reference_answer,
                         }
                     )
@@ -1829,9 +1831,9 @@ async def amain() -> int:
             "block — add it to retrieval_gold.yaml or run with --viewers full"
         )
 
-    # RAGAS is hybrid-only and full_access / partial_access only. Warn (don't
-    # error) when the operator's --mode / --viewers selection includes cells
-    # RAGAS will silently skip, so an empty `ragas` section is never a mystery.
+    # RAGAS is hybrid-only and full_access / partial_access only. Warn when the
+    # operator's --mode / --viewers selection includes cells RAGAS will skip,
+    # so a later zero-row or missing-cell failure identifies the selection.
     if args.include_ragas:
         for skipped_mode in (m for m in modes if m != "hybrid"):
             log.warning(
@@ -1862,10 +1864,15 @@ async def amain() -> int:
         generation_gold = load_generation_gold(args.generation_gold)
         missing = [q["id"] for q in questions if q["id"] not in generation_gold]
         if missing:
+            detail = ", ".join(missing[:5]) + ("…" if len(missing) > 5 else "")
+            if args.include_ragas:
+                raise RuntimeError(
+                    "--include-ragas requires a reference answer for every "
+                    f"question; {len(missing)} missing: {detail}"
+                )
             log.warning(
                 "generation_gold.yaml missing reference answers for %d questions: %s",
-                len(missing),
-                ", ".join(missing[:5]) + ("…" if len(missing) > 5 else ""),
+                len(missing), detail,
             )
         anthropic_mod = _get_anthropic()
         anthropic_client = anthropic_mod.AsyncAnthropic(api_key=anthropic_api_key)

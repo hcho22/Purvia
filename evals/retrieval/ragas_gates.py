@@ -77,10 +77,10 @@ RAGAS_WEEKLY_DIR = ROOT / "docs" / "ragas-weekly"
 NIGHTLY_DIR = ROOT / "docs" / "nightly"
 
 # FR-8: fixed operational thresholds. Deliberately not rolling — see the module
-# docstring. A cell must carry a non-NaN score for at least 96% of its
-# questions; a cell with more than 2 API errors is an operational failure.
-COVERAGE_FLOOR = 0.96
-API_ERROR_CEILING = 2
+# docstring. Every question must carry a score for every metric, and any API
+# error is an operational failure.
+COVERAGE_FLOOR = 1.0
+API_ERROR_CEILING = 0
 
 # FR-9: diagnostic drift parameters. `COVERAGE_DRIFT_PP` is how far below the
 # rolling-median coverage a cell must fall to count as drift (5 percentage
@@ -93,8 +93,8 @@ COVERAGE_DRIFT_PP = 0.05
 MIN_DRIFT_HISTORY = 3
 
 # FR-10 / FR-12 / FR-13: score-regression parameters. A regression is a strict
-# drop below the rolling median. `RAGAS_DROP` is the trigger on the 0–1 RAGAS
-# scale; `CLAUDE_FAITHFULNESS_DROP` / `CLAUDE_HELPFULNESS_DROP` are the
+# drop below the rolling median. `RAGAS_DROP` is the trigger in each metric's
+# native units; `CLAUDE_FAITHFULNESS_DROP` / `CLAUDE_HELPFULNESS_DROP` are the
 # cross-family Claude thresholds on the 1–5 Likert scale (helpfulness looser —
 # it corroborates Answer Relevancy "softly"). `MIN_REGRESSION_HISTORY` is the
 # full rolling window the score gate needs before it evaluates at all.
@@ -151,7 +151,7 @@ class GateBindings:
     ``coverage_floor``      — fixed operational coverage floor (``COVERAGE_FLOOR``).
     ``api_error_ceiling``   — fixed per-cell API-error ceiling (``API_ERROR_CEILING``).
     ``coverage_drift_pp``   — diagnostic rolling-window drift band (``COVERAGE_DRIFT_PP``).
-    ``ragas_drop``          — score-regression trigger on the 0–1 RAGAS scale (``RAGAS_DROP``).
+    ``ragas_drop``          — score-regression trigger in native metric units (``RAGAS_DROP``).
     ``min_drift_history``   — snapshots the diagnostic gate needs (``MIN_DRIFT_HISTORY``).
     ``min_regression_history`` — snapshots the score gate needs (``MIN_REGRESSION_HISTORY``).
     ``claude_equivalent``   — RAGAS metric → (cross-family judge metric, drop
@@ -265,24 +265,57 @@ def _cell_api_errors(cell: dict[str, Any]) -> int | None:
     Returns ``None`` for a cell with no metric blocks.
     """
     for block in cell.values():
+        if not isinstance(block, dict):
+            continue
         err = block.get("api_errors")
         if err is not None:
             return err
     return None
 
 
-def _collect_metric_history(
-    history: list[dict[str, Any]], cell_id: str, metric: str, key: str
-) -> list[float]:
-    """Collect a per-(cell × metric) numeric field across prior snapshots.
+def _eligible_metric_block(
+    cell: dict[str, Any], metric: str, bindings: GateBindings
+) -> dict[str, Any] | None:
+    block = cell.get(metric)
+    if not isinstance(block, dict):
+        return None
+    coverage = block.get("coverage")
+    api_errors = _cell_api_errors(cell)
+    if (
+        coverage is None
+        or coverage < bindings.coverage_floor
+        or api_errors is None
+        or api_errors > bindings.api_error_ceiling
+    ):
+        return None
+    return block
 
-    Each ``history`` entry is a prior run's ``ragas.aggregates``. Snapshots
-    missing the cell, the metric, or the value are skipped — the result holds
-    only the values actually present, the rolling window the gates median over.
+
+def _eligible_cell(cell: dict[str, Any], bindings: GateBindings) -> bool:
+    return all(
+        _eligible_metric_block(cell, metric, bindings) is not None
+        for metric in RAGAS_METRICS
+    )
+
+
+def _collect_metric_history(
+    history: list[dict[str, Any]],
+    cell_id: str,
+    metric: str,
+    key: str,
+    bindings: GateBindings,
+) -> list[float]:
+    """Collect eligible per-(cell × metric) values across prior snapshots.
+
+    Historical blocks enter a rolling baseline only when they meet the same
+    coverage and API-error thresholds as a green current measurement.
     """
     values: list[float] = []
     for h in history:
-        block = h.get("by_cell", {}).get(cell_id, {}).get(metric)
+        cell = h.get("by_cell", {}).get(cell_id)
+        if not isinstance(cell, dict):
+            continue
+        block = _eligible_metric_block(cell, metric, bindings)
         if block is None:
             continue
         value = block.get(key)
@@ -304,7 +337,8 @@ def check_operational_gates(
     constants), so an unbound call is byte-identical to the legacy behavior. Two
     fixed-threshold checks run:
 
-      * ``coverage < coverage_floor`` per (metric × cell) → red ``coverage-pipeline-failure``
+      * missing cell/metric/coverage, or ``coverage < coverage_floor``, per
+        (metric × cell) → red ``coverage-pipeline-failure``
       * ``api_errors > api_error_ceiling`` per cell → red ``coverage-operational-failure``
 
     See the module docstring for why coverage is per-metric but ``api_errors``
@@ -316,13 +350,51 @@ def check_operational_gates(
     for cell_id in b.cell_ids:
         cell = by_cell.get(cell_id)
         if not cell:
+            for metric in RAGAS_METRICS:
+                findings.append(
+                    GateFinding(
+                        severity="red",
+                        tag=TAG_COVERAGE_PIPELINE,
+                        metric=metric,
+                        cell=cell_id,
+                        message=(
+                            f"coverage unavailable for {metric} × {cell_id}; "
+                            "the expected RAGAS cell produced no rows"
+                        ),
+                    )
+                )
             continue
         for metric in RAGAS_METRICS:
             block = cell.get(metric)
             if block is None:
+                findings.append(
+                    GateFinding(
+                        severity="red",
+                        tag=TAG_COVERAGE_PIPELINE,
+                        metric=metric,
+                        cell=cell_id,
+                        message=(
+                            f"coverage unavailable for {metric} × {cell_id}; "
+                            "the expected metric aggregate is missing"
+                        ),
+                    )
+                )
                 continue
             coverage = block.get("coverage")
-            if coverage is not None and coverage < b.coverage_floor:
+            if coverage is None:
+                findings.append(
+                    GateFinding(
+                        severity="red",
+                        tag=TAG_COVERAGE_PIPELINE,
+                        metric=metric,
+                        cell=cell_id,
+                        message=(
+                            f"coverage unavailable for {metric} × {cell_id}; "
+                            "refusing a gate with no denominator"
+                        ),
+                    )
+                )
+            elif coverage < b.coverage_floor:
                 findings.append(
                     GateFinding(
                         severity="red",
@@ -336,7 +408,20 @@ def check_operational_gates(
                     )
                 )
         api_errors = _cell_api_errors(cell)
-        if api_errors is not None and api_errors > b.api_error_ceiling:
+        if api_errors is None:
+            findings.append(
+                GateFinding(
+                    severity="red",
+                    tag=TAG_COVERAGE_OPERATIONAL,
+                    metric="",
+                    cell=cell_id,
+                    message=(
+                        f"API-error count unavailable for {cell_id}; refusing "
+                        "an operational gate with no error telemetry"
+                    ),
+                )
+            )
+        elif api_errors > b.api_error_ceiling:
             findings.append(
                 GateFinding(
                     severity="red",
@@ -415,10 +500,9 @@ def check_diagnostic_gates(
       * ``api_errors`` above the rolling **mean** and non-zero, per cell →
         yellow ``api-error-drift``
 
-    When fewer than ``min_drift_history`` prior snapshots are available the
-    check is skipped with a single log line and returns ``[]`` — early-rollout
-    runs do not have enough history to tell drift from noise. Yellow findings
-    never fail the workflow.
+    Each series requires at least ``min_drift_history`` prior blocks that meet
+    the operational coverage and API-error thresholds. Yellow findings never
+    fail the workflow.
     """
     b = bindings if bindings is not None else default_bindings()
     if len(history) < b.min_drift_history:
@@ -443,9 +527,16 @@ def check_diagnostic_gates(
             if current_cov is None:
                 continue
             past_cov = _collect_metric_history(
-                history, cell_id, metric, "coverage"
+                history, cell_id, metric, "coverage", b
             )
-            if not past_cov:
+            if len(past_cov) < b.min_drift_history:
+                log.info(
+                    "coverage-drift check skipped for (%s × %s): "
+                    "insufficient eligible history (%d runs)",
+                    metric,
+                    cell_id,
+                    len(past_cov),
+                )
                 continue
             median_cov = statistics.median(past_cov)
             if current_cov < median_cov - b.coverage_drift_pp:
@@ -470,11 +561,17 @@ def check_diagnostic_gates(
         past_err: list[int] = []
         for h in history:
             h_cell = h.get("by_cell", {}).get(cell_id)
-            if h_cell:
+            if isinstance(h_cell, dict) and _eligible_cell(h_cell, b):
                 err = _cell_api_errors(h_cell)
                 if err is not None:
                     past_err.append(err)
-        if not past_err:
+        if len(past_err) < b.min_drift_history:
+            log.info(
+                "api-error-drift check skipped for %s: "
+                "insufficient eligible history (%d runs)",
+                cell_id,
+                len(past_err),
+            )
             continue
         mean_err = statistics.mean(past_err)
         if current_err > 0 and current_err > mean_err:
@@ -564,9 +661,10 @@ def check_score_regressions(
 
     Coverage-guard (FR-12): a (metric × cell) whose current ``coverage`` is
     below ``coverage_floor`` is skipped with a log line — a degraded-sample
-    mean is not comparable to a full-sample rolling median. When fewer than
-    ``min_regression_history`` prior snapshots exist (FR-13) the whole check is
-    skipped with a log line and returns ``[]``.
+    mean is not comparable to a full-sample rolling median. Historical blocks
+    enter that median only when they meet the operational coverage and API-error
+    thresholds, and at least ``min_regression_history`` eligible values are
+    required.
     """
     b = bindings if bindings is not None else default_bindings()
     if len(history) < b.min_regression_history:
@@ -613,9 +711,16 @@ def check_score_regressions(
             if current_strict is None:
                 continue
             past_strict = _collect_metric_history(
-                history, cell_id, metric, "mean_strict"
+                history, cell_id, metric, "mean_strict", b
             )
             if len(past_strict) < b.min_regression_history:
+                log.info(
+                    "score-regression check skipped for (%s × %s): "
+                    "insufficient eligible history (%d runs)",
+                    metric,
+                    cell_id,
+                    len(past_strict),
+                )
                 continue
             ragas_median = statistics.median(past_strict)
             ragas_dropped = current_strict < ragas_median - b.ragas_drop

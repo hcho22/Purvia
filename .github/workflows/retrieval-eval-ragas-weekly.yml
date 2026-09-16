@@ -5,11 +5,6 @@
 # own concurrency group and snapshot directory so it never tangles with the
 # daily nightly retrieval workflow.
 #
-# NOTE: the RAGAS scores themselves are not yet computed - `score_with_ragas()`
-# is still the US-001 scaffold returning no scores, so the published RAGAS
-# table renders unmeasured until a later story lands the evaluation pipeline.
-# The page's retrieval metrics and cross-family Claude-judge scores are real.
-#
 # Snapshots land under `docs/ragas-weekly/<DATE>.{json,md}` — the rolling
 # history the diagnostic / score-regression gates (US-006 / US-007) compare
 # against. A red gate finding (US-005 operational, or a US-007 corroborated
@@ -57,7 +52,10 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: |
+            backend/requirements.txt
+            evals/retrieval/requirements.txt
+            evals/retrieval/requirements-ragas.txt
 
       - name: Install Supabase CLI
         # Pinned to match local dev + retrieval-eval.yml: an unpinned `latest`
@@ -80,8 +78,8 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt
-          # requirements.txt (not requirements-ci.txt) so `ragas` +
-          # `langchain-openai` are present for the --include-ragas path.
+          # requirements.txt (not requirements-ci.txt) so pinned RAGAS and its
+          # evaluator/embedding dependencies are present for --include-ragas.
           pip install -r evals/retrieval/requirements.txt
 
       - name: Seed corpus + run RAGAS eval
@@ -137,13 +135,19 @@ jobs:
             EXIT_DESC="never ran (the job failed before the run step)"
             LOG_HINT="the *Seed corpus + run RAGAS eval* step never executed, so the failure is in an earlier step"
           fi
-          echo "exit_desc=${EXIT_DESC}" >> "$GITHUB_OUTPUT"
-          echo "log_hint=${LOG_HINT}" >> "$GITHUB_OUTPUT"
-          if [ -f /tmp/ragas-weekly.json ]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
+          set_output() {
+            printf '%s\n' "$1" >> "$GITHUB_OUTPUT"
+          }
+          set_output "exit_desc=${EXIT_DESC}"
+          set_output "log_hint=${LOG_HINT}"
+          if [ -f /tmp/ragas-weekly.json ] \
+            && python -m evals.retrieval.validate_ragas_snapshot /tmp/ragas-weekly.json; then
+            set_output "present=true"
           else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::error title=RAGAS weekly UNMEASURED::The runner ${EXIT_DESC} without writing a snapshot, so no gate was evaluated this week. This is not a red gate finding; nothing was measured."
+            set_output "present=false"
+            set_output "exit_desc=${EXIT_DESC} without writing a structurally valid, non-empty RAGAS snapshot"
+            set_output "log_hint=the runner/snapshot-validation log names the empty or missing RAGAS surface"
+            echo "::error title=RAGAS weekly UNMEASURED::The runner ${EXIT_DESC} without writing a structurally valid, non-empty RAGAS snapshot, so no gate was evaluated this week. This is not a red gate finding; nothing was measured."
           fi
 
       # Mint the eval-publish App token immediately before publishing, NOT at job
@@ -214,6 +218,7 @@ jobs:
             echo "::error title=RAGAS weekly snapshot NOT published - eval-publish App token is empty::The ${DATE} RAGAS snapshot was committed and pushed to \`${BRANCH}\` but no auto-merging PR was opened, so it is stranded there, unpublished to main. Ensure the EVAL_PUBLISH_APP_ID / EVAL_PUBLISH_APP_PRIVATE_KEY repo secrets (the eval-publish GitHub App) are set and valid, then re-run."
             exit 1
           fi
+          # shellcheck disable=SC2016  # Markdown backticks stay literal here.
           BODY=$(printf '%s\n' \
             "Automated docs-only eval snapshot from the \`RAGAS eval (weekly)\` workflow (run ${GITHUB_RUN_ID})." \
             '' \
@@ -338,7 +343,7 @@ jobs:
               gh issue create --label "${HARNESS_LABEL}" \
                 --title "RAGAS weekly: no snapshot produced — the gates are UNMEASURED" \
                 --body "$(printf '%s\n' \
-                  "The weekly RAGAS runner ${EXIT_DESC} without writing \`/tmp/ragas-weekly.json\`." \
+                  "The weekly RAGAS runner ${EXIT_DESC}." \
                   "" \
                   "**No gate was evaluated this week.** This is not a green run and not a red one - it is an unmeasured one, and every RAGAS number the repo reports is as old as the last run that did produce a snapshot." \
                   "" \

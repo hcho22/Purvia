@@ -10,34 +10,42 @@ This PRD covers integrating RAGAS as a **parallel** eval signal that ships **alo
 
 ## Goals
 
-- Ship the four canonical RAGAS metrics (`Faithfulness`, `Answer Relevancy`, `Context Precision`, `Context Recall`) over the existing 50-question golden set.
+- Ship the four canonical RAGAS metrics (`Faithfulness`, `Answer Relevancy`, `Context Precision`, `Context Recall`) over the existing 60-question golden set.
 - Keep the existing custom Claude judge untouched and visible as the headline cross-family signal.
 - Hold cost in check via: hybrid-mode-only, 2-cell sweep instead of 6-cell, weekly cadence (not nightly).
 - Treat NaN scores as a first-class data point (record reason; report two means; never use `nanmean` for headlines).
 - Distinguish operational gates (fixed thresholds — degraded conditions never become the accepted norm) from score gates (rolling-median — real improvements should reset the baseline).
 - Add a regression-alert system with two-color severity (yellow notice / red alert) and cross-family corroboration: a single-judge drop is yellow; same-cell drops in both RAGAS and the cross-family Claude judge are red.
 - Document the methodology choices in `docs/evals.md` so readers see deliberate trade-offs, not arbitrary defaults.
-- Do not regress PR CI behavior (RAGAS is never on the PR fast path — too noisy, too expensive, wrong cadence).
+- Keep paid RAGAS scoring off the PR fast path while import-checking the complete pinned runtime in ordinary PR CI without credentials or evaluator calls.
+
+## Implementation status correction (2026-09-15)
+
+The original nine stories were marked complete while US-001 deliberately shipped only a lazy-import scaffold. That made the project-level completion claim misleading: seven published weekly snapshots had zero `ragas.per_question` rows, zero cell aggregates, and vacuously green gates. US-001 is amended below to include the real scoring adapter and the non-vacuity contract required by the rest of this PRD. Historical snapshots through 2026-09-06 are preserved as unmeasured receipts, not rewritten into results; new empty/malformed RAGAS snapshots are rejected before publication.
 
 ## User Stories
 
 ---
 
-### US-001: Add RAGAS dependencies and lazy-import module scaffold — ✅ COMPLETE (2026-05-20)
+### US-001: Pin the RAGAS API and implement lazy real scoring — ✅ COMPLETE (amended 2026-09-15)
 
 **Description:** As a developer running the eval suite, I want the new `evals/retrieval/ragas.py` module to be lazy-importable so that callers of the runner who don't pass `--include-ragas` never pay the RAGAS install / import cost and existing CI workflows continue to work without changes.
 
 **Acceptance Criteria:**
 
-- [x] `evals/retrieval/requirements.txt` appends `ragas>=0.2.0` and `langchain-openai>=0.2.0` with an inline comment block explaining they're only loaded when `--include-ragas` is set (mirrors the existing `anthropic` comment).
+- [x] `evals/retrieval/requirements.txt` pins `ragas==0.4.3` plus the verified compatible LangChain distributions used by that collections API, with an inline comment explaining lazy loading and the compatibility boundary.
 - [x] New file `evals/retrieval/ragas.py` exists with:
-  - An `async def score_with_ragas(rows, judge_model: str) -> list[RagasRow]` function signature (implementation can return stub data in this story).
+  - An `async def score_with_ragas(rows, judge_model: str) -> list[RagasRow]` function that constructs a supported `EvaluationDataset`, runs Faithfulness / Answer Relevancy / Context Precision with reference / Context Recall, and maps results back without changing question/cell identity.
   - A module-level docstring explaining the same-family bias trade-off (judge is `gpt-4o-mini`, same family as the generator) and why the Claude judge remains independent.
-  - All `ragas` / `langchain_openai` imports done inside `score_with_ragas`, mirroring the `_get_anthropic()` pattern at `evals/retrieval/runner.py:506-523`.
+  - All RAGAS imports done inside `_load_ragas_runtime`, called only from `score_with_ragas`, mirroring the `_get_anthropic()` lazy-import pattern.
+- [x] Per-metric errors map to fixed NaN reasons and remain in the denominator; empty contexts map to `empty_contexts` without a paid call.
+- [x] Answer Relevancy preserves RAGAS's canonical negative cosine-similarity results (−1–1); the other three metric ranges remain 0–1.
+- [x] Zero input/result rows and duplicate identities fail loudly. Missing expected cells/metrics are red operational findings, and the workflow rejects a structurally empty snapshot before publication.
+- [x] The offline `test_ragas_scoring` module uses deterministic doubles to verify mapping, empty/partial/error behavior, exact configuration, aggregation, dependency compatibility, and gate non-vacuity without paid calls.
 - [x] Importing `evals.retrieval.runner` continues to succeed with only `pip install -r evals/retrieval/requirements-ci.txt` (no RAGAS installed) — verified by an explicit import test.
 - [x] Typecheck/lint passes.
 
-**Validation:** All 4 validation steps pass — runner imports `ok`, `--help` exits 0, `score_with_ragas` is importable as a symbol, and calling it with `ragas` absent raises `RuntimeError("--include-ragas requires the \`ragas\` package…")` rather than a generic `ModuleNotFoundError`. `mypy` reports no issues on `evals/retrieval/ragas.py`.
+**Validation:** `python -m evals.retrieval.test_ragas_scoring` executes the repository adapter with deterministic dataset/metric/provider doubles and asserts real-shaped rows, canonical negative Answer Relevancy, partial and failed metric mapping, empty-context coverage, exact judge/embedding configuration, aggregation, the exact RAGAS/LangChain compatibility contract, and red findings for missing cells/metrics or a single failed call. The PR job first runs it in the slim environment through `packaging` or pip's vendored fallback, then installs `requirements-ragas.txt` and reruns it so `_load_ragas_runtime()` must import all four real metric implementations. Neither pass uses credentials or makes paid calls.
 
 **Validation Test:**
 
@@ -46,8 +54,9 @@ This PRD covers integrating RAGAS as a **parallel** eval signal that ships **alo
   1. `python -c "import evals.retrieval.runner; print('ok')"`
   2. `python -m evals.retrieval.runner --help` and confirm exit code 0
   3. `python -c "from evals.retrieval import ragas; print(ragas.score_with_ragas)"` (function should be importable as a symbol)
-  4. `python -c "import asyncio; from evals.retrieval.ragas import score_with_ragas; asyncio.run(score_with_ragas([], 'gpt-4o-mini'))"` — this should fail with a clear error telling the user to install RAGAS, NOT a generic `ImportError`.
-- **Expected Result:** Steps 1–3 succeed silently. Step 4 raises `RuntimeError` with message matching `"--include-ragas requires the `ragas` package"` (or similar) — not a generic `ModuleNotFoundError`.
+  4. `python -m evals.retrieval.test_ragas_scoring` — exercise the scorer with offline doubles in the slim environment.
+  5. `pip install -r evals/retrieval/requirements-ragas.txt && RAGAS_RUNTIME_REQUIRED=1 python -m evals.retrieval.test_ragas_scoring` — rerun with the real pinned runtime required and importable.
+- **Expected Result:** Steps 1–3 succeed silently. Step 4 proves empty/partial/error surfaces cannot pass; step 5 additionally proves the compatible stack imports all four real metrics without making an evaluator call.
 - **Failure Indicator:** Steps 1–3 raise `ModuleNotFoundError: No module named 'ragas'` (hard import at module top), or step 4 raises a generic error without install instructions.
 
 ---
@@ -70,21 +79,21 @@ This PRD covers integrating RAGAS as a **parallel** eval signal that ships **alo
 
 **Implementation notes:** The gate lives in `evals/retrieval/ragas.py` as `ragas_cell_enabled(mode, viewer, filter_strategy)` plus the `RAGAS_MODE` / `RAGAS_CELLS` / `RAGAS_JUDGE_MODEL` constants. `run_eval` now returns `(per_question, ragas_rows)`; it collects one RAGAS input row per gated cell — full_access reuses the answer the US-036 generation block already produced, partial_access generates one (answer only, no Claude judge, so the US-036 table's full_access-only scope is unchanged). `amain` makes a single batched `score_with_ragas(ragas_rows, RAGAS_JUDGE_MODEL)` call and emits a minimal `ragas` top-level JSON key (`judge_model`, `per_question`); US-003 enriches it with `aggregates`. The `ragas` key is emitted only when `--include-ragas` is set, so non-RAGAS snapshots stay byte-stable.
 
-**Validation:** Offline-verifiable criteria pass — `--help` lists `--include-ragas`; with `--include-ragas` the runner logs the exact `auto-enabling --include-generation…` line; `--mode vector` logs `RAGAS scoring skipped for mode=vector (hybrid-only)`; `--viewers no_access` logs the viewer-skip warning; runs without `--include-ragas` log neither. `ragas_cell_enabled` truth table is correct for all (mode × viewer × filter) combinations. `mypy` adds zero new errors (the 2 pre-existing `runner.py` errors — `yaml` stubs, `viewers` `Literal` assignment — and the `backend/retrieval.py` path-resolution notes are unchanged). The full live-run validation steps below need local Supabase + a seeded corpus and were not executed in this environment. Note: with US-001's stub `score_with_ragas` (returns `[]`), the emitted `ragas.per_question` is empty until the real RAGAS pipeline lands — the wiring is complete and data flows through automatically once it does.
+**Validation:** Offline-verifiable criteria pass — `--help` lists `--include-ragas`; with `--include-ragas` the runner logs the exact `auto-enabling --include-generation…` line; `--mode vector` logs `RAGAS scoring skipped for mode=vector (hybrid-only)`; `--viewers no_access` logs the viewer-skip warning; runs without `--include-ragas` log neither. `ragas_cell_enabled` truth table is correct for all (mode × viewer × filter) combinations. Unsupported selections that collect zero RAGAS rows now terminate non-green instead of publishing an empty table. The full live-run validation needs local Supabase plus evaluator credentials; offline mapping is covered by `test_ragas_scoring`.
 
 **Validation Test:**
 
 - **Setup:** Local Supabase running, corpus seeded, `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` env vars set.
 - **Steps:**
-  1. `python -m evals.retrieval.runner --include-ragas --mode hybrid --viewers full --out /tmp/ragas1.json` — observe log output
+  1. `python -m evals.retrieval.runner --include-ragas --mode hybrid --viewers partial --out /tmp/ragas1.json` — observe log output and exit code
   2. `python -m evals.retrieval.runner --include-ragas --mode vector --viewers full --out /tmp/ragas2.json` — observe log output
   3. `python -m evals.retrieval.runner --include-ragas --mode hybrid --viewers no_access --out /tmp/ragas3.json` — observe log output
-  4. Inspect each result JSON: does the `ragas` top-level key exist? Does it contain entries for the expected cells only?
+  4. Inspect each result that was written: does the `ragas` top-level key exist, contain only the expected cells, and carry red findings for a missing expected cell?
 - **Expected Result:**
-  - Step 1: log shows `auto-enabling --include-generation`; result JSON contains `ragas` key with entries for the `full_access × pre_filter × hybrid` cell only.
-  - Step 2: log shows `RAGAS scoring skipped for mode=vector (hybrid-only)`; result JSON contains an empty or absent `ragas` key.
-  - Step 3: log shows skip warning; result JSON ragas section empty.
-- **Failure Indicator:** RAGAS runs on disallowed cells (cost overrun), or skip warnings are silent, or `--include-ragas` requires the operator to also pass `--include-generation` manually.
+  - Step 1: log shows `auto-enabling --include-generation`; result JSON contains both expected pre-filter cells and can exit green when the metric gates pass.
+  - Step 2: log shows `RAGAS scoring skipped for mode=vector (hybrid-only)`; zero collected rows terminate the run non-green before `/tmp/ragas2.json` is published.
+  - Step 3: log shows the `no_access` skip warning; because that viewer preset also includes `full_access`, the result contains the full-access cell, records red findings for the missing partial-access cell, and exits non-zero.
+- **Failure Indicator:** RAGAS runs on disallowed cells (cost overrun), a zero-row or missing-cell selection exits green, skip warnings are silent, or `--include-ragas` requires the operator to also pass `--include-generation` manually.
 
 ---
 
@@ -140,7 +149,7 @@ This PRD covers integrating RAGAS as a **parallel** eval signal that ships **alo
 
 **Implementation notes:** `evals/retrieval/ragas.py` gains `build_ragas_section(rows, judge_model)` — it serializes each `RagasRow` into a `per_question` entry and computes `aggregates.by_cell` via `_aggregate_by_cell`. `amain` now calls `build_ragas_section(...)` instead of building the section inline (the US-002 minimal `{judge_model, per_question}` shell is superseded). The `NAN_REASONS` frozenset is the fixed FR-7 enum; `_normalize_nan_reason` coerces any out-of-enum string to `unknown` (with a `log.warning`) so a stored `nan_reasons` value is always enum-or-`null`. Per (cell × metric): `mean_strict = sum(non-NaN) / total` (NaN→0), `mean_available = sum(non-NaN) / count(non-NaN)` (or `null` when a metric scored NaN everywhere), `coverage = count(non-NaN) / total`. `api_errors` is the cell total (RagasRow tracks errors per question, not per metric) repeated across the four metric blocks. Means/coverage round to 4 dp, matching the existing `aggregate()`. The existing top-level `aggregates` key and `aggregate()` are untouched — RAGAS data stays entirely under the separate `ragas` key.
 
-**Validation:** Reproduced the validation scenario below as a direct `build_ragas_section` unit test — 50 questions on `full_access:pre_filter`, `context_recall` NaN on 2 with reason `empty_contexts`. Results match: `context_recall` aggregate is `mean_strict=0.72`, `mean_available=0.75` (`mean_strict < mean_available`), `coverage=0.96` (48/50), `api_errors=0`; `per_question` has exactly 2 entries with `context_recall == null`; top-level `ragas` keys are `aggregates`/`judge_model`/`per_question`. An out-of-enum `nan_reason` is coerced to `unknown`. `mypy` is clean on `ragas.py` and adds zero new errors to `runner.py` (the 6 pre-existing errors are unchanged). The live runner steps below need local Supabase + a monkeypatched `score_with_ragas` and were not executed in this environment.
+**Validation:** Reproduced the validation scenario below as a direct `build_ragas_section` unit test — 60 questions on `full_access:pre_filter`, `context_recall` NaN on 2 with reason `empty_contexts`. Results match: `context_recall` aggregate is `mean_strict=0.725`, `mean_available=0.75` (`mean_strict < mean_available`), `coverage=0.9667` (58/60), `api_errors=0`; the two missing results remain visible and the operational gate is red because coverage is not complete. `per_question` has exactly 2 entries with `context_recall == null`; top-level `ragas` keys are `aggregates`/`judge_model`/`per_question`. An out-of-enum `nan_reason` is coerced to `unknown`. The live runner steps below need local Supabase + a monkeypatched `score_with_ragas` and were not executed in this environment.
 
 **Validation Test:**
 
@@ -151,7 +160,7 @@ This PRD covers integrating RAGAS as a **parallel** eval signal that ships **alo
   3. `jq '.ragas.per_question | map(select(.scores.context_recall == null)) | length' /tmp/ragas-schema.json`
   4. `jq 'keys' /tmp/ragas-schema.json` and confirm the top-level shape is `["aggregates", "elapsed_s", "generated_at", "modes", "n_corpus_chunks", "n_questions", "per_question", "ragas", "viewers", ...]` (existing keys + new `ragas` key, no removal).
 - **Expected Result:**
-  - Step 2: returns object with `mean_strict < mean_available`, `coverage = 0.96` (48/50), `api_errors = 0`.
+  - Step 2: returns object with `mean_strict < mean_available`, `coverage = 0.9667` (58/60), `api_errors = 0`.
   - Step 3: returns `2` (the two patched questions).
   - Step 4: existing key set unchanged; `ragas` added.
 - **Failure Indicator:** `mean_strict == mean_available` (NaN handling broken); `coverage == 1.0` despite 2 NaN entries; existing top-level keys removed or renamed; `nan_reasons` field missing or storing arbitrary strings outside the enum.
@@ -175,7 +184,7 @@ This PRD covers integrating RAGAS as a **parallel** eval signal that ships **alo
 
 **Implementation notes:** `render_summary` in `runner.py` gains an optional third arg `ragas_section: dict | None`; `amain` passes the `build_ragas_section(...)` result (or `None` when `--include-ragas` is absent). The RAGAS block always renders — a `### RAGAS comparison` h3 heading (kept *outside* the markers so the `docs/evals.md` embed target supplies its own `## RAGAS comparison` framing without a doubled heading), then the `EVAL_SUMMARY_RAGAS_START`/`END` markers bracketing either the 8-row table (one row per metric × cell, iterating `RAGAS_METRICS` × `RAGAS_CELL_IDS`) or the `_(RAGAS not run on this snapshot…)_` placeholder. The table renders one row even for cells RAGAS has no data for (em-dash cells), so the 8-row shape is stable. It sits immediately after the generation-judge table; the AC's "…and the existing per-category table" clause is moot — per-category already precedes the generation table in the existing layout. `docs/_embed_eval_summaries.py` gains `extract_ragas_table` (lifts the region between the `EVAL_SUMMARY_RAGAS` markers from the retrieval `summary.md`; returns `None` for a pre-US-004 summary so the caller substitutes a placeholder) and `replace_ragas_region` (swaps the matching region in `docs/evals.md`); `main` runs this as a second embed pass after the existing named-region embeds. `docs/evals.md` gains a `## RAGAS comparison` section after `## 3. Results` with an intro paragraph and the marker pair (the methodology sub-section is US-009's scope).
 
-**Validation:** Offline-verifiable criteria all pass — verified via a direct unit test of `render_summary`: with `ragas_section=None` it emits the markers, the exact placeholder string, and the `### RAGAS comparison` heading; with a populated `ragas_section` it emits the 6-column header and exactly 8 data rows (4 metrics × 2 cells), and a `mean_available` of `None` renders as an em-dash. All 51 pre-existing table/heading lines of `summary.md` are byte-stable in the regenerated output. `extract_ragas_table` + `replace_ragas_region` round-trip, and `extract_ragas_table` returns `None` on a marker-less doc. `summary.md` was regenerated offline from results JSON `20260515T134615+0000.json` so the committed artifact now carries the `EVAL_SUMMARY_RAGAS` markers; `python -m docs._embed_eval_summaries` then embeds the RAGAS region into `docs/evals.md` and is idempotent (run twice → byte-identical). `mypy`: `docs/_embed_eval_summaries.py` is clean and the new `render_summary` RAGAS code adds zero new errors (the 7 pre-existing `runner.py` errors — `asyncpg`/`yaml` stubs, the four `retrieval` attr-defined notes, the `viewers` `Literal` assignment — and the 1 pre-existing `ragas.py` lazy-import error are unchanged). The full live-run validation steps below need local Supabase + a seeded corpus and were not executed in this environment. Note: until the real RAGAS pipeline lands (US-001's `score_with_ragas` is still a stub returning `[]`), a live `--include-ragas` run produces an empty `by_cell`, so the 8 table rows render with em-dash cells — the structure is correct and fills in automatically once the pipeline ships.
+**Validation:** Offline-verifiable criteria all pass — `render_summary` still emits the placeholder only when RAGAS was not requested and emits all 8 rows for a populated section. An `--include-ragas` run can no longer reach the renderer with zero scored rows: `RagasScoringError` fails first, and the weekly workflow independently validates row/cell/metric structure before publish. Historical em-dash artifacts remain unchanged and are labeled unmeasured in `docs/evals.md`.
 
 **Validation Test:**
 
@@ -194,7 +203,7 @@ This PRD covers integrating RAGAS as a **parallel** eval signal that ships **alo
 
 ---
 
-### US-005: Operational gates — coverage < 96% AND api_error > 2 → red, fail workflow + open issue — ✅ COMPLETE (2026-05-20)
+### US-005: Operational gates — any missing score or API error → red — ✅ COMPLETE (amended 2026-09-15)
 
 **Description:** As a maintainer, I want operational degradations (low effective coverage, API error spikes) to fail the workflow loudly so that nobody silently accepts degraded conditions as the new normal. Operational gates use **fixed** thresholds (not rolling-median) because adapting to degradation is exactly the failure mode we want to avoid.
 
@@ -202,24 +211,24 @@ This PRD covers integrating RAGAS as a **parallel** eval signal that ships **alo
 
 - [x] `evals/retrieval/runner.py` (or a new sibling `evals/retrieval/ragas_gates.py`) implements a `check_operational_gates(ragas_aggregates) -> list[GateFinding]` function.
 - [x] For each (metric × cell) tuple:
-  - If `coverage < 0.96` → emit a `GateFinding` with severity `red`, tag `coverage-pipeline-failure`, message describing which (metric × cell) and the observed coverage value.
-  - If `api_errors > 2` → emit a `GateFinding` with severity `red`, tag `coverage-operational-failure`.
+  - If `coverage < 1.0` → emit a `GateFinding` with severity `red`, tag `coverage-pipeline-failure`, message describing which (metric × cell) and the observed coverage value.
+  - If `api_errors > 0` → emit one cell-level `GateFinding` with severity `red`, tag `coverage-operational-failure`.
 - [x] Runner exits non-zero when any red operational finding is present.
 - [x] Findings are also serialized into the result JSON under `ragas.gate_findings` (so the CI workflow can read them).
 - [ ] CI workflow step uses `gh issue create` (or `gh issue list --label … --state open` for idempotency) to open / dedup an issue per tag. `coverage-operational-failure` issues auto-close on the next green manual-dispatch run (look for "no api_errors in last successful dispatch" condition in workflow). _(deferred to US-008 — see Validation note)_
 - [x] Typecheck/lint passes.
 
-**Implementation notes:** New module `evals/retrieval/ragas_gates.py` holds the `GateFinding` dataclass (`severity`, `tag`, `metric`, `cell`, `message` — `asdict`-serializable straight into the JSON) and `check_operational_gates(ragas_aggregates)`. The function walks `aggregates.by_cell` in fixed `RAGAS_CELL_IDS` × `RAGAS_METRICS` order and applies two fixed-threshold checks per (metric × cell): `coverage < COVERAGE_FLOOR` (0.96) → red `coverage-pipeline-failure`; `api_errors > API_ERROR_CEILING` (2) → red `coverage-operational-failure`. Thresholds are fixed (never rolling) by design — a rolling baseline would absorb operational rot into the accepted "normal" (FR-8). Because `api_errors` is a cell-level total (US-003's `_aggregate_by_cell` repeats the same count across the four metric blocks), the `api_errors` check runs **once per cell** — one `coverage-operational-failure` finding per error-spiking cell (`metric=""`). Coverage is genuinely per-metric, so the coverage check stays per (metric × cell). _(The `api_errors` check was revised from per-metric to per-cell under US-006, which shares the new `_cell_api_errors` helper and requires exactly one `api-error-drift` finding per cell — both gate families now treat `api_errors` consistently as cell-level.)_ `runner.py`'s `amain` calls `check_operational_gates(ragas_section["aggregates"])` immediately after `build_ragas_section`, attaches the serialized findings to `ragas_section["gate_findings"]` (so they ride into the results JSON under `ragas.gate_findings`), and — *after* the JSON and `summary.md` are written — returns exit code 1 if any red finding is present, logging each. Writing the artifacts before the non-zero return is deliberate: the weekly workflow must still be able to read `ragas.gate_findings` to file issues despite the failed run. Boundary values do not fire — `coverage == 0.96` and `api_errors == 2` are both inside tolerance (strict `<` / `>`).
+**Implementation notes:** `check_operational_gates` walks `aggregates.by_cell` in fixed `RAGAS_CELL_IDS` × `RAGAS_METRICS` order. `coverage < COVERAGE_FLOOR` (1.0) is a red `coverage-pipeline-failure`; `api_errors > API_ERROR_CEILING` (0) is a red `coverage-operational-failure`. Because `api_errors` is a cell-level total repeated in every metric block, that check emits once per cell; coverage remains per metric. Thresholds are fixed so operational degradation never redefines normal. `runner.py` serializes the findings before returning exit 1, preserving the failed snapshot for diagnosis while preventing green publication.
 
-**Validation:** `check_operational_gates` verified offline via a direct unit test across 8 scenarios — empty/absent `by_cell` → no findings; clean cells → no findings; boundary `coverage == 0.96` / `api_errors == 2` → no findings; a single metric below the floor → exactly one red `coverage-pipeline-failure` carrying the right metric/cell/message; an `api_errors = 5` cell → one red `coverage-operational-failure` (per cell — see the revised implementation note); a cell failing both checks → both finding types; the `any(severity == "red")` predicate that drives the exit code; and `asdict(GateFinding)` producing the gate-finding JSON shape (`severity, tag, metric, cell, message` — US-007 later appended the defaulted `cross_family_corroborated` / `auto_close_weeks` fields, so findings now serialize seven keys). `runner.py` still imports cleanly and `--help` exits 0. `mypy`: `ragas_gates.py` is clean and the runner wiring adds zero new errors (the 8 pre-existing errors — `asyncpg`/`yaml` stubs, four `retrieval` attr-defined notes, the `viewers` `Literal` assignment, the `ragas.py` lazy-import — are unchanged, only shifted by the two new import lines). The full live-run validation steps below need local Supabase plus a monkeypatched `score_with_ragas` and were not executed in this environment; with US-001's stub `score_with_ragas` (returns `[]`) a live `--include-ragas` run produces an empty `by_cell`, so `gate_findings` is `[]` and the runner exits 0 until the real RAGAS pipeline lands. **AC5 (the CI workflow `gh issue` step) is intentionally deferred:** no workflow runs `--include-ragas` until the weekly workflow is created in US-008, whose AC explicitly builds the issue-filing step "per US-005". This story delivers the `ragas.gate_findings` JSON contract that the US-008 workflow step consumes.
+**Validation:** `check_operational_gates` is covered offline for complete clean data, missing structure, and the single-failure edge: 59/60 coverage is red even with no API error, and one provider error emits both the affected metric's coverage finding and exactly one cell-level operational finding. Only coverage 1.0 with zero API errors is green.
 
 **Validation Test:**
 
-- **Setup:** Use US-003's monkeypatch hook to artificially set `api_errors = 5` on the `faithfulness × full_access:pre_filter` cell. Have a second test variant that artificially drops coverage to 0.90.
+- **Setup:** Use US-003's monkeypatch hook to make one of 60 metric calls fail, first as a provider error and then as a non-provider metric error.
 - **Steps:**
-  1. Run with the `api_errors = 5` patch: `python -m evals.retrieval.runner --include-ragas --mode hybrid --viewers full --out /tmp/ragas-api-fail.json; echo "exit=$?"`
+  1. Run with one provider failure (`api_errors = 1`, affected metric coverage `59/60`): `python -m evals.retrieval.runner --include-ragas --mode hybrid --viewers partial --out /tmp/ragas-api-fail.json; echo "exit=$?"`
   2. `jq '.ragas.gate_findings' /tmp/ragas-api-fail.json`
-  3. Run with the coverage-0.90 patch: same command, different output file. Note exit code.
+  3. Run with one metric failure (`api_errors = 0`, affected metric coverage `59/60`): same command, different output file. Note exit code.
   4. Run a clean baseline (no patches): same command. Note exit code.
 - **Expected Result:**
   - Step 1: exit code 1; gate_findings contains a finding with severity `red` and tag `coverage-operational-failure`.
@@ -230,6 +239,8 @@ This PRD covers integrating RAGAS as a **parallel** eval signal that ships **alo
 ---
 
 ### US-006: Diagnostic gates — coverage drift and api_error drift → yellow, append to `## Diagnostics` — ✅ COMPLETE (2026-05-20)
+
+**Current fail-any amendment (2026-09-15):** Complete coverage and zero API errors are required for green. Any drift finding may still provide diagnostic context, but every non-zero provider-error count or missing metric result also emits a red operational finding and the runner exits non-zero. References later in this story to a `0.96` floor, an API-error allowance, or yellow-only execution are retained solely as the historical validation record of the superseded thresholds.
 
 **Description:** As a maintainer, I want slow drifts in coverage and `api_error` rate to surface as **yellow** diagnostics (not failures) so that I can spot operational rot before it crosses the fixed red threshold, without paging anyone on noisy week-to-week variation.
 
@@ -245,28 +256,30 @@ This PRD covers integrating RAGAS as a **parallel** eval signal that ships **alo
 
 **Implementation notes:** `evals/retrieval/ragas_gates.py` gains `load_ragas_history` and `check_diagnostic_gates`, plus the shared `_cell_api_errors` helper (also adopted by the revised US-005 `check_operational_gates`). `load_ragas_history(weeks=4, weekly_dir=None)` reads `docs/ragas-weekly/<YYYY-MM-DD>.json`, sorts by the ISO-date filename, and returns the last `weeks` snapshots; an absent directory (the pre-US-008 / first-run state) yields `[]`. `check_diagnostic_gates(current_aggregates, history)` runs two rolling-window checks: **coverage-drift** per (metric × cell) — `coverage < rolling_median − COVERAGE_DRIFT_PP` (0.05) → yellow `coverage-drift`; **api-error-drift** per cell — `api_errors > rolling_mean AND > 0` → yellow `api-error-drift`. coverage-drift is per-metric (coverage genuinely differs by metric); api-error-drift is per-cell because `api_errors` is a cell-level total — a per-metric check would emit four identical findings, and the validation expects exactly one. When fewer than `MIN_DRIFT_HISTORY` (3) prior snapshots exist the check is skipped with the single log line `drift check skipped: insufficient history (N runs)` and returns `[]` — 3, not 4, because US-007's score-regression gate needs the fuller 4-snapshot window while the lower-stakes diagnostic gate activates a week sooner (and the validation below uses 3 snapshots as sufficient). `runner.py`'s `amain` builds the history list from `load_ragas_history()`, calls `check_diagnostic_gates`, and concatenates the yellow findings onto the operational (red) ones in `ragas.gate_findings`; yellow findings carry `severity="yellow"` so the existing `any(severity == "red")` exit-code predicate ignores them — a yellow-only run still exits 0. `render_summary` gains a `diagnostic_findings` arg and emits a `### Diagnostics` markdown list immediately after the RAGAS comparison block, but only when there are findings. **Heading level:** the AC writes `## Diagnostics`; `summary.md` uses `###` for every section, so `### Diagnostics` was used for in-file consistency — a `grep '## Diagnostics'` still matches it.
 
-**Validation:** `check_diagnostic_gates`, `load_ragas_history`, the revised `check_operational_gates`, and `render_summary` were verified offline via a direct unit test across 8 scenarios — `< 3` history runs → skipped with the log line, no findings; stable history → no findings; a coverage drop on one metric + an api spike on one cell → **exactly 2** yellow findings (1 `coverage-drift`, 1 `api-error-drift` — the per-cell api check keeps it at 1, not 4); coverage-drift boundary (`coverage == median − 0.05` does not fire, strictly below does); api-error-drift boundary (`== rolling mean` and `0 errors` do not fire); `load_ragas_history` returns the last 4 snapshots by filename and `[]` for an absent directory; `render_summary` emits `### Diagnostics` only when findings exist and places it after the RAGAS table. The revised `check_operational_gates` (US-005's `api_errors` check moved per-metric → per-cell) yields one `coverage-operational-failure` per error-spiking cell. `runner.py` imports cleanly, `--help` exits 0, `mypy` is clean on `ragas_gates.py` with zero new errors. The live runner steps below need local Supabase plus a monkeypatched `score_with_ragas` and were not executed here; with the stub `score_with_ragas` (`[]`) and the absent `docs/ragas-weekly/` directory, a live `--include-ragas` run has empty aggregates and empty history → `drift check skipped: insufficient history (0 runs)` → no findings, exit 0.
+**Validation:** `check_diagnostic_gates`, `load_ragas_history`, the revised non-vacuous `check_operational_gates`, and `render_summary` are verified offline. Historical zero-row snapshots remain on disk for provenance but contribute no numeric values to rolling metric history; only blocks with complete coverage and zero provider errors count toward the configured minimum eligible-run window.
 
 **Validation-test caveat — the coverage-drift half of the test below is not satisfiable as written.** (1) Its setup uses `coverage = 0.94` against a `0.98` history — a 4pp drop, *below* the 5pp threshold the AC **and** FR-9 both specify — so no `coverage-drift` fires. (2) More fundamentally, `coverage = 0.94 < 0.96` trips US-005's **red** operational gate, so the runner exits 1 — contradicting step 1's expected `exit 0`. (3) Structurally, with a 5pp threshold and coverage capped at 1.0, a yellow `coverage-drift` can never fire without US-005's red `coverage-pipeline-failure` (fixed floor 0.96) also firing: the yellow zone (`coverage < median − 0.05 ≤ 0.95`) lies entirely inside the red zone (`coverage < 0.96`). So `coverage-drift` is shadowed by the red coverage gate. The implementation follows the AC + FR-9 spec (5pp) faithfully; the `api-error-drift` half of the test **is** sound (`api_errors = 1 ≤ 2` → no red; `> rolling mean` → yellow; exit 0) and is what the offline test exercises. See the new Open Question on reconciling the coverage-drift threshold with the red floor.
 
 **Validation Test:**
 
-- **Setup:** Create three synthetic prior weekly snapshots in `docs/ragas-weekly/2026-04-26.json`, `2026-05-03.json`, `2026-05-10.json` with `coverage = 0.98` and `api_errors = 0` on every cell. Then run with a patch that produces `coverage = 0.94` on one cell and `api_errors = 1` on another.
+- **Setup:** Create three synthetic prior weekly snapshots in `docs/ragas-weekly/2026-04-26.json`, `2026-05-03.json`, `2026-05-10.json` with `coverage = 1.0` and `api_errors = 0` on every cell. Then run with a patch that produces `coverage = 0.94` on one cell and `api_errors = 1` on another.
 - **Steps:**
   1. Run: `python -m evals.retrieval.runner --include-ragas --mode hybrid --viewers full --out /tmp/ragas-drift.json; echo "exit=$?"`
   2. `jq '.ragas.gate_findings | map(select(.severity == "yellow"))' /tmp/ragas-drift.json`
   3. Open `evals/retrieval/summary.md`, locate `## Diagnostics` section
   4. Delete the three synthetic prior snapshots and re-run.
 - **Expected Result:**
-  - Step 1: exit 0 (yellow gates don't fail workflow).
+  - Step 1: exit 1 because the operational fail-any gates are red; yellow diagnostics do not add a separate failure mode.
   - Step 2: 2 yellow findings — one tagged `coverage-drift`, one `api-error-drift`.
   - Step 3: both findings rendered as a markdown list under `## Diagnostics`.
-  - Step 4: log line `drift check skipped: insufficient history (0 runs)`; no findings; exit 0.
+  - Step 4: log line `drift check skipped: insufficient history (0 runs)`; no yellow drift findings, while the incomplete/erroring current run remains red.
 - **Failure Indicator:** Yellow findings fail the workflow; `## Diagnostics` section missing or empty when findings exist; insufficient-history is treated as drift (false positive).
 
 ---
 
 ### US-007: Score-regression gates with cross-family corroboration matrix + 4-week history reader + coverage-guard — ✅ COMPLETE (2026-05-20)
+
+**Current fail-any amendment (2026-09-15):** The score-regression coverage guard is `1.0`; incomplete cells skip longitudinal comparison because the operational gate already makes the run red. References later in this story to a `0.96` guard are retained solely as the historical validation record of the superseded threshold.
 
 **Description:** As a maintainer, I want score regressions in RAGAS to escalate to **red** only when corroborated by a same-cell drop in the cross-family Claude judge (independent observation), and stay **yellow** otherwise — so that single-judge noise doesn't generate false-alarm pages, but corroborated drops do get attention. Coverage-guard prevents comparing today's degraded-sample median against last week's full-sample median.
 
@@ -283,10 +296,10 @@ This PRD covers integrating RAGAS as a **parallel** eval signal that ships **alo
   | `context_recall` | (none) | n/a | **single-judge-red** | n/a |
 
 - [x] Drop magnitudes (proposed, confirm on first run):
-  - RAGAS score drop = current strict-mean < (4-week rolling median) - 0.05 (5pp on 0–1 scale)
+  - RAGAS score drop = current strict-mean < (4-week rolling median) - 0.05 in native metric units
   - Claude `faithfulness` drop (strict) = current < (4-week median) - 0.3 (on 1–5 Likert)
   - Claude `helpfulness` drop (soft, for Answer Relevancy corroboration) = current < (4-week median) - 0.2
-- [x] **Coverage-guard:** If `coverage < 0.96` on the cell being evaluated, the rolling-median comparison is **skipped** with log line `"score-regression check skipped for (metric × cell): insufficient coverage (X.XX < 0.96)"`. NOT a finding.
+- [x] **Coverage-guard:** If `coverage < 1.0` on the cell being evaluated, the rolling-median comparison is skipped. The operational gate already records the red finding.
 - [x] `single-judge-red` findings carry a longer auto-close window (2 weeks vs the standard 1 week for cross-family-corroborated reds) reflected as `auto_close_weeks: 2` in the finding payload.
 - [x] Insufficient history (< 4 prior snapshots) skips score regression checks entirely with log line — does NOT fail or flag.
 - [x] Typecheck/lint passes.
@@ -306,13 +319,13 @@ This PRD covers integrating RAGAS as a **parallel** eval signal that ships **alo
   3. Run with only the RAGAS drop (Claude unchanged): same command, different file.
   4. Run with only the Claude drop (RAGAS unchanged): same command, different file.
   5. Run a context_recall-only drop (no Claude equivalent exists): same command, different file.
-  6. Run with coverage = 0.80 on the cell (below the 96% guard): same command, different file.
+  6. Run with coverage = 0.80 on the cell (below the complete-coverage guard): same command, different file.
 - **Expected Result:**
   - Step 2: 1 red finding with tag `score-regression`, metric `faithfulness`, severity `red`, `cross_family_corroborated: true`.
   - Step 3: 1 yellow finding (`severity: yellow`, single-judge drop).
   - Step 4: 1 yellow finding (Claude-only drop is yellow on the Claude side; doesn't promote any RAGAS metric to red).
   - Step 5: 1 red finding with `tag: single-judge-red`, `auto_close_weeks: 2`.
-  - Step 6: log line `score-regression check skipped for (faithfulness × full_access:pre_filter): insufficient coverage (0.80 < 0.96)`. No finding emitted (yellow or red) for that cell.
+  - Step 6: log line `score-regression check skipped for (faithfulness × full_access:pre_filter): insufficient coverage (0.80 < 1.0)`. No score-regression finding is emitted for that cell; the operational coverage finding remains red.
 - **Failure Indicator:** Single-judge drop produces red (false alarm); both-judge drop produces only yellow (missed regression); single-judge-red lacks the 2-week auto-close window; coverage-guard fires but a finding still gets emitted.
 
 ---
@@ -337,7 +350,7 @@ This PRD covers integrating RAGAS as a **parallel** eval signal that ships **alo
 
 **Implementation notes:** New file `.github/workflows/retrieval-eval-ragas-weekly.yml`, structurally copied from `retrieval-eval-nightly.yml` (checkout → Python 3.11 → Supabase CLI → Supabase stack → install deps → seed + run) then adjusted: schedule `'0 4 * * 0'` (Sundays 04:00 UTC) + `workflow_dispatch`; concurrency group `retrieval-eval-ragas-weekly`; publish to `docs/ragas-weekly/<DATE>.{json,md}`. Two deviations from the AC's literal runner invocation, both for correctness: (1) `--viewers partial`, not `--viewers full,partial` — the runner's `--viewers` takes a single choice and `partial` already expands to `(full_access, partial_access)`, exactly RAGAS's two cells; there is no comma-list syntax and adding one would be redundant. (2) `--summary /tmp/ragas-weekly.md` is passed so the run does not clobber the default `evals/retrieval/summary.md` (the nightly retrieval artifact); the publish step copies the /tmp summary to `docs/ragas-weekly/<DATE>.md`. The runner step wraps the runner in `set +e` and records its exit code as a step output — the runner exits 1 on a red gate finding but writes the JSON + summary first (US-005), so the snapshot is always publishable. The publish step (`if: always()`) commits the snapshot regardless of gate outcome. The `File / close gate-finding issues` step (`if: always()`) implements US-005's deferred AC5: on a non-zero runner exit it reads `ragas.gate_findings` and, per unique **red** tag, ensures the label exists (`gh label create --force`) then files one issue unless `gh issue list --label <tag> --state open` already shows one (per-tag dedup); on a green **scheduled** run it auto-closes open `coverage-pipeline-failure` / `coverage-operational-failure` issues — per the Open Question's recommendation, manual dispatches do **not** auto-close, so a partial re-run can't clear a real finding. A final `Reflect runner exit code` step fails the workflow when the runner exited 1, so a maintainer sees a red ✗ next to the filed issue. `permissions` is `contents: write` (commit the snapshot) **plus** `issues: write` — the latter is required for the `gh issue` step and goes one line beyond the AC's literal `contents: write`.
 
-**Validation:** The workflow YAML parses cleanly (`yaml.safe_load`) — triggers `schedule` + `workflow_dispatch`, cron `0 4 * * 0`, concurrency group `retrieval-eval-ragas-weekly`, permissions `contents` + `issues: write`, and the nine steps in order. No Python changed, so `mypy` is unaffected. The full live validation (`gh workflow run` → snapshot committed → issues filed/closed) needs all prior stories merged to the default branch plus `gh` auth, and was not run here. **Secret prerequisite:** the AC states "same secrets as nightly … no new secrets", but `ANTHROPIC_API_KEY` is referenced by **no** existing workflow — nightly uses only `OPENAI_API_KEY`. The `--include-generation` Claude judge needs `ANTHROPIC_API_KEY`, so whoever enables this workflow must confirm it is configured as a repo secret; if it is absent, `secrets.ANTHROPIC_API_KEY` resolves empty and the runner fails fast with `--include-generation requires ANTHROPIC_API_KEY`. **Data note:** until US-001's stub `score_with_ragas` is replaced by the real RAGAS pipeline, a live weekly run publishes a snapshot whose `ragas.aggregates.by_cell` is empty and whose gates therefore produce no findings — the workflow is correct end-to-end and fills with real numbers automatically once the pipeline lands.
+**Validation:** The workflow YAML parses cleanly and preserves the existing schedule/concurrency/issue/publish contract. Its snapshot check now requires non-empty `ragas.per_question` plus both expected cells and all four metric aggregates before publish. Missing or structurally empty output takes the existing UNMEASURED harness-failure path; valid low-coverage output remains publishable evidence and exits red through the operational findings. A bounded live run still requires local Supabase plus `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` and must not be dispatched from a feature branch.
 
 **Validation Test:**
 
@@ -371,7 +384,7 @@ This PRD covers integrating RAGAS as a **parallel** eval signal that ships **alo
     - Why score gates use rolling-median but operational gates stay fixed (degraded operations must never become the accepted norm; real score improvements should reset the baseline).
     - Why cross-family corroboration is required for red on Faithfulness (independent observations reduce false alarms) but Context Precision/Recall fire single-judge-red with a 2-week auto-close (no Claude equivalent exists to corroborate against).
 - [x] **CONTEXT.md** — new entries appended under a new `## Evals` section (CONTEXT.md doesn't currently have an Evals section; add one):
-  - `RAGAS metric` — disambiguate from custom Claude judge scores; note score ranges (0–1 vs 1–5).
+  - `RAGAS metric` — disambiguate Answer Relevancy (−1–1), the other RAGAS metrics (0–1), and custom Claude judge scores (1–5).
   - `Same-family bias` — explain why deliberately accepted.
   - `Cell` — the (viewer × filter) tuple.
   - `Effective coverage` — fraction of non-NaN scores; distinct from "tried."
@@ -413,17 +426,17 @@ This PRD covers integrating RAGAS as a **parallel** eval signal that ships **alo
 - FR-3: RAGAS scoring runs **only** on `mode == "hybrid"` AND `(viewer, filter) ∈ {(full_access, pre_filter), (partial_access, pre_filter)}`. Other combinations are silently skipped with a log warning.
 - FR-4: The RAGAS judge LLM is `gpt-4o-mini`. Not configurable via CLI in v1 (deliberate; reduces surface for accidental misconfiguration).
 - FR-5: RAGAS results are emitted under a new top-level `ragas` key in the results JSON, never mixed with the existing `aggregates`.
-- FR-6: For each (metric × cell), the runner emits both `mean_strict` (NaN→0) and `mean_available` (NaN excluded); never uses `nanmean` for any headline number.
+- FR-6: For each (metric × cell), the runner emits both `mean_strict` (NaN→0) and `mean_available` (NaN excluded); never uses `nanmean` for any headline number. Answer Relevancy preserves its canonical −1–1 values; the other metric values remain 0–1.
 - FR-7: Each NaN score has a `nan_reasons` entry from the fixed enum: `judge_refused`, `parse_error`, `empty_contexts`, `metric_error`, `timeout`, `unknown`.
-- FR-8: Operational gates use **fixed** thresholds: `coverage < 0.96` per (metric × cell) → red; `api_errors > 2` per (metric × cell) → red. Both fail the workflow.
+- FR-8: Operational gates use **fixed** fail-any thresholds: `coverage < 1.0` per (metric × cell) → red; `api_errors > 0` per cell → red. Both fail the workflow.
 - FR-9: Diagnostic gates use **rolling 4-week** windows: coverage drift > 5pp → yellow; api_error drift above 4-week mean → yellow. Neither fails the workflow.
 - FR-10: Score-regression gates use **rolling 4-week median**. Red only when the RAGAS drop AND the corresponding cross-family Claude judge drop occur in the same cell (Faithfulness ↔ Claude `faithfulness` strict; Answer Relevancy ↔ Claude `helpfulness` soft).
 - FR-11: Context Precision and Context Recall regressions fire as `single-judge-red` (no Claude judge to corroborate) with a 2-week auto-close window.
-- FR-12: Coverage-guard: if `coverage < 0.96` on a cell, score-regression comparison is skipped (not evaluated as a regression).
-- FR-13: When 4-week history is unavailable (early rollout), drift and score-regression checks are skipped with log lines; no findings emitted.
+- FR-12: Coverage-guard: if `coverage < 1.0` on a cell, score-regression comparison is skipped; the operational red still fails the run.
+- FR-13: Drift and score-regression checks require the configured minimum number of historical blocks with complete coverage and zero provider errors; fewer eligible measurements skip comparison, even when enough snapshot files exist.
 - FR-14: The weekly workflow runs Sundays 04:00 UTC + `workflow_dispatch`, in its own concurrency group, publishing snapshots to `docs/ragas-weekly/<DATE>.{json,md}`.
 - FR-15: Operational red findings auto-file GitHub issues by tag; `coverage-operational-failure` issues auto-close on the next green dispatch.
-- FR-16: PR CI is unchanged. RAGAS never runs in `retrieval-eval.yml`.
+- FR-16: PR CI never runs paid RAGAS scoring. It installs the isolated pinned compatibility set and imports the real runtime and all four metrics without credentials or evaluator calls.
 
 ## Non-Goals (Out of Scope)
 
@@ -439,7 +452,7 @@ This PRD covers integrating RAGAS as a **parallel** eval signal that ships **alo
 
 ## Design Considerations
 
-- **Lazy import pattern.** Mirror the existing `_get_anthropic()` helper at `evals/retrieval/runner.py:506-523`. RAGAS / `langchain_openai` imports must live inside `score_with_ragas()`, not at the top of `ragas.py`.
+- **Lazy import pattern.** Mirror the existing `_get_anthropic()` helper at `evals/retrieval/runner.py:506-523`. RAGAS and its evaluator/embedding imports live inside `_load_ragas_runtime()`, called only from `score_with_ragas()`, not at module import time.
 - **Summary.md marker convention.** Use `<!-- EVAL_SUMMARY_RAGAS_START -->` / `<!-- EVAL_SUMMARY_RAGAS_END -->` to match the existing `EVAL_SUMMARY_*` marker style consumed by `docs/_embed_eval_summaries.py`.
 - **Workflow file convention.** Copy structure from `.github/workflows/retrieval-eval-nightly.yml`; change only schedule, concurrency group, runner CLI invocation, and publish path.
 - **CONTEXT.md.** New `## Evals` section. Glossary entries follow the format already used in `CONTEXT.md` (term — definition; optionally cross-referenced).
@@ -447,8 +460,8 @@ This PRD covers integrating RAGAS as a **parallel** eval signal that ships **alo
 
 ## Technical Considerations
 
-- **Lazy import.** RAGAS pulls in `langchain-core`, `langchain-openai`, `datasets`, `pandas`. Heavy. Hard import would break PR CI install (which only installs `requirements-ci.txt` without RAGAS).
-- **Cost envelope (per weekly run).** 50 questions × 1 mode × 2 cells × 4 metrics × ~3 LLM calls/metric ≈ 1,200 `gpt-4o-mini` calls per weekly RAGAS run. At current pricing, well under $1/run.
+- **Lazy import and compatibility boundary.** The normal runner and the first slim guard pass do not import RAGAS. A second import-only PR step installs `requirements-ragas.txt` and loads the real runtime without credentials, proving the pinned RAGAS/LangChain graph before the weekly paid path. RAGAS 0.4.3 imports the legacy `langchain_community.chat_models.vertexai` module at load time, so the full working set is pinned rather than allowing an incompatible 0.4.x community package.
+- **Cost envelope (per weekly run).** 60 questions × 1 mode × 2 cells × 4 metrics × ~3 LLM calls/metric budgets approximately 1,440 `gpt-4o-mini` calls per weekly RAGAS run. Actual spend depends on token usage and provider pricing.
 - **Snapshot byte stability.** Existing consumers of `docs/nightly/<DATE>.json` (e.g., `_embed_eval_summaries.py`, the diff_results.py CI comment script) must remain byte-stable when `ragas` is added. New `ragas` key alone, no rearrangement of existing keys.
 - **Determinism caveat.** Same as the existing runner — OpenAI embeddings and LLM outputs are not strictly bit-deterministic across calls. RAGAS scores will jitter within a few percentage points across runs even on unchanged inputs. The methodology paragraph in `docs/evals.md` should note this.
 - **Failure-reason taxonomy** is enforced by enum (per FR-7). Do not allow arbitrary free-text reasons — that defeats programmatic gate evaluation.
@@ -463,6 +476,8 @@ This PRD covers integrating RAGAS as a **parallel** eval signal that ships **alo
 - A portfolio reader (or new contributor) can read `docs/evals.md` and explain the RAGAS methodology without reading runner source.
 
 ## Open Questions
+
+The final coverage-drift item below records the superseded `0.96` / `>2` operational policy. Under the current `1.0` / `0` policy, coverage and API-error drift findings are contextual diagnostics that can accompany, but never replace or weaken, the required red operational finding.
 
 - **Drop magnitudes** (RAGAS = -5pp; Claude faithfulness = -0.3; Claude helpfulness soft = -0.2) are proposed defaults. After 4 weeks of weekly runs, evaluate whether they need tuning based on observed week-to-week variance.
 - **Failure-reason taxonomy completeness.** The 6-value enum (`judge_refused`, `parse_error`, `empty_contexts`, `metric_error`, `timeout`, `unknown`) is a first cut; may need additional categories once we observe real-world RAGAS failure modes.
