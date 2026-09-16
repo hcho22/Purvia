@@ -458,7 +458,7 @@ def _history_baseline_eligibility_check() -> None:
     diagnostic_current = {
         "by_cell": {cell_id: cell(0.8, coverage=0.8, api_errors=1)}
     }
-    missing = {"by_cell": {}}
+    missing: dict[str, Any] = {"by_cell": {}}
     assert check_diagnostic_gates(
         diagnostic_current, [eligible, missing, missing, missing]
     ) == []
@@ -510,14 +510,14 @@ def _dependency_contract_check() -> None:
         line = raw.split("#", 1)[0].strip()
         if line and not line.startswith("-"):
             requirement = Requirement(line)
-            name = canonicalize_name(requirement.name)
-            requirements.setdefault(name, []).append(requirement)
+            canonical_name = canonicalize_name(requirement.name)
+            requirements.setdefault(canonical_name, []).append(requirement)
 
-    for name, pinned_version in PINNED_RAGAS_STACK.items():
-        declared = requirements.get(name, [])
+    for package_name, pinned_version in PINNED_RAGAS_STACK.items():
+        declared = requirements.get(package_name, [])
         assert len(declared) == 1, (
             "evals/retrieval/requirements-ragas.txt must declare the RAGAS "
-            f"compatibility dependency {name} exactly once; got {declared!r}"
+            f"compatibility dependency {package_name} exactly once; got {declared!r}"
         )
         requirement = declared[0]
         assert (
@@ -527,17 +527,17 @@ def _dependency_contract_check() -> None:
             and requirement.url is None
         ), (
             "evals/retrieval/requirements-ragas.txt must exactly pin the verified "
-            f"RAGAS compatibility dependency {name} to {pinned_version}; "
+            f"RAGAS compatibility dependency {package_name} to {pinned_version}; "
             f"got {requirement!r}"
         )
 
     if importlib.util.find_spec("ragas") is not None:
         from importlib.metadata import version
 
-        for name, pinned_version in PINNED_RAGAS_STACK.items():
-            assert version(name) == pinned_version, (
-                f"installed {name} must match the verified RAGAS compatibility "
-                f"version {pinned_version}; got {version(name)}"
+        for package_name, pinned_version in PINNED_RAGAS_STACK.items():
+            assert version(package_name) == pinned_version, (
+                f"installed {package_name} must match the verified RAGAS compatibility "
+                f"version {pinned_version}; got {version(package_name)}"
             )
         runtime = ragas_mod._load_ragas_runtime()
         assert callable(runtime.evaluation_dataset.from_list)
