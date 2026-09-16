@@ -238,12 +238,14 @@ jobs:
   # The RAGAS scoring guard adds the ninth module: paid/provider calls are
   # replaced by deterministic doubles while the real dataset mapping,
   # partial/error handling, aggregation, dependency pin, and non-vacuous
-  # operational gate are exercised end to end.
+  # operational gate are exercised end to end. A second pass installs the
+  # isolated pinned runtime and proves all four real metric imports resolve.
   #
-  # All nine are offline by construction - no DB, no secrets, no network, inputs
-  # built in-process (the two gate modules drive fake judge clients, so there is
-  # no network call to make) - which is what lets this job gate a PR without the
-  # Supabase stack the two jobs below pay for. The rubric module's LIVE half
+  # All nine execute offline by construction - no DB, no secrets, no provider
+  # calls, and inputs built in-process. The compatibility pass needs only the
+  # package installation network already used during setup. This lets the job
+  # gate a PR without the Supabase stack the two jobs below pay for. The rubric
+  # module's LIVE half
   # skips cleanly when no API keys are present; its deterministic fake clients
   # execute both runtime and offline judge entry points and inspect the emitted
   # prompts and schemas. It is deliberately its own job so it still reports on a
@@ -253,7 +255,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.guards == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Checkout PR head
@@ -264,7 +266,9 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-          cache-dependency-path: evals/retrieval/requirements-ci.txt
+          cache-dependency-path: |
+            evals/retrieval/requirements-ci.txt
+            evals/retrieval/requirements-ragas.txt
 
       - name: Install Python deps
         run: |
@@ -292,6 +296,11 @@ jobs:
           python -m backend.test_answer_gate_rubric
           python -m backend.test_answer_gate
           python -m backend.test_faithfulness_gate
+
+      - name: Validate pinned RAGAS runtime imports
+        run: |
+          pip install -r evals/retrieval/requirements-ragas.txt
+          RAGAS_RUNTIME_REQUIRED=1 python -m evals.retrieval.test_ragas_scoring
 
   retrieval-eval:
     name: PR vs main

@@ -1,0 +1,12 @@
+# Import-only and scheduled-run dependency boundary for RAGAS 0.4.3.
+# RAGAS imports `langchain_community.chat_models.vertexai` at module load;
+# langchain-community 0.4.x removed it, while 0.3.31 conflicts with the
+# repository's langsmith==0.2.10 and pydantic==2.10.4 pins.
+ragas==0.4.3
+langchain==0.3.25
+langchain-core==0.3.63
+langchain-community==0.3.24
+langchain-openai==0.3.19
+langchain-text-splitters==0.3.8
+langsmith==0.2.10
+pydantic==2.10.4

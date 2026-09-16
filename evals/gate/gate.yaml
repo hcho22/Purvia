@@ -56,11 +56,11 @@ bindings:
     - "partial_access:pre_filter"
 
   # Fixed operational floors + rolling-window parameters. Reproduce the FR-8/9/10
-  # constants: coverage floor 0.96, API-error ceiling 2, 5pp drift band, a 0.05
+  # constants: complete coverage, zero API errors, a 5pp drift band, a 0.05
   # RAGAS-drop trigger, and the minimum snapshot windows the drift/score gates need.
   thresholds:
-    coverage_floor: 0.96
-    api_error_ceiling: 2
+    coverage_floor: 1.0
+    api_error_ceiling: 0
     coverage_drift_pp: 0.05
     ragas_drop: 0.05
     min_drift_history: 3

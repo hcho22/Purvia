@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import math
+import os
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -45,6 +46,7 @@ from evals.retrieval.ragas import (  # noqa: E402
     score_with_ragas,
 )
 from evals.retrieval.ragas_gates import (  # noqa: E402
+    TAG_COVERAGE_OPERATIONAL,
     TAG_COVERAGE_PIPELINE,
     check_operational_gates,
 )
@@ -53,7 +55,7 @@ from evals.retrieval.validate_ragas_snapshot import (  # noqa: E402
     validate_ragas_payload,
 )
 
-REQUIREMENTS = ROOT / "evals" / "retrieval" / "requirements.txt"
+REQUIREMENTS = ROOT / "evals" / "retrieval" / "requirements-ragas.txt"
 PINNED_RAGAS_STACK = {
     "ragas": "0.4.3",
     "langchain": "0.3.25",
@@ -61,6 +63,8 @@ PINNED_RAGAS_STACK = {
     "langchain-community": "0.3.24",
     "langchain-openai": "0.3.19",
     "langchain-text-splitters": "0.3.8",
+    "langsmith": "0.2.10",
+    "pydantic": "2.10.4",
 }
 
 
@@ -191,7 +195,7 @@ async def _mapping_partial_and_error_check() -> None:
     ]
     outcomes: dict[tuple[str, str], float | BaseException] = {
         ("faithfulness", "healthy"): 0.9,
-        ("answer_relevancy", "healthy"): 0.8,
+        ("answer_relevancy", "healthy"): -0.2,
         ("context_precision", "healthy"): 0.7,
         ("context_recall", "healthy"): 0.6,
         ("faithfulness", "partial"): provider_wrapper,
@@ -219,7 +223,7 @@ async def _mapping_partial_and_error_check() -> None:
 
     assert scored[0].scores == {
         "faithfulness": 0.9,
-        "answer_relevancy": 0.8,
+        "answer_relevancy": -0.2,
         "context_precision": 0.7,
         "context_recall": 0.6,
     }
@@ -278,6 +282,12 @@ async def _mapping_partial_and_error_check() -> None:
         "mean_strict": 0.4,
         "mean_available": 0.6,
         "coverage": 0.6667,
+        "api_errors": 2,
+    }
+    assert block["answer_relevancy"] == {
+        "mean_strict": -0.0667,
+        "mean_available": -0.2,
+        "coverage": 0.3333,
         "api_errors": 2,
     }
     findings = check_operational_gates(section["aggregates"])
@@ -342,7 +352,57 @@ def _gate_non_vacuity_check() -> None:
     missing = {(f.cell, f.metric) for f in findings}
     assert ("full_access:pre_filter", "answer_relevancy") in missing
     assert ("partial_access:pre_filter", "faithfulness") in missing
-    print("  gates: missing cells/metrics are red, never a vacuous pass")
+
+    complete = {
+        "by_cell": {
+            cell: {
+                metric: {
+                    "coverage": 1.0,
+                    "mean_strict": 0.75,
+                    "mean_available": 0.75,
+                    "api_errors": 0,
+                }
+                for metric in RAGAS_METRICS
+            }
+            for cell in ("full_access:pre_filter", "partial_access:pre_filter")
+        }
+    }
+    assert check_operational_gates(complete) == []
+
+    one_provider_failure = {
+        "by_cell": {
+            cell: {
+                metric: {**block, "api_errors": int(cell == "full_access:pre_filter")}
+                for metric, block in metrics.items()
+            }
+            for cell, metrics in complete["by_cell"].items()
+        }
+    }
+    one_provider_failure["by_cell"]["full_access:pre_filter"]["faithfulness"][
+        "coverage"
+    ] = 59 / 60
+    findings = check_operational_gates(one_provider_failure)
+    assert any(
+        finding.tag == TAG_COVERAGE_PIPELINE
+        and finding.metric == "faithfulness"
+        for finding in findings
+    )
+    assert sum(f.tag == TAG_COVERAGE_OPERATIONAL for f in findings) == 1
+
+    one_metric_failure = {
+        "by_cell": {
+            cell: {metric: dict(block) for metric, block in metrics.items()}
+            for cell, metrics in complete["by_cell"].items()
+        }
+    }
+    one_metric_failure["by_cell"]["full_access:pre_filter"]["context_precision"][
+        "coverage"
+    ] = 59 / 60
+    findings = check_operational_gates(one_metric_failure)
+    assert len(findings) == 1
+    assert findings[0].tag == TAG_COVERAGE_PIPELINE
+    assert findings[0].metric == "context_precision"
+    print("  gates: missing structure or one failed metric/provider call is red")
 
 
 def _snapshot_publishability_check() -> None:
@@ -390,7 +450,7 @@ def _dependency_contract_check() -> None:
     for name, pinned_version in PINNED_RAGAS_STACK.items():
         declared = requirements.get(name, [])
         assert len(declared) == 1, (
-            "evals/retrieval/requirements.txt must declare the RAGAS "
+            "evals/retrieval/requirements-ragas.txt must declare the RAGAS "
             f"compatibility dependency {name} exactly once; got {declared!r}"
         )
         requirement = declared[0]
@@ -400,7 +460,7 @@ def _dependency_contract_check() -> None:
             and requirement.marker is None
             and requirement.url is None
         ), (
-            "evals/retrieval/requirements.txt must exactly pin the verified "
+            "evals/retrieval/requirements-ragas.txt must exactly pin the verified "
             f"RAGAS compatibility dependency {name} to {pinned_version}; "
             f"got {requirement!r}"
         )
@@ -427,6 +487,10 @@ def _dependency_contract_check() -> None:
             )
         )
         print("  dependency: installed compatibility set exposes all four metrics")
+    elif os.environ.get("RAGAS_RUNTIME_REQUIRED") == "1":
+        raise AssertionError(
+            "RAGAS_RUNTIME_REQUIRED=1 but the pinned RAGAS runtime is not installed"
+        )
     else:
         print("  dependency: exact compatibility set declared (import skipped)")
 

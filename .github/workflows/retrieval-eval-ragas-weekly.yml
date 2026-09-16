@@ -55,6 +55,7 @@ jobs:
           cache-dependency-path: |
             backend/requirements.txt
             evals/retrieval/requirements.txt
+            evals/retrieval/requirements-ragas.txt
 
       - name: Install Supabase CLI
         # Pinned to match local dev + retrieval-eval.yml: an unpinned `latest`

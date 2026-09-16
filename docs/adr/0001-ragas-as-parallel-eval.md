@@ -31,7 +31,7 @@ custom Claude judge — explicitly **not** as a replacement.
   ground from independent angles — different judge models, different prompting
   techniques, different metric definitions.
 - The configuration is locked: `gpt-4o-mini` judge; hybrid mode only; the two
-  `pre_filter` cells only; weekly cadence (never on the PR fast path); NaN
+  `pre_filter` cells only; weekly paid scoring (never on the PR fast path); NaN
   scores recorded with a reason and reported as two means (`mean_strict`,
   `mean_available`); fixed operational gates vs rolling-median score gates;
   cross-family corroboration required for a red Faithfulness / Answer Relevancy
@@ -45,8 +45,9 @@ custom Claude judge — explicitly **not** as a replacement.
   changing repository question/cell identity.
 - Empty input/results and missing expected cells or metric aggregates are
   UNMEASURED/non-green. Metric-level failures remain explicit NaNs in the
-  denominator so the fixed coverage gate, rather than a shrinking sample, owns
-  the verdict.
+  denominator; complete coverage and zero provider errors are required for a
+  green run. Answer Relevancy preserves RAGAS's canonical negative cosine
+  similarities instead of coercing its native −1–1 range onto 0–1.
 
 ## Consequences
 
@@ -56,16 +57,17 @@ custom Claude judge — explicitly **not** as a replacement.
 - Pre-scorer snapshots through 2026-09-06 are retained as historical artifacts
   but have no RAGAS rows/cells and are not measurement baselines. The workflow
   rejects any new structurally empty snapshot before publication.
-- Cost is accepted and bounded: roughly 1,200 `gpt-4o-mini` calls per weekly
-  run (well under $1), kept down by the hybrid-only, two-cell,
-  weekly-not-nightly scoping.
+- Cost is accepted and bounded: approximately 1,440 `gpt-4o-mini` calls per
+  weekly run (60 questions × two cells × four metrics × roughly three calls),
+  kept down by the hybrid-only, weekly-not-nightly scoping.
 - Same-family bias is accepted — the RAGAS judge shares a model family with the
   answer generator. Independence is preserved by keeping the cross-family
   Claude judge as the headline signal.
 - The eval suite now speaks a methodology a portfolio reader recognises without
   reading runner source — the stated goal of the integration.
-- PR CI is unaffected: RAGAS never runs on the PR fast path (too noisy, too
-  expensive, wrong cadence).
+- PR CI performs an import-only check of the complete pinned RAGAS/LangChain
+  stack without credentials or evaluator calls. Paid, non-deterministic RAGAS
+  scoring remains weekly and never blocks a PR.
 
 ## Alternatives considered and rejected
 

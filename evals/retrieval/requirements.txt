@@ -25,19 +25,7 @@
 # out-of-band through `extra_body` on a 1.x SDK that deliberately dropped it.
 anthropic==0.125.0
 
-# RAGAS provides the four canonical RAG metrics (Faithfulness, Answer
-# Relevancy, Context Precision, Context Recall) under industry-standard names.
-# It drags in heavy instructor / langchain-core / datasets / pandas transitive
-# deps, so it is imported lazily and loaded only for --include-ragas. The PR-CI
-# install (requirements-ci.txt) omits it. Pin the complete compatibility set:
-# RAGAS 0.4.3 imports `langchain_community.chat_models.vertexai` at module load,
-# but langchain-community 0.4.x removed that module. The newer 0.3.31 line is
-# also incompatible with this repository's langsmith==0.2.10 pin. These exact
-# versions retain the RAGAS collections API and its import surface while
-# resolving with the repository's existing dependency constraints.
-ragas==0.4.3
-langchain==0.3.25
-langchain-core==0.3.63
-langchain-community==0.3.24
-langchain-openai==0.3.19
-langchain-text-splitters==0.3.8
+# RAGAS stays lazy on the runtime path. Its import-compatible dependency set is
+# isolated so ordinary PR CI can install and import-check it without pulling the
+# full backend/docling stack or making paid evaluator calls.
+-r requirements-ragas.txt

@@ -331,7 +331,7 @@ def _metric_failure_reason(exc: BaseException, runtime: _RagasRuntime) -> str:
     return "metric_error"
 
 
-def _score_value(result: Any) -> tuple[float | None, str | None]:
+def _score_value(result: Any, metric: str) -> tuple[float | None, str | None]:
     """Normalize a RAGAS MetricResult without allowing NaN/invalid ranges."""
     value = getattr(result, "value", result)
     try:
@@ -340,7 +340,8 @@ def _score_value(result: Any) -> tuple[float | None, str | None]:
         return None, "parse_error"
     if not math.isfinite(score):
         return None, "parse_error"
-    if not 0.0 <= score <= 1.0:
+    lower_bound = -1.0 if metric == "answer_relevancy" else 0.0
+    if not lower_bound <= score <= 1.0:
         return None, "metric_error"
     return score, None
 
@@ -419,7 +420,7 @@ async def _score_sample(
         for metric, build_metric, kwargs in specs:
             try:
                 result = await build_metric().ascore(**kwargs)
-                score, reason = _score_value(result)
+                score, reason = _score_value(result, metric)
             except Exception as exc:
                 score = None
                 reason = _metric_failure_reason(exc, runtime)

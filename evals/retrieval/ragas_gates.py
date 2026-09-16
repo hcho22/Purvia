@@ -77,10 +77,10 @@ RAGAS_WEEKLY_DIR = ROOT / "docs" / "ragas-weekly"
 NIGHTLY_DIR = ROOT / "docs" / "nightly"
 
 # FR-8: fixed operational thresholds. Deliberately not rolling — see the module
-# docstring. A cell must carry a non-NaN score for at least 96% of its
-# questions; a cell with more than 2 API errors is an operational failure.
-COVERAGE_FLOOR = 0.96
-API_ERROR_CEILING = 2
+# docstring. Every question must carry a score for every metric, and any API
+# error is an operational failure.
+COVERAGE_FLOOR = 1.0
+API_ERROR_CEILING = 0
 
 # FR-9: diagnostic drift parameters. `COVERAGE_DRIFT_PP` is how far below the
 # rolling-median coverage a cell must fall to count as drift (5 percentage
@@ -93,8 +93,8 @@ COVERAGE_DRIFT_PP = 0.05
 MIN_DRIFT_HISTORY = 3
 
 # FR-10 / FR-12 / FR-13: score-regression parameters. A regression is a strict
-# drop below the rolling median. `RAGAS_DROP` is the trigger on the 0–1 RAGAS
-# scale; `CLAUDE_FAITHFULNESS_DROP` / `CLAUDE_HELPFULNESS_DROP` are the
+# drop below the rolling median. `RAGAS_DROP` is the trigger in each metric's
+# native units; `CLAUDE_FAITHFULNESS_DROP` / `CLAUDE_HELPFULNESS_DROP` are the
 # cross-family Claude thresholds on the 1–5 Likert scale (helpfulness looser —
 # it corroborates Answer Relevancy "softly"). `MIN_REGRESSION_HISTORY` is the
 # full rolling window the score gate needs before it evaluates at all.
@@ -151,7 +151,7 @@ class GateBindings:
     ``coverage_floor``      — fixed operational coverage floor (``COVERAGE_FLOOR``).
     ``api_error_ceiling``   — fixed per-cell API-error ceiling (``API_ERROR_CEILING``).
     ``coverage_drift_pp``   — diagnostic rolling-window drift band (``COVERAGE_DRIFT_PP``).
-    ``ragas_drop``          — score-regression trigger on the 0–1 RAGAS scale (``RAGAS_DROP``).
+    ``ragas_drop``          — score-regression trigger in native metric units (``RAGAS_DROP``).
     ``min_drift_history``   — snapshots the diagnostic gate needs (``MIN_DRIFT_HISTORY``).
     ``min_regression_history`` — snapshots the score gate needs (``MIN_REGRESSION_HISTORY``).
     ``claude_equivalent``   — RAGAS metric → (cross-family judge metric, drop
