@@ -15,11 +15,14 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import math
-import re
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+
+from packaging.requirements import Requirement
+from packaging.specifiers import SpecifierSet
+from packaging.utils import canonicalize_name
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -165,6 +168,10 @@ def _row(
 
 
 async def _mapping_partial_and_error_check() -> None:
+    provider_wrapper = _FakeParseError("provider wrapper")
+    provider_wrapper.__cause__ = _FakeAPIError("provider failed")
+    timeout_wrapper = _FakeParseError("timeout wrapper")
+    timeout_wrapper.__cause__ = _FakeTimeout("provider timed out")
     rows = [
         _row("q1", "healthy"),
         _row("q2", "partial"),
@@ -175,10 +182,10 @@ async def _mapping_partial_and_error_check() -> None:
         ("answer_relevancy", "healthy"): 0.8,
         ("context_precision", "healthy"): 0.7,
         ("context_recall", "healthy"): 0.6,
-        ("faithfulness", "partial"): _FakeAPIError("provider failed"),
+        ("faithfulness", "partial"): provider_wrapper,
         ("answer_relevancy", "partial"): math.nan,
         ("context_precision", "partial"): 0.5,
-        ("context_recall", "partial"): _FakeTimeout("provider timed out"),
+        ("context_recall", "partial"): timeout_wrapper,
     }
     client = _FakeClient()
     _FakeLLM.configs = []
@@ -360,14 +367,24 @@ def _snapshot_publishability_check() -> None:
 
 
 def _dependency_contract_check() -> None:
-    requirement = None
+    requirements: list[Requirement] = []
     for raw in REQUIREMENTS.read_text(encoding="utf-8").splitlines():
         line = raw.split("#", 1)[0].strip()
-        match = re.fullmatch(r"ragas\s*==\s*([^\s]+)", line, re.IGNORECASE)
-        if match:
-            requirement = match.group(1)
-            break
-    assert requirement == PINNED_RAGAS, (
+        if line and not line.startswith("-"):
+            requirement = Requirement(line)
+            if canonicalize_name(requirement.name) == "ragas":
+                requirements.append(requirement)
+    assert len(requirements) == 1, (
+        "evals/retrieval/requirements.txt must declare RAGAS exactly once; "
+        f"got {requirements!r}"
+    )
+    requirement = requirements[0]
+    assert (
+        requirement.specifier == SpecifierSet(f"=={PINNED_RAGAS}")
+        and not requirement.extras
+        and requirement.marker is None
+        and requirement.url is None
+    ), (
         "evals/retrieval/requirements.txt must exactly pin the RAGAS collections "
         f"API exercised here to {PINNED_RAGAS}; got {requirement!r}"
     )

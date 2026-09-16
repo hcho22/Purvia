@@ -324,6 +324,8 @@ def _exception_contains(
 def _metric_failure_reason(exc: BaseException, runtime: _RagasRuntime) -> str:
     if _exception_contains(exc, runtime.timeout_error_types):
         return "timeout"
+    if _exception_contains(exc, runtime.api_error_types):
+        return "metric_error"
     if _exception_contains(exc, runtime.parse_error_types):
         return "parse_error"
     return "metric_error"

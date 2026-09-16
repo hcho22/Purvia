@@ -1831,9 +1831,9 @@ async def amain() -> int:
             "block — add it to retrieval_gold.yaml or run with --viewers full"
         )
 
-    # RAGAS is hybrid-only and full_access / partial_access only. Warn (don't
-    # error) when the operator's --mode / --viewers selection includes cells
-    # RAGAS will silently skip, so an empty `ragas` section is never a mystery.
+    # RAGAS is hybrid-only and full_access / partial_access only. Warn when the
+    # operator's --mode / --viewers selection includes cells RAGAS will skip,
+    # so a later zero-row or missing-cell failure identifies the selection.
     if args.include_ragas:
         for skipped_mode in (m for m in modes if m != "hybrid"):
             log.warning(

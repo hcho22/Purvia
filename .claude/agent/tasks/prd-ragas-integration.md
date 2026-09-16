@@ -10,7 +10,7 @@ This PRD covers integrating RAGAS as a **parallel** eval signal that ships **alo
 
 ## Goals
 
-- Ship the four canonical RAGAS metrics (`Faithfulness`, `Answer Relevancy`, `Context Precision`, `Context Recall`) over the existing 50-question golden set.
+- Ship the four canonical RAGAS metrics (`Faithfulness`, `Answer Relevancy`, `Context Precision`, `Context Recall`) over the existing 60-question golden set.
 - Keep the existing custom Claude judge untouched and visible as the headline cross-family signal.
 - Hold cost in check via: hybrid-mode-only, 2-cell sweep instead of 6-cell, weekly cadence (not nightly).
 - Treat NaN scores as a first-class data point (record reason; report two means; never use `nanmean` for headlines).
@@ -83,15 +83,15 @@ The original nine stories were marked complete while US-001 deliberately shipped
 
 - **Setup:** Local Supabase running, corpus seeded, `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` env vars set.
 - **Steps:**
-  1. `python -m evals.retrieval.runner --include-ragas --mode hybrid --viewers full --out /tmp/ragas1.json` — observe log output
+  1. `python -m evals.retrieval.runner --include-ragas --mode hybrid --viewers partial --out /tmp/ragas1.json` — observe log output and exit code
   2. `python -m evals.retrieval.runner --include-ragas --mode vector --viewers full --out /tmp/ragas2.json` — observe log output
   3. `python -m evals.retrieval.runner --include-ragas --mode hybrid --viewers no_access --out /tmp/ragas3.json` — observe log output
-  4. Inspect each result JSON: does the `ragas` top-level key exist? Does it contain entries for the expected cells only?
+  4. Inspect each result that was written: does the `ragas` top-level key exist, contain only the expected cells, and carry red findings for a missing expected cell?
 - **Expected Result:**
-  - Step 1: log shows `auto-enabling --include-generation`; result JSON contains `ragas` key with entries for the `full_access × pre_filter × hybrid` cell only.
-  - Step 2: log shows `RAGAS scoring skipped for mode=vector (hybrid-only)`; result JSON contains an empty or absent `ragas` key.
-  - Step 3: log shows skip warning; result JSON ragas section empty.
-- **Failure Indicator:** RAGAS runs on disallowed cells (cost overrun), or skip warnings are silent, or `--include-ragas` requires the operator to also pass `--include-generation` manually.
+  - Step 1: log shows `auto-enabling --include-generation`; result JSON contains both expected pre-filter cells and can exit green when the metric gates pass.
+  - Step 2: log shows `RAGAS scoring skipped for mode=vector (hybrid-only)`; zero collected rows terminate the run non-green before `/tmp/ragas2.json` is published.
+  - Step 3: log shows the `no_access` skip warning; because that viewer preset also includes `full_access`, the result contains the full-access cell, records red findings for the missing partial-access cell, and exits non-zero.
+- **Failure Indicator:** RAGAS runs on disallowed cells (cost overrun), a zero-row or missing-cell selection exits green, skip warnings are silent, or `--include-ragas` requires the operator to also pass `--include-generation` manually.
 
 ---
 
@@ -147,7 +147,7 @@ The original nine stories were marked complete while US-001 deliberately shipped
 
 **Implementation notes:** `evals/retrieval/ragas.py` gains `build_ragas_section(rows, judge_model)` — it serializes each `RagasRow` into a `per_question` entry and computes `aggregates.by_cell` via `_aggregate_by_cell`. `amain` now calls `build_ragas_section(...)` instead of building the section inline (the US-002 minimal `{judge_model, per_question}` shell is superseded). The `NAN_REASONS` frozenset is the fixed FR-7 enum; `_normalize_nan_reason` coerces any out-of-enum string to `unknown` (with a `log.warning`) so a stored `nan_reasons` value is always enum-or-`null`. Per (cell × metric): `mean_strict = sum(non-NaN) / total` (NaN→0), `mean_available = sum(non-NaN) / count(non-NaN)` (or `null` when a metric scored NaN everywhere), `coverage = count(non-NaN) / total`. `api_errors` is the cell total (RagasRow tracks errors per question, not per metric) repeated across the four metric blocks. Means/coverage round to 4 dp, matching the existing `aggregate()`. The existing top-level `aggregates` key and `aggregate()` are untouched — RAGAS data stays entirely under the separate `ragas` key.
 
-**Validation:** Reproduced the validation scenario below as a direct `build_ragas_section` unit test — 50 questions on `full_access:pre_filter`, `context_recall` NaN on 2 with reason `empty_contexts`. Results match: `context_recall` aggregate is `mean_strict=0.72`, `mean_available=0.75` (`mean_strict < mean_available`), `coverage=0.96` (48/50), `api_errors=0`; `per_question` has exactly 2 entries with `context_recall == null`; top-level `ragas` keys are `aggregates`/`judge_model`/`per_question`. An out-of-enum `nan_reason` is coerced to `unknown`. `mypy` is clean on `ragas.py` and adds zero new errors to `runner.py` (the 6 pre-existing errors are unchanged). The live runner steps below need local Supabase + a monkeypatched `score_with_ragas` and were not executed in this environment.
+**Validation:** Reproduced the validation scenario below as a direct `build_ragas_section` unit test — 60 questions on `full_access:pre_filter`, `context_recall` NaN on 2 with reason `empty_contexts`. Results match: `context_recall` aggregate is `mean_strict=0.725`, `mean_available=0.75` (`mean_strict < mean_available`), `coverage=0.9667` (58/60), `api_errors=0`; `per_question` has exactly 2 entries with `context_recall == null`; top-level `ragas` keys are `aggregates`/`judge_model`/`per_question`. An out-of-enum `nan_reason` is coerced to `unknown`. `mypy` is clean on `ragas.py` and adds zero new errors to `runner.py` (the 6 pre-existing errors are unchanged). The live runner steps below need local Supabase + a monkeypatched `score_with_ragas` and were not executed in this environment.
 
 **Validation Test:**
 
@@ -158,7 +158,7 @@ The original nine stories were marked complete while US-001 deliberately shipped
   3. `jq '.ragas.per_question | map(select(.scores.context_recall == null)) | length' /tmp/ragas-schema.json`
   4. `jq 'keys' /tmp/ragas-schema.json` and confirm the top-level shape is `["aggregates", "elapsed_s", "generated_at", "modes", "n_corpus_chunks", "n_questions", "per_question", "ragas", "viewers", ...]` (existing keys + new `ragas` key, no removal).
 - **Expected Result:**
-  - Step 2: returns object with `mean_strict < mean_available`, `coverage = 0.96` (48/50), `api_errors = 0`.
+  - Step 2: returns object with `mean_strict < mean_available`, `coverage = 0.9667` (58/60), `api_errors = 0`.
   - Step 3: returns `2` (the two patched questions).
   - Step 4: existing key set unchanged; `ragas` added.
 - **Failure Indicator:** `mean_strict == mean_available` (NaN handling broken); `coverage == 1.0` despite 2 NaN entries; existing top-level keys removed or renamed; `nan_reasons` field missing or storing arbitrary strings outside the enum.
@@ -455,7 +455,7 @@ The original nine stories were marked complete while US-001 deliberately shipped
 ## Technical Considerations
 
 - **Lazy import.** RAGAS pulls in `instructor`, `langchain-core`, `langchain-openai`, `datasets`, and `pandas`. Heavy. Hard import would break PR CI install (which only installs `requirements-ci.txt` without RAGAS).
-- **Cost envelope (per weekly run).** 50 questions × 1 mode × 2 cells × 4 metrics × ~3 LLM calls/metric ≈ 1,200 `gpt-4o-mini` calls per weekly RAGAS run. At current pricing, well under $1/run.
+- **Cost envelope (per weekly run).** 60 questions × 1 mode × 2 cells × 4 metrics × ~3 LLM calls/metric budgets approximately 1,440 `gpt-4o-mini` calls per weekly RAGAS run. Actual spend depends on token usage and provider pricing.
 - **Snapshot byte stability.** Existing consumers of `docs/nightly/<DATE>.json` (e.g., `_embed_eval_summaries.py`, the diff_results.py CI comment script) must remain byte-stable when `ragas` is added. New `ragas` key alone, no rearrangement of existing keys.
 - **Determinism caveat.** Same as the existing runner — OpenAI embeddings and LLM outputs are not strictly bit-deterministic across calls. RAGAS scores will jitter within a few percentage points across runs even on unchanged inputs. The methodology paragraph in `docs/evals.md` should note this.
 - **Failure-reason taxonomy** is enforced by enum (per FR-7). Do not allow arbitrary free-text reasons — that defeats programmatic gate evaluation.
