@@ -1,0 +1,2261 @@
+{
+  "e7_answer_gate_parity": {
+    "checks": [
+      {
+        "error": null,
+        "matches": true,
+        "offline_answered": true,
+        "population": "P2",
+        "question_id": "e7-p2-01",
+        "runtime_answered": true,
+        "runtime_judge_failed": false
+      },
+      {
+        "error": null,
+        "matches": true,
+        "offline_answered": true,
+        "population": "P2",
+        "question_id": "e7-p2-02",
+        "runtime_answered": true,
+        "runtime_judge_failed": false
+      },
+      {
+        "error": null,
+        "matches": true,
+        "offline_answered": true,
+        "population": "P2",
+        "question_id": "e7-p2-03",
+        "runtime_answered": true,
+        "runtime_judge_failed": false
+      },
+      {
+        "error": null,
+        "matches": true,
+        "offline_answered": true,
+        "population": "P2",
+        "question_id": "e7-p2-04",
+        "runtime_answered": true,
+        "runtime_judge_failed": false
+      },
+      {
+        "error": null,
+        "matches": false,
+        "offline_answered": true,
+        "population": "P3",
+        "question_id": "e7-p3-01",
+        "runtime_answered": false,
+        "runtime_judge_failed": false
+      },
+      {
+        "error": null,
+        "matches": true,
+        "offline_answered": false,
+        "population": "P3",
+        "question_id": "e7-p3-02",
+        "runtime_answered": false,
+        "runtime_judge_failed": false
+      },
+      {
+        "error": null,
+        "matches": true,
+        "offline_answered": false,
+        "population": "P3",
+        "question_id": "e7-p3-03",
+        "runtime_answered": false,
+        "runtime_judge_failed": false
+      },
+      {
+        "error": null,
+        "matches": true,
+        "offline_answered": false,
+        "population": "P3",
+        "question_id": "e7-p3-04",
+        "runtime_answered": false,
+        "runtime_judge_failed": false
+      },
+      {
+        "error": null,
+        "matches": false,
+        "offline_answered": true,
+        "population": "P3",
+        "question_id": "e7-p3-05",
+        "runtime_answered": false,
+        "runtime_judge_failed": false
+      },
+      {
+        "error": null,
+        "matches": false,
+        "offline_answered": true,
+        "population": "P3",
+        "question_id": "e7-p3-09",
+        "runtime_answered": false,
+        "runtime_judge_failed": false
+      },
+      {
+        "error": null,
+        "matches": false,
+        "offline_answered": false,
+        "population": "P3",
+        "question_id": "e7-p3-10",
+        "runtime_answered": true,
+        "runtime_judge_failed": false
+      },
+      {
+        "error": null,
+        "matches": true,
+        "offline_answered": false,
+        "population": "P3",
+        "question_id": "e7-p3-11",
+        "runtime_answered": false,
+        "runtime_judge_failed": false
+      },
+      {
+        "error": null,
+        "matches": true,
+        "offline_answered": false,
+        "population": "P3",
+        "question_id": "e7-p3-12",
+        "runtime_answered": false,
+        "runtime_judge_failed": false
+      },
+      {
+        "error": null,
+        "matches": true,
+        "offline_answered": false,
+        "population": "P3",
+        "question_id": "e7-p3-13",
+        "runtime_answered": false,
+        "runtime_judge_failed": false
+      }
+    ],
+    "label": "offline_vs_runtime_answer_gate",
+    "mismatch_ids": [
+      "e7-p3-01",
+      "e7-p3-05",
+      "e7-p3-09",
+      "e7-p3-10"
+    ],
+    "n_eligible": 14,
+    "n_questions": 15,
+    "n_unmeasured": 0,
+    "offline_judge_model": "claude-haiku-4-5",
+    "passed": false,
+    "population": "parity",
+    "runtime_judge_model": "gpt-4o-mini",
+    "status": "fail"
+  },
+  "e7_false_resolve_ceiling": {
+    "breached": true,
+    "ceiling": 0.05,
+    "denominator": 11,
+    "numerator": 3,
+    "passed": false,
+    "rate": 0.2727272727272727
+  },
+  "e7_metrics": {
+    "deflection": {
+      "by_population": [
+        {
+          "counts_toward_rate": true,
+          "denominator": 4,
+          "numerator": 4,
+          "population": "P2"
+        }
+      ],
+      "denominator": 4,
+      "name": "deflection",
+      "numerator": 4,
+      "rate": 1.0,
+      "safety": false
+    },
+    "false_escalate": {
+      "by_population": [
+        {
+          "counts_toward_rate": true,
+          "denominator": 4,
+          "numerator": 0,
+          "population": "P2"
+        }
+      ],
+      "denominator": 4,
+      "name": "false_escalate",
+      "numerator": 0,
+      "rate": 0.0,
+      "safety": false
+    },
+    "false_resolve": {
+      "by_population": [
+        {
+          "counts_toward_rate": false,
+          "denominator": 3,
+          "numerator": 0,
+          "population": "P1a"
+        },
+        {
+          "counts_toward_rate": false,
+          "denominator": 4,
+          "numerator": 0,
+          "population": "P1b"
+        },
+        {
+          "counts_toward_rate": true,
+          "denominator": 11,
+          "numerator": 3,
+          "population": "P3"
+        }
+      ],
+      "denominator": 11,
+      "name": "false_resolve",
+      "numerator": 3,
+      "rate": 0.2727272727272727,
+      "safety": true
+    }
+  },
+  "e7_p1a": {
+    "cleared_gate": [],
+    "decisions": [
+      {
+        "correct": true,
+        "decision": "escalate",
+        "draft_calls": 0,
+        "expected": "escalate",
+        "gate_reason": "weak: empty_results",
+        "gate_strong": false,
+        "judge_calls": 0,
+        "n_cleared": 0,
+        "n_results": 0,
+        "question_id": "e7-p1a-01",
+        "top1_cosine": null
+      },
+      {
+        "correct": true,
+        "decision": "escalate",
+        "draft_calls": 0,
+        "expected": "escalate",
+        "gate_reason": "weak: no_vector_cosine",
+        "gate_strong": false,
+        "judge_calls": 0,
+        "n_cleared": 0,
+        "n_results": 1,
+        "question_id": "e7-p1a-02",
+        "top1_cosine": null
+      },
+      {
+        "correct": true,
+        "decision": "escalate",
+        "draft_calls": 0,
+        "expected": "escalate",
+        "gate_reason": "weak: top1_cosine 0.3878 < tau_sim 0.4000",
+        "gate_strong": false,
+        "judge_calls": 0,
+        "n_cleared": 5,
+        "n_results": 5,
+        "question_id": "e7-p1a-03",
+        "top1_cosine": 0.38778258844558
+      }
+    ],
+    "label": "no_context",
+    "match_threshold": 0.3,
+    "n_min": 2,
+    "n_questions": 3,
+    "passed": true,
+    "population": "P1a",
+    "tau_sim": 0.4,
+    "total_draft_calls": 0,
+    "total_judge_calls": 0
+  },
+  "e7_p1b": {
+    "cleared_gate": [],
+    "decisions": [
+      {
+        "correct": true,
+        "decision": "draft",
+        "draft_calls": 0,
+        "expected": "escalate",
+        "gate_reason": "strong",
+        "gate_strong": true,
+        "gold_stable_ids": [
+          "warranty-terms:0"
+        ],
+        "judge_calls": 0,
+        "leaked_gold_ids": [],
+        "n_cleared": 2,
+        "n_results": 5,
+        "question_id": "e7-p2-01",
+        "returned_stable_ids": [
+          "warranty-terms:1",
+          "returns-process:1",
+          "product-catalog:1",
+          "shipping-faq:0",
+          "product-catalog:0"
+        ],
+        "top1_cosine": 0.554640144895612
+      },
+      {
+        "correct": true,
+        "decision": "draft",
+        "draft_calls": 0,
+        "expected": "escalate",
+        "gate_reason": "strong",
+        "gate_strong": true,
+        "gold_stable_ids": [
+          "shipping-faq:0"
+        ],
+        "judge_calls": 0,
+        "leaked_gold_ids": [],
+        "n_cleared": 4,
+        "n_results": 5,
+        "question_id": "e7-p2-02",
+        "returned_stable_ids": [
+          "returns-process:0",
+          "shipping-faq:1",
+          "warranty-terms:1",
+          "returns-process:1",
+          "refund-policy:0"
+        ],
+        "top1_cosine": 0.448176855099941
+      },
+      {
+        "correct": true,
+        "decision": "draft",
+        "draft_calls": 0,
+        "expected": "escalate",
+        "gate_reason": "strong",
+        "gate_strong": true,
+        "gold_stable_ids": [
+          "refund-policy:0"
+        ],
+        "judge_calls": 0,
+        "leaked_gold_ids": [],
+        "n_cleared": 5,
+        "n_results": 5,
+        "question_id": "e7-p2-03",
+        "returned_stable_ids": [
+          "returns-process:0",
+          "shipping-faq:0",
+          "warranty-terms:0",
+          "warranty-terms:1",
+          "returns-process:1"
+        ],
+        "top1_cosine": 0.43043489779829
+      },
+      {
+        "correct": true,
+        "decision": "escalate",
+        "draft_calls": 0,
+        "expected": "escalate",
+        "gate_reason": "weak: top1_cosine 0.3586 < tau_sim 0.4000",
+        "gate_strong": false,
+        "gold_stable_ids": [
+          "returns-process:0",
+          "returns-process:1"
+        ],
+        "judge_calls": 0,
+        "leaked_gold_ids": [],
+        "n_cleared": 3,
+        "n_results": 5,
+        "question_id": "e7-p2-04",
+        "returned_stable_ids": [
+          "refund-policy:0",
+          "product-catalog:1",
+          "refund-policy:1",
+          "shipping-faq:0",
+          "api-error-reference:0"
+        ],
+        "top1_cosine": 0.358590370117307
+      }
+    ],
+    "match_threshold": 0.3,
+    "n_min": 2,
+    "n_questions": 4,
+    "passed": true,
+    "population": "P1b",
+    "source_label": "answerable_faithful",
+    "tau_sim": 0.4,
+    "total_draft_calls": 0,
+    "total_judge_calls": 0
+  },
+  "e7_p1b_non_disclosure": {
+    "assertion": "p1b_customer_output == p1a_customer_output (byte-for-byte)",
+    "leaks": [],
+    "n_leaks": 0,
+    "n_p1b": 4,
+    "p1a_reference": "Thanks for reaching out. I don't have enough information to answer this confidently, so I've passed it along to our team \u2014 a human will follow up with you.",
+    "p1a_reference_bytes": 157,
+    "passed": true
+  },
+  "e7_p2": {
+    "decisions": [
+      {
+        "answer_judge_calls": 1,
+        "answered": true,
+        "context": "[1] # Warranty Terms\n\nAcme Co's product warranty terms by category. Warranty coverage is separate from the refund policy and applies after the 30-day refund window has closed.\n\n## Electronics\n\nElectronics carry a 12-month limited warranty against manufacturing defects. The warranty starts on the order's `shipped_at` date, not the `paid_at` date. Coverage includes:\n\n- Component failure under normal use.\n- Battery capacity falling below 70% of rated capacity within the warranty period.\n- Firmware-related issues that cannot be resolved by a factory reset.\n\nCoverage does not include physical damage, water damage (unless the product is rated IPX7 or higher), or damage from unauthorized modifications. The warranty is voided if the device has been opened by anyone other than an authorized Acme repair partner.\n\n## Apparel\n\nApparel carries a 90-day warranty against stitching defects, fabric defects, and dye-fastness issues. The warranty starts on the order's `shipped_at` date.\n\nApparel warranty claims do not cover wear-and-tear, fading from washing per the care label, or alterations performed by a third party. Customers who report a warranty issue within 90 days of `shipped_at` may choose between a free replacement (subject to stock) or a full refund credited to the original payment method.\n\n## Home Goods\n\nHome goods carry a 6-month warranty against manufacturing defects. The warranty starts on the order's `shipped_at` date and covers structural failure of joints, glassware breakage during normal household use, and fabric defects on upholstered items.\n\nGlassware warranty claims require a photo of the broken item; the customer is not required to return the broken piece (we ask that it be disposed of safely).\n\n## Books\n\nBooks carry a 30-day warranty against printing defects (missing pages, blurred ink, binding failure). Beyond 30 days, book warranty claims are at the discretion of customer service.\n\n## Food\n\nFood products do not carry a warranty in the traditional sense. Quality issues with food products (off-flavor, expired-on-arrival, packaging compromise) are handled as refunds under the standard refund policy regardless of the 30-day window.\n\n[2] ## Food\n\nFood products do not carry a warranty in the traditional sense. Quality issues with food products (off-flavor, expired-on-arrival, packaging compromise) are handled as refunds under the standard refund policy regardless of the 30-day window.\n\n## What about expedited replacement?\n\nA loyalty-tier customer at Gold or Platinum may request expedited warranty replacement; we ship the replacement before receiving the defective item back, provided the customer authorizes a hold on the original payment method. The hold is released when the defective item is received at our returns center.\n\nExpedited replacement is not available for the electronics category due to fraud risk; electronics warranty claims always require the defective unit to be received first.\n\n[3] The deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns 5\u201320 lbs; quoted per-case for returns over 20 lbs.\n\n## Receiving and Inspection\n\nReturns are received at our Ohio returns center, typically 4\u20137 business days after the customer drops the package. The receiving team performs an inspection: condition of product, completeness (all original parts, manuals, accessories), and match against the RMA.\n\nThe inspection outcome drives the refund settlement:\n\n- **Pass** (product in resaleable condition): full refund per policy.\n- **Partial pass** (product usable but not resaleable, e.g. opened software, worn apparel): partial refund at 50\u201380% of original price.\n- **Fail** (product damaged by the customer, incomplete, or wrong item returned): no refund; the customer is contacted to authorize return-to-customer at the customer's expense or disposal at the customer's option.\n\n## Return Volume Tracking\n\nThe returns center tracks return volume by SKU and surfaces SKUs with a return rate above 8% to the merchandising team for quality review. The return-rate metric is computed as returns received in the trailing 90 days divided by units sold in the same window.\n\nA SKU placed on quality review may be temporarily de-listed from the storefront pending investigation. De-listed SKUs do not affect existing orders or open returns.\n\n[4] Shipping fees are recorded in `orders.shipping` and tax in `orders.tax`. Neither contributes to gross revenue \u2014 they are pass-through to the carrier and tax authority respectively.\n\n## Category Notes\n\n**Electronics** (`ELE-*`) is our highest-AOV category. Most SKUs are priced between $40 and $200, and the category produces about 35% of total revenue despite being 20% of the SKU count. Electronics carry the longest warranty (12 months) and the strictest return-inspection process \u2014 a returned electronics item must include all original cables, manuals, and packaging to pass inspection.\n\n**Apparel** (`APP-*`) has the highest return rate, typically 12\u201315% on the trailing 90 days, driven by size and fit issues. The merchandising team has a standing instruction to flag any apparel SKU above 18% return rate for fit-guide review.\n\n**Home goods** (`HOM-*`) includes the most diverse product mix: glassware, lighting, textiles, organizers. Glassware has special return-shipping handling \u2014 see the Returns Process document.\n\n**Books** (`BOO-*`) is the lowest-margin category, typically 25\u201335% gross margin. Books are sold at fixed list price; books are never put on flash sale because publisher agreements prohibit it.\n\n**Food** (`FOO-*`) is the smallest category by SKU count but has the highest repeat-purchase rate. Subscription-style food orders (granola, coffee, tea) are handled outside this document \u2014 see the Subscription Operations runbook.\n\n## Discontinued Products\n\nA product moves to discontinued status when the supplier confirms it is no longer available. Discontinued products keep their row in the `products` table for revenue-reporting continuity; the `status` flag is set, the SKU is de-listed from the storefront, and the product disappears from all active sort orders.\n\nDiscontinued products may still appear on historical orders; reporting queries should not exclude discontinued products from revenue aggregations unless the question is specifically about active catalog performance.\n\n[5] # Shipping FAQ\n\nCommon questions about how Acme Co ships orders, what carriers we use, and what to expect after `shipped_at` is set on an order.\n\n## How long does standard shipping take?\n\nStandard shipping is 3\u20135 business days within the contiguous US. We dispatch from our Ohio fulfillment center; rural ZIP codes may add 1\u20132 days. Standard shipping is free for orders over $50 and is calculated at checkout for smaller orders.\n\nStandard shipping is not available to PO boxes; the cart will surface a carrier change at checkout if the address is a PO box.\n\n## How long does expedited shipping take?\n\nExpedited shipping is 1\u20132 business days within the contiguous US. Orders placed before 2 PM Eastern ship the same day; orders placed after 2 PM ship the next business day. Expedited shipping is never free and is not eligible for the loyalty-tier shipping discount.\n\n## How long does international shipping take?\n\nInternational shipping varies by destination. Most European and Asia-Pacific destinations receive orders within 7\u201314 business days; Latin American and Middle Eastern destinations may take 10\u201321 business days. Customs delays are common and are outside our control.\n\nInternational orders may incur import duties and taxes assessed by the destination country. These charges are the customer's responsibility and are collected by the carrier at delivery.\n\n## Which carriers do we use?\n\nStandard domestic shipping uses USPS or UPS Ground depending on package weight; expedited uses FedEx Express. International orders ship via DHL Express for most destinations and EMS for select countries.\n\nThe carrier choice is recorded on each order in the fulfillment system but is not exposed on the `orders` table. Customers receive the tracking number via email once `shipped_at` is set.\n\n## When does the shipped_at timestamp get updated?\n\n`shipped_at` is set when the carrier scans the package at our fulfillment center, not when the label is generated. There is typically a 2\u20136 hour gap between label generation and carrier pickup, especially on weekends and holidays.\n\nFor orders where `shipped_at` has been set but the tracking number shows no movement after 48 hours, contact customer service \u2014 the package may have been mis-scanned and requires investigation.",
+        "correct": true,
+        "decision": "auto_resolve",
+        "draft": "The electronics warranty is 12 months against manufacturing defects, starting on the order's `shipped_at` date.",
+        "draft_calls": 1,
+        "escalate_leg": null,
+        "expected": "auto_resolve",
+        "faithful": true,
+        "faithfulness_judge_min": 4,
+        "faithfulness_score": 5,
+        "false_escalate": false,
+        "gate_reason": "strong",
+        "gate_strong": true,
+        "helpfulness_score": 4,
+        "judge_calls": 1,
+        "n_cleared": 3,
+        "n_results": 5,
+        "question": "How long is the electronics warranty?",
+        "question_id": "e7-p2-01",
+        "top1_cosine": 0.554619162917747
+      },
+      {
+        "answer_judge_calls": 1,
+        "answered": true,
+        "context": "[1] # Shipping FAQ\n\nCommon questions about how Acme Co ships orders, what carriers we use, and what to expect after `shipped_at` is set on an order.\n\n## How long does standard shipping take?\n\nStandard shipping is 3\u20135 business days within the contiguous US. We dispatch from our Ohio fulfillment center; rural ZIP codes may add 1\u20132 days. Standard shipping is free for orders over $50 and is calculated at checkout for smaller orders.\n\nStandard shipping is not available to PO boxes; the cart will surface a carrier change at checkout if the address is a PO box.\n\n## How long does expedited shipping take?\n\nExpedited shipping is 1\u20132 business days within the contiguous US. Orders placed before 2 PM Eastern ship the same day; orders placed after 2 PM ship the next business day. Expedited shipping is never free and is not eligible for the loyalty-tier shipping discount.\n\n## How long does international shipping take?\n\nInternational shipping varies by destination. Most European and Asia-Pacific destinations receive orders within 7\u201314 business days; Latin American and Middle Eastern destinations may take 10\u201321 business days. Customs delays are common and are outside our control.\n\nInternational orders may incur import duties and taxes assessed by the destination country. These charges are the customer's responsibility and are collected by the carrier at delivery.\n\n## Which carriers do we use?\n\nStandard domestic shipping uses USPS or UPS Ground depending on package weight; expedited uses FedEx Express. International orders ship via DHL Express for most destinations and EMS for select countries.\n\nThe carrier choice is recorded on each order in the fulfillment system but is not exposed on the `orders` table. Customers receive the tracking number via email once `shipped_at` is set.\n\n## When does the shipped_at timestamp get updated?\n\n`shipped_at` is set when the carrier scans the package at our fulfillment center, not when the label is generated. There is typically a 2\u20136 hour gap between label generation and carrier pickup, especially on weekends and holidays.\n\nFor orders where `shipped_at` has been set but the tracking number shows no movement after 48 hours, contact customer service \u2014 the package may have been mis-scanned and requires investigation.\n\n[2] # Returns Process\n\nThe mechanical steps for processing a return, distinct from the refund policy decision. A return is the physical movement of product back to Acme Co; a refund is the financial settlement. Most refunds are paired with a return, but not all.\n\n## Cancellation vs Return\n\nIf the order has not yet shipped (`shipped_at IS NULL`), the customer requests a cancellation rather than a return. Cancellations are free, instant, and refund the full order total. The cancellation cutoff is when the order enters the fulfillment-processing state \u2014 typically 2 to 4 hours after `paid_at` on weekdays and up to 24 hours on weekends.\n\nOnce `shipped_at` is set, cancellation is no longer available; the customer must initiate a return.\n\n## Return Authorization\n\nAll returns require a Return Merchandise Authorization (RMA) number issued by customer service. The customer cannot ship product back without an RMA \u2014 unauthorized returns are refused at the warehouse and shipped back to the customer at the customer's expense.\n\nThe RMA is generated through the customer portal or by emailing customer service. The RMA includes a pre-paid shipping label for US domestic returns; international returns are at the customer's expense unless the return is for a wrong-item-shipped or damaged-in-transit case.\n\n## Return Shipping\n\nUS domestic returns use USPS or UPS Ground depending on package weight. The customer drops the package at any USPS or UPS pickup point; no scheduled pickup is needed. The pre-paid label tracks the package; the customer should keep the tracking number.\n\nReturn shipping is free for the following cases:\n\n- Damaged in transit (Acme Co's fault via the carrier).\n- Wrong item shipped (Acme Co's fault).\n- Product defect (Acme Co's fault).\n\nReturn shipping is paid by the customer (deducted from the refund or charged to the original payment method) for:\n\n- Customer changed their mind.\n- Customer ordered the wrong size or color.\n- Customer no longer needs the item.\n\nThe deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns 5\u201320 lbs; quoted per-case for returns over 20 lbs.\n\n[3] For orders where `shipped_at` has been set but the tracking number shows no movement after 48 hours, contact customer service \u2014 the package may have been mis-scanned and requires investigation.\n\n## What happens on weekends and holidays?\n\nStandard and expedited shipping operate Monday through Friday only. Orders placed on Saturday or Sunday process on the following Monday. The fulfillment center observes ten US federal holidays per year; the published holiday calendar is available in the customer portal.\n\nInternational carriers operate on their own calendars; weekend processing varies by destination.\n\n[4] ## Food\n\nFood products do not carry a warranty in the traditional sense. Quality issues with food products (off-flavor, expired-on-arrival, packaging compromise) are handled as refunds under the standard refund policy regardless of the 30-day window.\n\n## What about expedited replacement?\n\nA loyalty-tier customer at Gold or Platinum may request expedited warranty replacement; we ship the replacement before receiving the defective item back, provided the customer authorizes a hold on the original payment method. The hold is released when the defective item is received at our returns center.\n\nExpedited replacement is not available for the electronics category due to fraud risk; electronics warranty claims always require the defective unit to be received first.\n\n[5] The deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns 5\u201320 lbs; quoted per-case for returns over 20 lbs.\n\n## Receiving and Inspection\n\nReturns are received at our Ohio returns center, typically 4\u20137 business days after the customer drops the package. The receiving team performs an inspection: condition of product, completeness (all original parts, manuals, accessories), and match against the RMA.\n\nThe inspection outcome drives the refund settlement:\n\n- **Pass** (product in resaleable condition): full refund per policy.\n- **Partial pass** (product usable but not resaleable, e.g. opened software, worn apparel): partial refund at 50\u201380% of original price.\n- **Fail** (product damaged by the customer, incomplete, or wrong item returned): no refund; the customer is contacted to authorize return-to-customer at the customer's expense or disposal at the customer's option.\n\n## Return Volume Tracking\n\nThe returns center tracks return volume by SKU and surfaces SKUs with a return rate above 8% to the merchandising team for quality review. The return-rate metric is computed as returns received in the trailing 90 days divided by units sold in the same window.\n\nA SKU placed on quality review may be temporarily de-listed from the storefront pending investigation. De-listed SKUs do not affect existing orders or open returns.",
+        "correct": true,
+        "decision": "auto_resolve",
+        "draft": "Standard domestic shipping takes 3\u20135 business days within the contiguous US. It may take an additional 1\u20132 days for rural ZIP codes.",
+        "draft_calls": 1,
+        "escalate_leg": null,
+        "expected": "auto_resolve",
+        "faithful": true,
+        "faithfulness_judge_min": 4,
+        "faithfulness_score": 5,
+        "false_escalate": false,
+        "gate_reason": "strong",
+        "gate_strong": true,
+        "helpfulness_score": 5,
+        "judge_calls": 1,
+        "n_cleared": 5,
+        "n_results": 5,
+        "question": "How long does standard domestic shipping take?",
+        "question_id": "e7-p2-02",
+        "top1_cosine": 0.454304661800268
+      },
+      {
+        "answer_judge_calls": 1,
+        "answered": true,
+        "context": "[1] # Refund Policy\n\nThis document defines how Acme Co handles refunds for orders placed through our online store and customer support channels.\n\n## Eligibility Window\n\nCustomers may request a refund within 30 days of the order's `shipped_at` date. Orders that have not shipped follow the cancellation policy instead \u2014 see the Returns Process document for the cancellation cutoff and partial-shipment edge cases.\n\nRefund eligibility is independent of the order's `paid_at` date. A refund window that has already closed cannot be reopened by customer service except under the goodwill exception described below.\n\n## Full vs Partial Refunds\n\nA full refund returns the entire order `total` (including tax, shipping, and any applied discounts already debited). Full refunds are the default for damaged-in-transit, wrong-item-shipped, and product-defect cases.\n\nA partial refund returns a subset of the order `total`. Partial refunds are the default for customer-dissatisfied and delivery-delay cases; the refunded amount is typically 10% to 80% of the order total and is set at the agent's discretion within the published guardrails.\n\nThe `refunds.amount` field records the refunded value in the same currency as `orders.total`. Net revenue calculations subtract `refunds.amount` from gross revenue.\n\n## Goodwill Exception\n\nCustomer service may issue a goodwill refund outside the 30-day window when:\n\n- The order shipped through a third-party carrier that lost the package after delivery scan.\n- The customer can demonstrate that the product became defective within the first 90 days but the defect was not discoverable on receipt.\n- A loyalty-tier customer (Gold or Platinum) requests a refund within 60 days of `shipped_at`.\n\nGoodwill refunds are capped at 50% of the order total unless escalated to a supervisor. Document the goodwill reason in the `refunds.reason` field for auditability.\n\n## Refund Method\n\nRefunds are processed to the original payment method whenever possible. Card refunds typically settle in 5\u20137 business days; bank transfers in 3\u20135 business days. Store credit is offered as an alternative and is available immediately.\n\nRefunds cannot be split across multiple payment methods. If the customer paid with a combination of store credit and card, the refund returns to each method proportionally to the original split.\n\n[2] # Returns Process\n\nThe mechanical steps for processing a return, distinct from the refund policy decision. A return is the physical movement of product back to Acme Co; a refund is the financial settlement. Most refunds are paired with a return, but not all.\n\n## Cancellation vs Return\n\nIf the order has not yet shipped (`shipped_at IS NULL`), the customer requests a cancellation rather than a return. Cancellations are free, instant, and refund the full order total. The cancellation cutoff is when the order enters the fulfillment-processing state \u2014 typically 2 to 4 hours after `paid_at` on weekdays and up to 24 hours on weekends.\n\nOnce `shipped_at` is set, cancellation is no longer available; the customer must initiate a return.\n\n## Return Authorization\n\nAll returns require a Return Merchandise Authorization (RMA) number issued by customer service. The customer cannot ship product back without an RMA \u2014 unauthorized returns are refused at the warehouse and shipped back to the customer at the customer's expense.\n\nThe RMA is generated through the customer portal or by emailing customer service. The RMA includes a pre-paid shipping label for US domestic returns; international returns are at the customer's expense unless the return is for a wrong-item-shipped or damaged-in-transit case.\n\n## Return Shipping\n\nUS domestic returns use USPS or UPS Ground depending on package weight. The customer drops the package at any USPS or UPS pickup point; no scheduled pickup is needed. The pre-paid label tracks the package; the customer should keep the tracking number.\n\nReturn shipping is free for the following cases:\n\n- Damaged in transit (Acme Co's fault via the carrier).\n- Wrong item shipped (Acme Co's fault).\n- Product defect (Acme Co's fault).\n\nReturn shipping is paid by the customer (deducted from the refund or charged to the original payment method) for:\n\n- Customer changed their mind.\n- Customer ordered the wrong size or color.\n- Customer no longer needs the item.\n\nThe deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns 5\u201320 lbs; quoted per-case for returns over 20 lbs.\n\n[3] # Shipping FAQ\n\nCommon questions about how Acme Co ships orders, what carriers we use, and what to expect after `shipped_at` is set on an order.\n\n## How long does standard shipping take?\n\nStandard shipping is 3\u20135 business days within the contiguous US. We dispatch from our Ohio fulfillment center; rural ZIP codes may add 1\u20132 days. Standard shipping is free for orders over $50 and is calculated at checkout for smaller orders.\n\nStandard shipping is not available to PO boxes; the cart will surface a carrier change at checkout if the address is a PO box.\n\n## How long does expedited shipping take?\n\nExpedited shipping is 1\u20132 business days within the contiguous US. Orders placed before 2 PM Eastern ship the same day; orders placed after 2 PM ship the next business day. Expedited shipping is never free and is not eligible for the loyalty-tier shipping discount.\n\n## How long does international shipping take?\n\nInternational shipping varies by destination. Most European and Asia-Pacific destinations receive orders within 7\u201314 business days; Latin American and Middle Eastern destinations may take 10\u201321 business days. Customs delays are common and are outside our control.\n\nInternational orders may incur import duties and taxes assessed by the destination country. These charges are the customer's responsibility and are collected by the carrier at delivery.\n\n## Which carriers do we use?\n\nStandard domestic shipping uses USPS or UPS Ground depending on package weight; expedited uses FedEx Express. International orders ship via DHL Express for most destinations and EMS for select countries.\n\nThe carrier choice is recorded on each order in the fulfillment system but is not exposed on the `orders` table. Customers receive the tracking number via email once `shipped_at` is set.\n\n## When does the shipped_at timestamp get updated?\n\n`shipped_at` is set when the carrier scans the package at our fulfillment center, not when the label is generated. There is typically a 2\u20136 hour gap between label generation and carrier pickup, especially on weekends and holidays.\n\nFor orders where `shipped_at` has been set but the tracking number shows no movement after 48 hours, contact customer service \u2014 the package may have been mis-scanned and requires investigation.\n\n[4] # Warranty Terms\n\nAcme Co's product warranty terms by category. Warranty coverage is separate from the refund policy and applies after the 30-day refund window has closed.\n\n## Electronics\n\nElectronics carry a 12-month limited warranty against manufacturing defects. The warranty starts on the order's `shipped_at` date, not the `paid_at` date. Coverage includes:\n\n- Component failure under normal use.\n- Battery capacity falling below 70% of rated capacity within the warranty period.\n- Firmware-related issues that cannot be resolved by a factory reset.\n\nCoverage does not include physical damage, water damage (unless the product is rated IPX7 or higher), or damage from unauthorized modifications. The warranty is voided if the device has been opened by anyone other than an authorized Acme repair partner.\n\n## Apparel\n\nApparel carries a 90-day warranty against stitching defects, fabric defects, and dye-fastness issues. The warranty starts on the order's `shipped_at` date.\n\nApparel warranty claims do not cover wear-and-tear, fading from washing per the care label, or alterations performed by a third party. Customers who report a warranty issue within 90 days of `shipped_at` may choose between a free replacement (subject to stock) or a full refund credited to the original payment method.\n\n## Home Goods\n\nHome goods carry a 6-month warranty against manufacturing defects. The warranty starts on the order's `shipped_at` date and covers structural failure of joints, glassware breakage during normal household use, and fabric defects on upholstered items.\n\nGlassware warranty claims require a photo of the broken item; the customer is not required to return the broken piece (we ask that it be disposed of safely).\n\n## Books\n\nBooks carry a 30-day warranty against printing defects (missing pages, blurred ink, binding failure). Beyond 30 days, book warranty claims are at the discretion of customer service.\n\n## Food\n\nFood products do not carry a warranty in the traditional sense. Quality issues with food products (off-flavor, expired-on-arrival, packaging compromise) are handled as refunds under the standard refund policy regardless of the 30-day window.\n\n[5] ## Food\n\nFood products do not carry a warranty in the traditional sense. Quality issues with food products (off-flavor, expired-on-arrival, packaging compromise) are handled as refunds under the standard refund policy regardless of the 30-day window.\n\n## What about expedited replacement?\n\nA loyalty-tier customer at Gold or Platinum may request expedited warranty replacement; we ship the replacement before receiving the defective item back, provided the customer authorizes a hold on the original payment method. The hold is released when the defective item is received at our returns center.\n\nExpedited replacement is not available for the electronics category due to fraud risk; electronics warranty claims always require the defective unit to be received first.",
+        "correct": true,
+        "decision": "auto_resolve",
+        "draft": "You can request a refund within 30 days of the order's `shipped_at` date.",
+        "draft_calls": 1,
+        "escalate_leg": null,
+        "expected": "auto_resolve",
+        "faithful": true,
+        "faithfulness_judge_min": 4,
+        "faithfulness_score": 5,
+        "false_escalate": false,
+        "gate_reason": "strong",
+        "gate_strong": true,
+        "helpfulness_score": 5,
+        "judge_calls": 1,
+        "n_cleared": 5,
+        "n_results": 5,
+        "question": "Within how many days of the shipped_at date can I request a refund?",
+        "question_id": "e7-p2-03",
+        "top1_cosine": 0.522717474212791
+      },
+      {
+        "answer_judge_calls": 1,
+        "answered": true,
+        "context": "[1] # Returns Process\n\nThe mechanical steps for processing a return, distinct from the refund policy decision. A return is the physical movement of product back to Acme Co; a refund is the financial settlement. Most refunds are paired with a return, but not all.\n\n## Cancellation vs Return\n\nIf the order has not yet shipped (`shipped_at IS NULL`), the customer requests a cancellation rather than a return. Cancellations are free, instant, and refund the full order total. The cancellation cutoff is when the order enters the fulfillment-processing state \u2014 typically 2 to 4 hours after `paid_at` on weekdays and up to 24 hours on weekends.\n\nOnce `shipped_at` is set, cancellation is no longer available; the customer must initiate a return.\n\n## Return Authorization\n\nAll returns require a Return Merchandise Authorization (RMA) number issued by customer service. The customer cannot ship product back without an RMA \u2014 unauthorized returns are refused at the warehouse and shipped back to the customer at the customer's expense.\n\nThe RMA is generated through the customer portal or by emailing customer service. The RMA includes a pre-paid shipping label for US domestic returns; international returns are at the customer's expense unless the return is for a wrong-item-shipped or damaged-in-transit case.\n\n## Return Shipping\n\nUS domestic returns use USPS or UPS Ground depending on package weight. The customer drops the package at any USPS or UPS pickup point; no scheduled pickup is needed. The pre-paid label tracks the package; the customer should keep the tracking number.\n\nReturn shipping is free for the following cases:\n\n- Damaged in transit (Acme Co's fault via the carrier).\n- Wrong item shipped (Acme Co's fault).\n- Product defect (Acme Co's fault).\n\nReturn shipping is paid by the customer (deducted from the refund or charged to the original payment method) for:\n\n- Customer changed their mind.\n- Customer ordered the wrong size or color.\n- Customer no longer needs the item.\n\nThe deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns 5\u201320 lbs; quoted per-case for returns over 20 lbs.\n\n[2] The deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns 5\u201320 lbs; quoted per-case for returns over 20 lbs.\n\n## Receiving and Inspection\n\nReturns are received at our Ohio returns center, typically 4\u20137 business days after the customer drops the package. The receiving team performs an inspection: condition of product, completeness (all original parts, manuals, accessories), and match against the RMA.\n\nThe inspection outcome drives the refund settlement:\n\n- **Pass** (product in resaleable condition): full refund per policy.\n- **Partial pass** (product usable but not resaleable, e.g. opened software, worn apparel): partial refund at 50\u201380% of original price.\n- **Fail** (product damaged by the customer, incomplete, or wrong item returned): no refund; the customer is contacted to authorize return-to-customer at the customer's expense or disposal at the customer's option.\n\n## Return Volume Tracking\n\nThe returns center tracks return volume by SKU and surfaces SKUs with a return rate above 8% to the merchandising team for quality review. The return-rate metric is computed as returns received in the trailing 90 days divided by units sold in the same window.\n\nA SKU placed on quality review may be temporarily de-listed from the storefront pending investigation. De-listed SKUs do not affect existing orders or open returns.\n\n[3] # Refund Policy\n\nThis document defines how Acme Co handles refunds for orders placed through our online store and customer support channels.\n\n## Eligibility Window\n\nCustomers may request a refund within 30 days of the order's `shipped_at` date. Orders that have not shipped follow the cancellation policy instead \u2014 see the Returns Process document for the cancellation cutoff and partial-shipment edge cases.\n\nRefund eligibility is independent of the order's `paid_at` date. A refund window that has already closed cannot be reopened by customer service except under the goodwill exception described below.\n\n## Full vs Partial Refunds\n\nA full refund returns the entire order `total` (including tax, shipping, and any applied discounts already debited). Full refunds are the default for damaged-in-transit, wrong-item-shipped, and product-defect cases.\n\nA partial refund returns a subset of the order `total`. Partial refunds are the default for customer-dissatisfied and delivery-delay cases; the refunded amount is typically 10% to 80% of the order total and is set at the agent's discretion within the published guardrails.\n\nThe `refunds.amount` field records the refunded value in the same currency as `orders.total`. Net revenue calculations subtract `refunds.amount` from gross revenue.\n\n## Goodwill Exception\n\nCustomer service may issue a goodwill refund outside the 30-day window when:\n\n- The order shipped through a third-party carrier that lost the package after delivery scan.\n- The customer can demonstrate that the product became defective within the first 90 days but the defect was not discoverable on receipt.\n- A loyalty-tier customer (Gold or Platinum) requests a refund within 60 days of `shipped_at`.\n\nGoodwill refunds are capped at 50% of the order total unless escalated to a supervisor. Document the goodwill reason in the `refunds.reason` field for auditability.\n\n## Refund Method\n\nRefunds are processed to the original payment method whenever possible. Card refunds typically settle in 5\u20137 business days; bank transfers in 3\u20135 business days. Store credit is offered as an alternative and is available immediately.\n\nRefunds cannot be split across multiple payment methods. If the customer paid with a combination of store credit and card, the refund returns to each method proportionally to the original split.\n\n[4] Shipping fees are recorded in `orders.shipping` and tax in `orders.tax`. Neither contributes to gross revenue \u2014 they are pass-through to the carrier and tax authority respectively.\n\n## Category Notes\n\n**Electronics** (`ELE-*`) is our highest-AOV category. Most SKUs are priced between $40 and $200, and the category produces about 35% of total revenue despite being 20% of the SKU count. Electronics carry the longest warranty (12 months) and the strictest return-inspection process \u2014 a returned electronics item must include all original cables, manuals, and packaging to pass inspection.\n\n**Apparel** (`APP-*`) has the highest return rate, typically 12\u201315% on the trailing 90 days, driven by size and fit issues. The merchandising team has a standing instruction to flag any apparel SKU above 18% return rate for fit-guide review.\n\n**Home goods** (`HOM-*`) includes the most diverse product mix: glassware, lighting, textiles, organizers. Glassware has special return-shipping handling \u2014 see the Returns Process document.\n\n**Books** (`BOO-*`) is the lowest-margin category, typically 25\u201335% gross margin. Books are sold at fixed list price; books are never put on flash sale because publisher agreements prohibit it.\n\n**Food** (`FOO-*`) is the smallest category by SKU count but has the highest repeat-purchase rate. Subscription-style food orders (granola, coffee, tea) are handled outside this document \u2014 see the Subscription Operations runbook.\n\n## Discontinued Products\n\nA product moves to discontinued status when the supplier confirms it is no longer available. Discontinued products keep their row in the `products` table for revenue-reporting continuity; the `status` flag is set, the SKU is de-listed from the storefront, and the product disappears from all active sort orders.\n\nDiscontinued products may still appear on historical orders; reporting queries should not exclude discontinued products from revenue aggregations unless the question is specifically about active catalog performance.\n\n[5] Refunds cannot be split across multiple payment methods. If the customer paid with a combination of store credit and card, the refund returns to each method proportionally to the original split.\n\n## What Refunds Do Not Cover\n\nRefunds do not include the original shipping cost on orders shipped via expedited or international carriers, except for the damaged-in-transit and wrong-item-shipped cases. Restocking fees do not apply at Acme Co; we do not deduct from the refund amount for handling.\n\nGift cards are not refundable. Subscription-style orders follow the Loyalty Program cancellation rules, not this policy.",
+        "correct": true,
+        "decision": "auto_resolve",
+        "draft": "The return shipping fee for an item between 5 and 20 pounds that you changed your mind about is $14.95.",
+        "draft_calls": 1,
+        "escalate_leg": null,
+        "expected": "auto_resolve",
+        "faithful": true,
+        "faithfulness_judge_min": 4,
+        "faithfulness_score": 5,
+        "false_escalate": false,
+        "gate_reason": "strong",
+        "gate_strong": true,
+        "helpfulness_score": 4,
+        "judge_calls": 1,
+        "n_cleared": 5,
+        "n_results": 5,
+        "question": "What is the return shipping fee for an item between 5 and 20 pounds that I changed my mind about?",
+        "question_id": "e7-p2-04",
+        "top1_cosine": 0.506029824804942
+      }
+    ],
+    "deflection_rate": 1.0,
+    "faithfulness_judge_min": 4,
+    "false_escalate_rate": 0.0,
+    "false_escalates": [],
+    "judge_model": "claude-haiku-4-5",
+    "label": "answerable_faithful",
+    "match_threshold": 0.3,
+    "n_auto_resolved": 4,
+    "n_false_escalate": 0,
+    "n_min": 2,
+    "n_questions": 4,
+    "passed": true,
+    "population": "P2",
+    "tau_sim": 0.4,
+    "total_answer_judge_calls": 4,
+    "total_draft_calls": 4,
+    "total_judge_calls": 4
+  },
+  "e7_p3": {
+    "decisions": [
+      {
+        "answer_judge_calls": 1,
+        "answered": true,
+        "context": "[1] # Warranty Terms\n\nAcme Co's product warranty terms by category. Warranty coverage is separate from the refund policy and applies after the 30-day refund window has closed.\n\n## Electronics\n\nElectronics carry a 12-month limited warranty against manufacturing defects. The warranty starts on the order's `shipped_at` date, not the `paid_at` date. Coverage includes:\n\n- Component failure under normal use.\n- Battery capacity falling below 70% of rated capacity within the warranty period.\n- Firmware-related issues that cannot be resolved by a factory reset.\n\nCoverage does not include physical damage, water damage (unless the product is rated IPX7 or higher), or damage from unauthorized modifications. The warranty is voided if the device has been opened by anyone other than an authorized Acme repair partner.\n\n## Apparel\n\nApparel carries a 90-day warranty against stitching defects, fabric defects, and dye-fastness issues. The warranty starts on the order's `shipped_at` date.\n\nApparel warranty claims do not cover wear-and-tear, fading from washing per the care label, or alterations performed by a third party. Customers who report a warranty issue within 90 days of `shipped_at` may choose between a free replacement (subject to stock) or a full refund credited to the original payment method.\n\n## Home Goods\n\nHome goods carry a 6-month warranty against manufacturing defects. The warranty starts on the order's `shipped_at` date and covers structural failure of joints, glassware breakage during normal household use, and fabric defects on upholstered items.\n\nGlassware warranty claims require a photo of the broken item; the customer is not required to return the broken piece (we ask that it be disposed of safely).\n\n## Books\n\nBooks carry a 30-day warranty against printing defects (missing pages, blurred ink, binding failure). Beyond 30 days, book warranty claims are at the discretion of customer service.\n\n## Food\n\nFood products do not carry a warranty in the traditional sense. Quality issues with food products (off-flavor, expired-on-arrival, packaging compromise) are handled as refunds under the standard refund policy regardless of the 30-day window.\n\n[2] ## Food\n\nFood products do not carry a warranty in the traditional sense. Quality issues with food products (off-flavor, expired-on-arrival, packaging compromise) are handled as refunds under the standard refund policy regardless of the 30-day window.\n\n## What about expedited replacement?\n\nA loyalty-tier customer at Gold or Platinum may request expedited warranty replacement; we ship the replacement before receiving the defective item back, provided the customer authorizes a hold on the original payment method. The hold is released when the defective item is received at our returns center.\n\nExpedited replacement is not available for the electronics category due to fraud risk; electronics warranty claims always require the defective unit to be received first.\n\n[3] ## Cancellation and tier preservation\n\nCustomers who close their account lose all tier benefits immediately. Cancelled subscriptions and refunded orders reduce trailing-12-month spend and may trigger a tier drop at the next recalculation.\n\nIf a customer's trailing-12-month spend drops below their current tier threshold by less than 10% (for example, a Gold member falls to $920), the customer retains the tier for one additional month as a grace period. The grace period applies once per calendar year.\n\n## Active customer definition\n\nFor tier purposes, an \"active customer\" is one whose `last_order_at` is within the trailing 90 days. Inactive customers retain their tier through the next recalculation but are not counted in the active-customer metrics reported in the monthly business review.\n\n[4] Shipping fees are recorded in `orders.shipping` and tax in `orders.tax`. Neither contributes to gross revenue \u2014 they are pass-through to the carrier and tax authority respectively.\n\n## Category Notes\n\n**Electronics** (`ELE-*`) is our highest-AOV category. Most SKUs are priced between $40 and $200, and the category produces about 35% of total revenue despite being 20% of the SKU count. Electronics carry the longest warranty (12 months) and the strictest return-inspection process \u2014 a returned electronics item must include all original cables, manuals, and packaging to pass inspection.\n\n**Apparel** (`APP-*`) has the highest return rate, typically 12\u201315% on the trailing 90 days, driven by size and fit issues. The merchandising team has a standing instruction to flag any apparel SKU above 18% return rate for fit-guide review.\n\n**Home goods** (`HOM-*`) includes the most diverse product mix: glassware, lighting, textiles, organizers. Glassware has special return-shipping handling \u2014 see the Returns Process document.\n\n**Books** (`BOO-*`) is the lowest-margin category, typically 25\u201335% gross margin. Books are sold at fixed list price; books are never put on flash sale because publisher agreements prohibit it.\n\n**Food** (`FOO-*`) is the smallest category by SKU count but has the highest repeat-purchase rate. Subscription-style food orders (granola, coffee, tea) are handled outside this document \u2014 see the Subscription Operations runbook.\n\n## Discontinued Products\n\nA product moves to discontinued status when the supplier confirms it is no longer available. Discontinued products keep their row in the `products` table for revenue-reporting continuity; the `status` flag is set, the SKU is de-listed from the storefront, and the product disappears from all active sort orders.\n\nDiscontinued products may still appear on historical orders; reporting queries should not exclude discontinued products from revenue aggregations unless the question is specifically about active catalog performance.\n\n[5] # Loyalty Program\n\nAcme Co's loyalty program rewards repeat customers with tiered benefits based on annual spend.\n\n## Tiers\n\nThere are four tiers: Bronze, Silver, Gold, and Platinum. Tier is recalculated on the first day of each calendar month based on the customer's spend over the trailing 12 months.\n\nTier thresholds:\n\n- **Bronze**: Any customer with at least one order. No spend threshold.\n- **Silver**: Trailing 12-month spend of $250 or more.\n- **Gold**: Trailing 12-month spend of $1,000 or more.\n- **Platinum**: Trailing 12-month spend of $5,000 or more.\n\nSpend is computed as the sum of `orders.total` minus any `refunds.amount`, restricted to orders with `status` in `paid`, `shipped`, or `refunded`. Cancelled and pending orders do not count toward tier.\n\n## Benefits\n\nBronze members receive early access to seasonal sales (24 hours before public launch) and a free birthday gift redeemable in the month of the customer's birthday.\n\nSilver members receive everything in Bronze plus free standard shipping on orders over $25 (instead of the $50 threshold) and a 5% loyalty discount automatically applied at checkout on orders over $100.\n\nGold members receive everything in Silver plus free expedited shipping on orders over $75, a 10% loyalty discount on all orders, and access to the goodwill refund exception described in the Refund Policy. Gold members may also request expedited warranty replacement for apparel, home goods, and books (not electronics).\n\nPlatinum members receive everything in Gold plus a dedicated customer service line, complimentary gift wrapping on every order, and an annual $100 store credit issued on the customer's program anniversary.\n\n## How tier is communicated\n\nThe customer's current tier appears in the account header and on every order confirmation email. Tier changes (up or down) trigger a notification email the morning of the recalculation. Customers who drop a tier retain the previous tier's benefits for the remainder of the calendar month in which the drop occurs.\n\n## Cancellation and tier preservation\n\nCustomers who close their account lose all tier benefits immediately. Cancelled subscriptions and refunded orders reduce trailing-12-month spend and may trigger a tier drop at the next recalculation.",
+        "correct": false,
+        "decision": "auto_resolve",
+        "draft": "I don't have that information.",
+        "draft_calls": 1,
+        "escalate_leg": null,
+        "expected": "escalate",
+        "faithful": true,
+        "faithfulness_judge_min": 4,
+        "faithfulness_score": 5,
+        "false_resolve": true,
+        "gate_reason": "strong",
+        "gate_strong": true,
+        "helpfulness_score": 5,
+        "judge_calls": 1,
+        "mislabeled": false,
+        "n_cleared": 2,
+        "n_results": 5,
+        "question": "What is the warranty period for jewelry?",
+        "question_id": "e7-p3-01",
+        "top1_cosine": 0.460665467665936
+      },
+      {
+        "answer_judge_calls": 1,
+        "answered": false,
+        "context": "[1] # Shipping FAQ\n\nCommon questions about how Acme Co ships orders, what carriers we use, and what to expect after `shipped_at` is set on an order.\n\n## How long does standard shipping take?\n\nStandard shipping is 3\u20135 business days within the contiguous US. We dispatch from our Ohio fulfillment center; rural ZIP codes may add 1\u20132 days. Standard shipping is free for orders over $50 and is calculated at checkout for smaller orders.\n\nStandard shipping is not available to PO boxes; the cart will surface a carrier change at checkout if the address is a PO box.\n\n## How long does expedited shipping take?\n\nExpedited shipping is 1\u20132 business days within the contiguous US. Orders placed before 2 PM Eastern ship the same day; orders placed after 2 PM ship the next business day. Expedited shipping is never free and is not eligible for the loyalty-tier shipping discount.\n\n## How long does international shipping take?\n\nInternational shipping varies by destination. Most European and Asia-Pacific destinations receive orders within 7\u201314 business days; Latin American and Middle Eastern destinations may take 10\u201321 business days. Customs delays are common and are outside our control.\n\nInternational orders may incur import duties and taxes assessed by the destination country. These charges are the customer's responsibility and are collected by the carrier at delivery.\n\n## Which carriers do we use?\n\nStandard domestic shipping uses USPS or UPS Ground depending on package weight; expedited uses FedEx Express. International orders ship via DHL Express for most destinations and EMS for select countries.\n\nThe carrier choice is recorded on each order in the fulfillment system but is not exposed on the `orders` table. Customers receive the tracking number via email once `shipped_at` is set.\n\n## When does the shipped_at timestamp get updated?\n\n`shipped_at` is set when the carrier scans the package at our fulfillment center, not when the label is generated. There is typically a 2\u20136 hour gap between label generation and carrier pickup, especially on weekends and holidays.\n\nFor orders where `shipped_at` has been set but the tracking number shows no movement after 48 hours, contact customer service \u2014 the package may have been mis-scanned and requires investigation.\n\n[2] For orders where `shipped_at` has been set but the tracking number shows no movement after 48 hours, contact customer service \u2014 the package may have been mis-scanned and requires investigation.\n\n## What happens on weekends and holidays?\n\nStandard and expedited shipping operate Monday through Friday only. Orders placed on Saturday or Sunday process on the following Monday. The fulfillment center observes ten US federal holidays per year; the published holiday calendar is available in the customer portal.\n\nInternational carriers operate on their own calendars; weekend processing varies by destination.\n\n[3] The deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns 5\u201320 lbs; quoted per-case for returns over 20 lbs.\n\n## Receiving and Inspection\n\nReturns are received at our Ohio returns center, typically 4\u20137 business days after the customer drops the package. The receiving team performs an inspection: condition of product, completeness (all original parts, manuals, accessories), and match against the RMA.\n\nThe inspection outcome drives the refund settlement:\n\n- **Pass** (product in resaleable condition): full refund per policy.\n- **Partial pass** (product usable but not resaleable, e.g. opened software, worn apparel): partial refund at 50\u201380% of original price.\n- **Fail** (product damaged by the customer, incomplete, or wrong item returned): no refund; the customer is contacted to authorize return-to-customer at the customer's expense or disposal at the customer's option.\n\n## Return Volume Tracking\n\nThe returns center tracks return volume by SKU and surfaces SKUs with a return rate above 8% to the merchandising team for quality review. The return-rate metric is computed as returns received in the trailing 90 days divided by units sold in the same window.\n\nA SKU placed on quality review may be temporarily de-listed from the storefront pending investigation. De-listed SKUs do not affect existing orders or open returns.\n\n[4] # Refund Policy\n\nThis document defines how Acme Co handles refunds for orders placed through our online store and customer support channels.\n\n## Eligibility Window\n\nCustomers may request a refund within 30 days of the order's `shipped_at` date. Orders that have not shipped follow the cancellation policy instead \u2014 see the Returns Process document for the cancellation cutoff and partial-shipment edge cases.\n\nRefund eligibility is independent of the order's `paid_at` date. A refund window that has already closed cannot be reopened by customer service except under the goodwill exception described below.\n\n## Full vs Partial Refunds\n\nA full refund returns the entire order `total` (including tax, shipping, and any applied discounts already debited). Full refunds are the default for damaged-in-transit, wrong-item-shipped, and product-defect cases.\n\nA partial refund returns a subset of the order `total`. Partial refunds are the default for customer-dissatisfied and delivery-delay cases; the refunded amount is typically 10% to 80% of the order total and is set at the agent's discretion within the published guardrails.\n\nThe `refunds.amount` field records the refunded value in the same currency as `orders.total`. Net revenue calculations subtract `refunds.amount` from gross revenue.\n\n## Goodwill Exception\n\nCustomer service may issue a goodwill refund outside the 30-day window when:\n\n- The order shipped through a third-party carrier that lost the package after delivery scan.\n- The customer can demonstrate that the product became defective within the first 90 days but the defect was not discoverable on receipt.\n- A loyalty-tier customer (Gold or Platinum) requests a refund within 60 days of `shipped_at`.\n\nGoodwill refunds are capped at 50% of the order total unless escalated to a supervisor. Document the goodwill reason in the `refunds.reason` field for auditability.\n\n## Refund Method\n\nRefunds are processed to the original payment method whenever possible. Card refunds typically settle in 5\u20137 business days; bank transfers in 3\u20135 business days. Store credit is offered as an alternative and is available immediately.\n\nRefunds cannot be split across multiple payment methods. If the customer paid with a combination of store credit and card, the refund returns to each method proportionally to the original split.\n\n[5] # Returns Process\n\nThe mechanical steps for processing a return, distinct from the refund policy decision. A return is the physical movement of product back to Acme Co; a refund is the financial settlement. Most refunds are paired with a return, but not all.\n\n## Cancellation vs Return\n\nIf the order has not yet shipped (`shipped_at IS NULL`), the customer requests a cancellation rather than a return. Cancellations are free, instant, and refund the full order total. The cancellation cutoff is when the order enters the fulfillment-processing state \u2014 typically 2 to 4 hours after `paid_at` on weekdays and up to 24 hours on weekends.\n\nOnce `shipped_at` is set, cancellation is no longer available; the customer must initiate a return.\n\n## Return Authorization\n\nAll returns require a Return Merchandise Authorization (RMA) number issued by customer service. The customer cannot ship product back without an RMA \u2014 unauthorized returns are refused at the warehouse and shipped back to the customer at the customer's expense.\n\nThe RMA is generated through the customer portal or by emailing customer service. The RMA includes a pre-paid shipping label for US domestic returns; international returns are at the customer's expense unless the return is for a wrong-item-shipped or damaged-in-transit case.\n\n## Return Shipping\n\nUS domestic returns use USPS or UPS Ground depending on package weight. The customer drops the package at any USPS or UPS pickup point; no scheduled pickup is needed. The pre-paid label tracks the package; the customer should keep the tracking number.\n\nReturn shipping is free for the following cases:\n\n- Damaged in transit (Acme Co's fault via the carrier).\n- Wrong item shipped (Acme Co's fault).\n- Product defect (Acme Co's fault).\n\nReturn shipping is paid by the customer (deducted from the refund or charged to the original payment method) for:\n\n- Customer changed their mind.\n- Customer ordered the wrong size or color.\n- Customer no longer needs the item.\n\nThe deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns 5\u201320 lbs; quoted per-case for returns over 20 lbs.",
+        "correct": true,
+        "decision": "escalate",
+        "draft": "I don't have that information.",
+        "draft_calls": 1,
+        "escalate_leg": "answer",
+        "expected": "escalate",
+        "faithful": true,
+        "faithfulness_judge_min": 4,
+        "faithfulness_score": 5,
+        "false_resolve": false,
+        "gate_reason": "strong",
+        "gate_strong": true,
+        "helpfulness_score": 5,
+        "judge_calls": 1,
+        "mislabeled": false,
+        "n_cleared": 3,
+        "n_results": 5,
+        "question": "How many business days does standard shipping to Hawaii take?",
+        "question_id": "e7-p3-02",
+        "top1_cosine": 0.421396968387195
+      },
+      {
+        "answer_judge_calls": 1,
+        "answered": false,
+        "context": "[1] # Refund Policy\n\nThis document defines how Acme Co handles refunds for orders placed through our online store and customer support channels.\n\n## Eligibility Window\n\nCustomers may request a refund within 30 days of the order's `shipped_at` date. Orders that have not shipped follow the cancellation policy instead \u2014 see the Returns Process document for the cancellation cutoff and partial-shipment edge cases.\n\nRefund eligibility is independent of the order's `paid_at` date. A refund window that has already closed cannot be reopened by customer service except under the goodwill exception described below.\n\n## Full vs Partial Refunds\n\nA full refund returns the entire order `total` (including tax, shipping, and any applied discounts already debited). Full refunds are the default for damaged-in-transit, wrong-item-shipped, and product-defect cases.\n\nA partial refund returns a subset of the order `total`. Partial refunds are the default for customer-dissatisfied and delivery-delay cases; the refunded amount is typically 10% to 80% of the order total and is set at the agent's discretion within the published guardrails.\n\nThe `refunds.amount` field records the refunded value in the same currency as `orders.total`. Net revenue calculations subtract `refunds.amount` from gross revenue.\n\n## Goodwill Exception\n\nCustomer service may issue a goodwill refund outside the 30-day window when:\n\n- The order shipped through a third-party carrier that lost the package after delivery scan.\n- The customer can demonstrate that the product became defective within the first 90 days but the defect was not discoverable on receipt.\n- A loyalty-tier customer (Gold or Platinum) requests a refund within 60 days of `shipped_at`.\n\nGoodwill refunds are capped at 50% of the order total unless escalated to a supervisor. Document the goodwill reason in the `refunds.reason` field for auditability.\n\n## Refund Method\n\nRefunds are processed to the original payment method whenever possible. Card refunds typically settle in 5\u20137 business days; bank transfers in 3\u20135 business days. Store credit is offered as an alternative and is available immediately.\n\nRefunds cannot be split across multiple payment methods. If the customer paid with a combination of store credit and card, the refund returns to each method proportionally to the original split.\n\n[2] Refunds cannot be split across multiple payment methods. If the customer paid with a combination of store credit and card, the refund returns to each method proportionally to the original split.\n\n## What Refunds Do Not Cover\n\nRefunds do not include the original shipping cost on orders shipped via expedited or international carriers, except for the damaged-in-transit and wrong-item-shipped cases. Restocking fees do not apply at Acme Co; we do not deduct from the refund amount for handling.\n\nGift cards are not refundable. Subscription-style orders follow the Loyalty Program cancellation rules, not this policy.\n\n[3] The deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns 5\u201320 lbs; quoted per-case for returns over 20 lbs.\n\n## Receiving and Inspection\n\nReturns are received at our Ohio returns center, typically 4\u20137 business days after the customer drops the package. The receiving team performs an inspection: condition of product, completeness (all original parts, manuals, accessories), and match against the RMA.\n\nThe inspection outcome drives the refund settlement:\n\n- **Pass** (product in resaleable condition): full refund per policy.\n- **Partial pass** (product usable but not resaleable, e.g. opened software, worn apparel): partial refund at 50\u201380% of original price.\n- **Fail** (product damaged by the customer, incomplete, or wrong item returned): no refund; the customer is contacted to authorize return-to-customer at the customer's expense or disposal at the customer's option.\n\n## Return Volume Tracking\n\nThe returns center tracks return volume by SKU and surfaces SKUs with a return rate above 8% to the merchandising team for quality review. The return-rate metric is computed as returns received in the trailing 90 days divided by units sold in the same window.\n\nA SKU placed on quality review may be temporarily de-listed from the storefront pending investigation. De-listed SKUs do not affect existing orders or open returns.\n\n[4] # Returns Process\n\nThe mechanical steps for processing a return, distinct from the refund policy decision. A return is the physical movement of product back to Acme Co; a refund is the financial settlement. Most refunds are paired with a return, but not all.\n\n## Cancellation vs Return\n\nIf the order has not yet shipped (`shipped_at IS NULL`), the customer requests a cancellation rather than a return. Cancellations are free, instant, and refund the full order total. The cancellation cutoff is when the order enters the fulfillment-processing state \u2014 typically 2 to 4 hours after `paid_at` on weekdays and up to 24 hours on weekends.\n\nOnce `shipped_at` is set, cancellation is no longer available; the customer must initiate a return.\n\n## Return Authorization\n\nAll returns require a Return Merchandise Authorization (RMA) number issued by customer service. The customer cannot ship product back without an RMA \u2014 unauthorized returns are refused at the warehouse and shipped back to the customer at the customer's expense.\n\nThe RMA is generated through the customer portal or by emailing customer service. The RMA includes a pre-paid shipping label for US domestic returns; international returns are at the customer's expense unless the return is for a wrong-item-shipped or damaged-in-transit case.\n\n## Return Shipping\n\nUS domestic returns use USPS or UPS Ground depending on package weight. The customer drops the package at any USPS or UPS pickup point; no scheduled pickup is needed. The pre-paid label tracks the package; the customer should keep the tracking number.\n\nReturn shipping is free for the following cases:\n\n- Damaged in transit (Acme Co's fault via the carrier).\n- Wrong item shipped (Acme Co's fault).\n- Product defect (Acme Co's fault).\n\nReturn shipping is paid by the customer (deducted from the refund or charged to the original payment method) for:\n\n- Customer changed their mind.\n- Customer ordered the wrong size or color.\n- Customer no longer needs the item.\n\nThe deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns 5\u201320 lbs; quoted per-case for returns over 20 lbs.\n\n[5] ## Food\n\nFood products do not carry a warranty in the traditional sense. Quality issues with food products (off-flavor, expired-on-arrival, packaging compromise) are handled as refunds under the standard refund policy regardless of the 30-day window.\n\n## What about expedited replacement?\n\nA loyalty-tier customer at Gold or Platinum may request expedited warranty replacement; we ship the replacement before receiving the defective item back, provided the customer authorizes a hold on the original payment method. The hold is released when the defective item is received at our returns center.\n\nExpedited replacement is not available for the electronics category due to fraud risk; electronics warranty claims always require the defective unit to be received first.",
+        "correct": true,
+        "decision": "escalate",
+        "draft": "For delivery delays, you may receive a partial refund typically between 10% to 80% of the order total. The exact amount is set at the agent's discretion within the published guardrails.",
+        "draft_calls": 1,
+        "escalate_leg": "answer",
+        "expected": "escalate",
+        "faithful": true,
+        "faithfulness_judge_min": 4,
+        "faithfulness_score": 5,
+        "false_resolve": false,
+        "gate_reason": "strong",
+        "gate_strong": true,
+        "helpfulness_score": 2,
+        "judge_calls": 1,
+        "mislabeled": false,
+        "n_cleared": 5,
+        "n_results": 5,
+        "question": "If my delivery is delayed past the estimated date, exactly what refund amount am I owed?",
+        "question_id": "e7-p3-03",
+        "top1_cosine": 0.429849730147535
+      },
+      {
+        "answer_judge_calls": 1,
+        "answered": false,
+        "context": "[1] # Warranty Terms\n\nAcme Co's product warranty terms by category. Warranty coverage is separate from the refund policy and applies after the 30-day refund window has closed.\n\n## Electronics\n\nElectronics carry a 12-month limited warranty against manufacturing defects. The warranty starts on the order's `shipped_at` date, not the `paid_at` date. Coverage includes:\n\n- Component failure under normal use.\n- Battery capacity falling below 70% of rated capacity within the warranty period.\n- Firmware-related issues that cannot be resolved by a factory reset.\n\nCoverage does not include physical damage, water damage (unless the product is rated IPX7 or higher), or damage from unauthorized modifications. The warranty is voided if the device has been opened by anyone other than an authorized Acme repair partner.\n\n## Apparel\n\nApparel carries a 90-day warranty against stitching defects, fabric defects, and dye-fastness issues. The warranty starts on the order's `shipped_at` date.\n\nApparel warranty claims do not cover wear-and-tear, fading from washing per the care label, or alterations performed by a third party. Customers who report a warranty issue within 90 days of `shipped_at` may choose between a free replacement (subject to stock) or a full refund credited to the original payment method.\n\n## Home Goods\n\nHome goods carry a 6-month warranty against manufacturing defects. The warranty starts on the order's `shipped_at` date and covers structural failure of joints, glassware breakage during normal household use, and fabric defects on upholstered items.\n\nGlassware warranty claims require a photo of the broken item; the customer is not required to return the broken piece (we ask that it be disposed of safely).\n\n## Books\n\nBooks carry a 30-day warranty against printing defects (missing pages, blurred ink, binding failure). Beyond 30 days, book warranty claims are at the discretion of customer service.\n\n## Food\n\nFood products do not carry a warranty in the traditional sense. Quality issues with food products (off-flavor, expired-on-arrival, packaging compromise) are handled as refunds under the standard refund policy regardless of the 30-day window.\n\n[2] ## Food\n\nFood products do not carry a warranty in the traditional sense. Quality issues with food products (off-flavor, expired-on-arrival, packaging compromise) are handled as refunds under the standard refund policy regardless of the 30-day window.\n\n## What about expedited replacement?\n\nA loyalty-tier customer at Gold or Platinum may request expedited warranty replacement; we ship the replacement before receiving the defective item back, provided the customer authorizes a hold on the original payment method. The hold is released when the defective item is received at our returns center.\n\nExpedited replacement is not available for the electronics category due to fraud risk; electronics warranty claims always require the defective unit to be received first.\n\n[3] # Refund Policy\n\nThis document defines how Acme Co handles refunds for orders placed through our online store and customer support channels.\n\n## Eligibility Window\n\nCustomers may request a refund within 30 days of the order's `shipped_at` date. Orders that have not shipped follow the cancellation policy instead \u2014 see the Returns Process document for the cancellation cutoff and partial-shipment edge cases.\n\nRefund eligibility is independent of the order's `paid_at` date. A refund window that has already closed cannot be reopened by customer service except under the goodwill exception described below.\n\n## Full vs Partial Refunds\n\nA full refund returns the entire order `total` (including tax, shipping, and any applied discounts already debited). Full refunds are the default for damaged-in-transit, wrong-item-shipped, and product-defect cases.\n\nA partial refund returns a subset of the order `total`. Partial refunds are the default for customer-dissatisfied and delivery-delay cases; the refunded amount is typically 10% to 80% of the order total and is set at the agent's discretion within the published guardrails.\n\nThe `refunds.amount` field records the refunded value in the same currency as `orders.total`. Net revenue calculations subtract `refunds.amount` from gross revenue.\n\n## Goodwill Exception\n\nCustomer service may issue a goodwill refund outside the 30-day window when:\n\n- The order shipped through a third-party carrier that lost the package after delivery scan.\n- The customer can demonstrate that the product became defective within the first 90 days but the defect was not discoverable on receipt.\n- A loyalty-tier customer (Gold or Platinum) requests a refund within 60 days of `shipped_at`.\n\nGoodwill refunds are capped at 50% of the order total unless escalated to a supervisor. Document the goodwill reason in the `refunds.reason` field for auditability.\n\n## Refund Method\n\nRefunds are processed to the original payment method whenever possible. Card refunds typically settle in 5\u20137 business days; bank transfers in 3\u20135 business days. Store credit is offered as an alternative and is available immediately.\n\nRefunds cannot be split across multiple payment methods. If the customer paid with a combination of store credit and card, the refund returns to each method proportionally to the original split.\n\n[4] The deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns 5\u201320 lbs; quoted per-case for returns over 20 lbs.\n\n## Receiving and Inspection\n\nReturns are received at our Ohio returns center, typically 4\u20137 business days after the customer drops the package. The receiving team performs an inspection: condition of product, completeness (all original parts, manuals, accessories), and match against the RMA.\n\nThe inspection outcome drives the refund settlement:\n\n- **Pass** (product in resaleable condition): full refund per policy.\n- **Partial pass** (product usable but not resaleable, e.g. opened software, worn apparel): partial refund at 50\u201380% of original price.\n- **Fail** (product damaged by the customer, incomplete, or wrong item returned): no refund; the customer is contacted to authorize return-to-customer at the customer's expense or disposal at the customer's option.\n\n## Return Volume Tracking\n\nThe returns center tracks return volume by SKU and surfaces SKUs with a return rate above 8% to the merchandising team for quality review. The return-rate metric is computed as returns received in the trailing 90 days divided by units sold in the same window.\n\nA SKU placed on quality review may be temporarily de-listed from the storefront pending investigation. De-listed SKUs do not affect existing orders or open returns.\n\n[5] # Product Catalog Overview\n\nAcme Co sells across five categories: electronics, apparel, home goods, books, and food. This document summarises the catalog structure, pricing conventions, and category-specific notes that affect order processing and reporting.\n\n## Catalog Structure\n\nEach product carries an SKU of the form `CAT-NNNN` where `CAT` is a three-letter category prefix and `NNNN` is a zero-padded sequence number. The category prefix is `ELE` for electronics, `APP` for apparel, `HOM` for home goods, `BOO` for books, and `FOO` for food. SKUs are never reused; a discontinued SKU stays in the database for reporting continuity.\n\nEach product has a `list_price` (the published price on the storefront) and a `cost` (our wholesale cost from the supplier or manufacturing partner). Cost is typically 50\u201370% of list price across categories; the resulting gross margin lands in the 30\u201350% range.\n\nThe `unit_price` recorded on `order_items` is a snapshot of the price at order time. It is not always equal to the current `list_price` because of promotional drift: limited-time discounts, flash sales, and per-customer pricing for loyalty-tier members can push `unit_price` to within \u00b110% of `list_price` on individual line items. This is why gross-revenue calculations should sum `unit_price * quantity` from `order_items` rather than recomputing from `products.list_price`.\n\n## Pricing Conventions\n\nList prices are denominated in US dollars and use the `numeric(10,2)` SQL type. We do not store prices in cents; all amounts are decimal-rounded to two places at write time.\n\nPromotional discounts on individual line items are recorded in `order_items.discount`. Order-level discounts (loyalty discount, coupon codes) are recorded separately in `orders.discount`. Both reduce gross revenue when computing net revenue; the merchandising team specifically asks that the two be summed when reporting \"total discounts\" to avoid double-counting.\n\nShipping fees are recorded in `orders.shipping` and tax in `orders.tax`. Neither contributes to gross revenue \u2014 they are pass-through to the carrier and tax authority respectively.",
+        "correct": true,
+        "decision": "escalate",
+        "draft": "The context does not provide information specific to the warranty period for refurbished electronics items. Therefore, I don't have that information.",
+        "draft_calls": 1,
+        "escalate_leg": "answer",
+        "expected": "escalate",
+        "faithful": true,
+        "faithfulness_judge_min": 4,
+        "faithfulness_score": 5,
+        "false_resolve": false,
+        "gate_reason": "strong",
+        "gate_strong": true,
+        "helpfulness_score": 4,
+        "judge_calls": 1,
+        "mislabeled": false,
+        "n_cleared": 4,
+        "n_results": 5,
+        "question": "How long is the warranty on a refurbished electronics item?",
+        "question_id": "e7-p3-04",
+        "top1_cosine": 0.533843910149843
+      },
+      {
+        "answer_judge_calls": 1,
+        "answered": true,
+        "context": "[1] # Returns Process\n\nThe mechanical steps for processing a return, distinct from the refund policy decision. A return is the physical movement of product back to Acme Co; a refund is the financial settlement. Most refunds are paired with a return, but not all.\n\n## Cancellation vs Return\n\nIf the order has not yet shipped (`shipped_at IS NULL`), the customer requests a cancellation rather than a return. Cancellations are free, instant, and refund the full order total. The cancellation cutoff is when the order enters the fulfillment-processing state \u2014 typically 2 to 4 hours after `paid_at` on weekdays and up to 24 hours on weekends.\n\nOnce `shipped_at` is set, cancellation is no longer available; the customer must initiate a return.\n\n## Return Authorization\n\nAll returns require a Return Merchandise Authorization (RMA) number issued by customer service. The customer cannot ship product back without an RMA \u2014 unauthorized returns are refused at the warehouse and shipped back to the customer at the customer's expense.\n\nThe RMA is generated through the customer portal or by emailing customer service. The RMA includes a pre-paid shipping label for US domestic returns; international returns are at the customer's expense unless the return is for a wrong-item-shipped or damaged-in-transit case.\n\n## Return Shipping\n\nUS domestic returns use USPS or UPS Ground depending on package weight. The customer drops the package at any USPS or UPS pickup point; no scheduled pickup is needed. The pre-paid label tracks the package; the customer should keep the tracking number.\n\nReturn shipping is free for the following cases:\n\n- Damaged in transit (Acme Co's fault via the carrier).\n- Wrong item shipped (Acme Co's fault).\n- Product defect (Acme Co's fault).\n\nReturn shipping is paid by the customer (deducted from the refund or charged to the original payment method) for:\n\n- Customer changed their mind.\n- Customer ordered the wrong size or color.\n- Customer no longer needs the item.\n\nThe deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns 5\u201320 lbs; quoted per-case for returns over 20 lbs.\n\n[2] The deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns 5\u201320 lbs; quoted per-case for returns over 20 lbs.\n\n## Receiving and Inspection\n\nReturns are received at our Ohio returns center, typically 4\u20137 business days after the customer drops the package. The receiving team performs an inspection: condition of product, completeness (all original parts, manuals, accessories), and match against the RMA.\n\nThe inspection outcome drives the refund settlement:\n\n- **Pass** (product in resaleable condition): full refund per policy.\n- **Partial pass** (product usable but not resaleable, e.g. opened software, worn apparel): partial refund at 50\u201380% of original price.\n- **Fail** (product damaged by the customer, incomplete, or wrong item returned): no refund; the customer is contacted to authorize return-to-customer at the customer's expense or disposal at the customer's option.\n\n## Return Volume Tracking\n\nThe returns center tracks return volume by SKU and surfaces SKUs with a return rate above 8% to the merchandising team for quality review. The return-rate metric is computed as returns received in the trailing 90 days divided by units sold in the same window.\n\nA SKU placed on quality review may be temporarily de-listed from the storefront pending investigation. De-listed SKUs do not affect existing orders or open returns.\n\n[3] # Shipping FAQ\n\nCommon questions about how Acme Co ships orders, what carriers we use, and what to expect after `shipped_at` is set on an order.\n\n## How long does standard shipping take?\n\nStandard shipping is 3\u20135 business days within the contiguous US. We dispatch from our Ohio fulfillment center; rural ZIP codes may add 1\u20132 days. Standard shipping is free for orders over $50 and is calculated at checkout for smaller orders.\n\nStandard shipping is not available to PO boxes; the cart will surface a carrier change at checkout if the address is a PO box.\n\n## How long does expedited shipping take?\n\nExpedited shipping is 1\u20132 business days within the contiguous US. Orders placed before 2 PM Eastern ship the same day; orders placed after 2 PM ship the next business day. Expedited shipping is never free and is not eligible for the loyalty-tier shipping discount.\n\n## How long does international shipping take?\n\nInternational shipping varies by destination. Most European and Asia-Pacific destinations receive orders within 7\u201314 business days; Latin American and Middle Eastern destinations may take 10\u201321 business days. Customs delays are common and are outside our control.\n\nInternational orders may incur import duties and taxes assessed by the destination country. These charges are the customer's responsibility and are collected by the carrier at delivery.\n\n## Which carriers do we use?\n\nStandard domestic shipping uses USPS or UPS Ground depending on package weight; expedited uses FedEx Express. International orders ship via DHL Express for most destinations and EMS for select countries.\n\nThe carrier choice is recorded on each order in the fulfillment system but is not exposed on the `orders` table. Customers receive the tracking number via email once `shipped_at` is set.\n\n## When does the shipped_at timestamp get updated?\n\n`shipped_at` is set when the carrier scans the package at our fulfillment center, not when the label is generated. There is typically a 2\u20136 hour gap between label generation and carrier pickup, especially on weekends and holidays.\n\nFor orders where `shipped_at` has been set but the tracking number shows no movement after 48 hours, contact customer service \u2014 the package may have been mis-scanned and requires investigation.\n\n[4] Shipping fees are recorded in `orders.shipping` and tax in `orders.tax`. Neither contributes to gross revenue \u2014 they are pass-through to the carrier and tax authority respectively.\n\n## Category Notes\n\n**Electronics** (`ELE-*`) is our highest-AOV category. Most SKUs are priced between $40 and $200, and the category produces about 35% of total revenue despite being 20% of the SKU count. Electronics carry the longest warranty (12 months) and the strictest return-inspection process \u2014 a returned electronics item must include all original cables, manuals, and packaging to pass inspection.\n\n**Apparel** (`APP-*`) has the highest return rate, typically 12\u201315% on the trailing 90 days, driven by size and fit issues. The merchandising team has a standing instruction to flag any apparel SKU above 18% return rate for fit-guide review.\n\n**Home goods** (`HOM-*`) includes the most diverse product mix: glassware, lighting, textiles, organizers. Glassware has special return-shipping handling \u2014 see the Returns Process document.\n\n**Books** (`BOO-*`) is the lowest-margin category, typically 25\u201335% gross margin. Books are sold at fixed list price; books are never put on flash sale because publisher agreements prohibit it.\n\n**Food** (`FOO-*`) is the smallest category by SKU count but has the highest repeat-purchase rate. Subscription-style food orders (granola, coffee, tea) are handled outside this document \u2014 see the Subscription Operations runbook.\n\n## Discontinued Products\n\nA product moves to discontinued status when the supplier confirms it is no longer available. Discontinued products keep their row in the `products` table for revenue-reporting continuity; the `status` flag is set, the SKU is de-listed from the storefront, and the product disappears from all active sort orders.\n\nDiscontinued products may still appear on historical orders; reporting queries should not exclude discontinued products from revenue aggregations unless the question is specifically about active catalog performance.\n\n[5] # Refund Policy\n\nThis document defines how Acme Co handles refunds for orders placed through our online store and customer support channels.\n\n## Eligibility Window\n\nCustomers may request a refund within 30 days of the order's `shipped_at` date. Orders that have not shipped follow the cancellation policy instead \u2014 see the Returns Process document for the cancellation cutoff and partial-shipment edge cases.\n\nRefund eligibility is independent of the order's `paid_at` date. A refund window that has already closed cannot be reopened by customer service except under the goodwill exception described below.\n\n## Full vs Partial Refunds\n\nA full refund returns the entire order `total` (including tax, shipping, and any applied discounts already debited). Full refunds are the default for damaged-in-transit, wrong-item-shipped, and product-defect cases.\n\nA partial refund returns a subset of the order `total`. Partial refunds are the default for customer-dissatisfied and delivery-delay cases; the refunded amount is typically 10% to 80% of the order total and is set at the agent's discretion within the published guardrails.\n\nThe `refunds.amount` field records the refunded value in the same currency as `orders.total`. Net revenue calculations subtract `refunds.amount` from gross revenue.\n\n## Goodwill Exception\n\nCustomer service may issue a goodwill refund outside the 30-day window when:\n\n- The order shipped through a third-party carrier that lost the package after delivery scan.\n- The customer can demonstrate that the product became defective within the first 90 days but the defect was not discoverable on receipt.\n- A loyalty-tier customer (Gold or Platinum) requests a refund within 60 days of `shipped_at`.\n\nGoodwill refunds are capped at 50% of the order total unless escalated to a supervisor. Document the goodwill reason in the `refunds.reason` field for auditability.\n\n## Refund Method\n\nRefunds are processed to the original payment method whenever possible. Card refunds typically settle in 5\u20137 business days; bank transfers in 3\u20135 business days. Store credit is offered as an alternative and is available immediately.\n\nRefunds cannot be split across multiple payment methods. If the customer paid with a combination of store credit and card, the refund returns to each method proportionally to the original split.",
+        "correct": false,
+        "decision": "auto_resolve",
+        "draft": "The return shipping fee for returns over 20 lbs is quoted on a per-case basis.",
+        "draft_calls": 1,
+        "escalate_leg": null,
+        "expected": "escalate",
+        "faithful": true,
+        "faithfulness_judge_min": 4,
+        "faithfulness_score": 5,
+        "false_resolve": true,
+        "gate_reason": "strong",
+        "gate_strong": true,
+        "helpfulness_score": 4,
+        "judge_calls": 1,
+        "mislabeled": false,
+        "n_cleared": 5,
+        "n_results": 5,
+        "question": "What is the return shipping fee for a return over 20 lbs?",
+        "question_id": "e7-p3-05",
+        "top1_cosine": 0.579999133577984
+      },
+      {
+        "answer_judge_calls": 0,
+        "answered": null,
+        "context": null,
+        "correct": true,
+        "decision": "escalate",
+        "draft": "The goodwill refund cap is 50% of the order total; however, if escalated to a supervisor, this cap may be exceeded at their discretion.",
+        "draft_calls": 1,
+        "escalate_leg": "faithfulness",
+        "expected": "escalate",
+        "faithful": false,
+        "faithfulness_judge_min": 4,
+        "faithfulness_score": 2,
+        "false_resolve": false,
+        "gate_reason": "strong",
+        "gate_strong": true,
+        "helpfulness_score": 2,
+        "judge_calls": 1,
+        "mislabeled": false,
+        "n_cleared": 5,
+        "n_results": 5,
+        "question": "What is the goodwill refund cap once the case is escalated to a supervisor?",
+        "question_id": "e7-p3-07",
+        "top1_cosine": 0.42344661202162
+      },
+      {
+        "answer_judge_calls": 1,
+        "answered": true,
+        "context": "[1] # Loyalty Program\n\nAcme Co's loyalty program rewards repeat customers with tiered benefits based on annual spend.\n\n## Tiers\n\nThere are four tiers: Bronze, Silver, Gold, and Platinum. Tier is recalculated on the first day of each calendar month based on the customer's spend over the trailing 12 months.\n\nTier thresholds:\n\n- **Bronze**: Any customer with at least one order. No spend threshold.\n- **Silver**: Trailing 12-month spend of $250 or more.\n- **Gold**: Trailing 12-month spend of $1,000 or more.\n- **Platinum**: Trailing 12-month spend of $5,000 or more.\n\nSpend is computed as the sum of `orders.total` minus any `refunds.amount`, restricted to orders with `status` in `paid`, `shipped`, or `refunded`. Cancelled and pending orders do not count toward tier.\n\n## Benefits\n\nBronze members receive early access to seasonal sales (24 hours before public launch) and a free birthday gift redeemable in the month of the customer's birthday.\n\nSilver members receive everything in Bronze plus free standard shipping on orders over $25 (instead of the $50 threshold) and a 5% loyalty discount automatically applied at checkout on orders over $100.\n\nGold members receive everything in Silver plus free expedited shipping on orders over $75, a 10% loyalty discount on all orders, and access to the goodwill refund exception described in the Refund Policy. Gold members may also request expedited warranty replacement for apparel, home goods, and books (not electronics).\n\nPlatinum members receive everything in Gold plus a dedicated customer service line, complimentary gift wrapping on every order, and an annual $100 store credit issued on the customer's program anniversary.\n\n## How tier is communicated\n\nThe customer's current tier appears in the account header and on every order confirmation email. Tier changes (up or down) trigger a notification email the morning of the recalculation. Customers who drop a tier retain the previous tier's benefits for the remainder of the calendar month in which the drop occurs.\n\n## Cancellation and tier preservation\n\nCustomers who close their account lose all tier benefits immediately. Cancelled subscriptions and refunded orders reduce trailing-12-month spend and may trigger a tier drop at the next recalculation.\n\n[2] ## Cancellation and tier preservation\n\nCustomers who close their account lose all tier benefits immediately. Cancelled subscriptions and refunded orders reduce trailing-12-month spend and may trigger a tier drop at the next recalculation.\n\nIf a customer's trailing-12-month spend drops below their current tier threshold by less than 10% (for example, a Gold member falls to $920), the customer retains the tier for one additional month as a grace period. The grace period applies once per calendar year.\n\n## Active customer definition\n\nFor tier purposes, an \"active customer\" is one whose `last_order_at` is within the trailing 90 days. Inactive customers retain their tier through the next recalculation but are not counted in the active-customer metrics reported in the monthly business review.\n\n[3] # Refund Policy\n\nThis document defines how Acme Co handles refunds for orders placed through our online store and customer support channels.\n\n## Eligibility Window\n\nCustomers may request a refund within 30 days of the order's `shipped_at` date. Orders that have not shipped follow the cancellation policy instead \u2014 see the Returns Process document for the cancellation cutoff and partial-shipment edge cases.\n\nRefund eligibility is independent of the order's `paid_at` date. A refund window that has already closed cannot be reopened by customer service except under the goodwill exception described below.\n\n## Full vs Partial Refunds\n\nA full refund returns the entire order `total` (including tax, shipping, and any applied discounts already debited). Full refunds are the default for damaged-in-transit, wrong-item-shipped, and product-defect cases.\n\nA partial refund returns a subset of the order `total`. Partial refunds are the default for customer-dissatisfied and delivery-delay cases; the refunded amount is typically 10% to 80% of the order total and is set at the agent's discretion within the published guardrails.\n\nThe `refunds.amount` field records the refunded value in the same currency as `orders.total`. Net revenue calculations subtract `refunds.amount` from gross revenue.\n\n## Goodwill Exception\n\nCustomer service may issue a goodwill refund outside the 30-day window when:\n\n- The order shipped through a third-party carrier that lost the package after delivery scan.\n- The customer can demonstrate that the product became defective within the first 90 days but the defect was not discoverable on receipt.\n- A loyalty-tier customer (Gold or Platinum) requests a refund within 60 days of `shipped_at`.\n\nGoodwill refunds are capped at 50% of the order total unless escalated to a supervisor. Document the goodwill reason in the `refunds.reason` field for auditability.\n\n## Refund Method\n\nRefunds are processed to the original payment method whenever possible. Card refunds typically settle in 5\u20137 business days; bank transfers in 3\u20135 business days. Store credit is offered as an alternative and is available immediately.\n\nRefunds cannot be split across multiple payment methods. If the customer paid with a combination of store credit and card, the refund returns to each method proportionally to the original split.\n\n[4] ## Food\n\nFood products do not carry a warranty in the traditional sense. Quality issues with food products (off-flavor, expired-on-arrival, packaging compromise) are handled as refunds under the standard refund policy regardless of the 30-day window.\n\n## What about expedited replacement?\n\nA loyalty-tier customer at Gold or Platinum may request expedited warranty replacement; we ship the replacement before receiving the defective item back, provided the customer authorizes a hold on the original payment method. The hold is released when the defective item is received at our returns center.\n\nExpedited replacement is not available for the electronics category due to fraud risk; electronics warranty claims always require the defective unit to be received first.\n\n[5] # Shipping FAQ\n\nCommon questions about how Acme Co ships orders, what carriers we use, and what to expect after `shipped_at` is set on an order.\n\n## How long does standard shipping take?\n\nStandard shipping is 3\u20135 business days within the contiguous US. We dispatch from our Ohio fulfillment center; rural ZIP codes may add 1\u20132 days. Standard shipping is free for orders over $50 and is calculated at checkout for smaller orders.\n\nStandard shipping is not available to PO boxes; the cart will surface a carrier change at checkout if the address is a PO box.\n\n## How long does expedited shipping take?\n\nExpedited shipping is 1\u20132 business days within the contiguous US. Orders placed before 2 PM Eastern ship the same day; orders placed after 2 PM ship the next business day. Expedited shipping is never free and is not eligible for the loyalty-tier shipping discount.\n\n## How long does international shipping take?\n\nInternational shipping varies by destination. Most European and Asia-Pacific destinations receive orders within 7\u201314 business days; Latin American and Middle Eastern destinations may take 10\u201321 business days. Customs delays are common and are outside our control.\n\nInternational orders may incur import duties and taxes assessed by the destination country. These charges are the customer's responsibility and are collected by the carrier at delivery.\n\n## Which carriers do we use?\n\nStandard domestic shipping uses USPS or UPS Ground depending on package weight; expedited uses FedEx Express. International orders ship via DHL Express for most destinations and EMS for select countries.\n\nThe carrier choice is recorded on each order in the fulfillment system but is not exposed on the `orders` table. Customers receive the tracking number via email once `shipped_at` is set.\n\n## When does the shipped_at timestamp get updated?\n\n`shipped_at` is set when the carrier scans the package at our fulfillment center, not when the label is generated. There is typically a 2\u20136 hour gap between label generation and carrier pickup, especially on weekends and holidays.\n\nFor orders where `shipped_at` has been set but the tracking number shows no movement after 48 hours, contact customer service \u2014 the package may have been mis-scanned and requires investigation.",
+        "correct": false,
+        "decision": "auto_resolve",
+        "draft": "I don't have that information.",
+        "draft_calls": 1,
+        "escalate_leg": null,
+        "expected": "escalate",
+        "faithful": true,
+        "faithfulness_judge_min": 4,
+        "faithfulness_score": 5,
+        "false_resolve": true,
+        "gate_reason": "strong",
+        "gate_strong": true,
+        "helpfulness_score": 5,
+        "judge_calls": 1,
+        "mislabeled": false,
+        "n_cleared": 2,
+        "n_results": 5,
+        "question": "What is the annual spend threshold for Diamond tier?",
+        "question_id": "e7-p3-09",
+        "top1_cosine": 0.457030480538454
+      },
+      {
+        "answer_judge_calls": 1,
+        "answered": false,
+        "context": "[1] # Returns Process\n\nThe mechanical steps for processing a return, distinct from the refund policy decision. A return is the physical movement of product back to Acme Co; a refund is the financial settlement. Most refunds are paired with a return, but not all.\n\n## Cancellation vs Return\n\nIf the order has not yet shipped (`shipped_at IS NULL`), the customer requests a cancellation rather than a return. Cancellations are free, instant, and refund the full order total. The cancellation cutoff is when the order enters the fulfillment-processing state \u2014 typically 2 to 4 hours after `paid_at` on weekdays and up to 24 hours on weekends.\n\nOnce `shipped_at` is set, cancellation is no longer available; the customer must initiate a return.\n\n## Return Authorization\n\nAll returns require a Return Merchandise Authorization (RMA) number issued by customer service. The customer cannot ship product back without an RMA \u2014 unauthorized returns are refused at the warehouse and shipped back to the customer at the customer's expense.\n\nThe RMA is generated through the customer portal or by emailing customer service. The RMA includes a pre-paid shipping label for US domestic returns; international returns are at the customer's expense unless the return is for a wrong-item-shipped or damaged-in-transit case.\n\n## Return Shipping\n\nUS domestic returns use USPS or UPS Ground depending on package weight. The customer drops the package at any USPS or UPS pickup point; no scheduled pickup is needed. The pre-paid label tracks the package; the customer should keep the tracking number.\n\nReturn shipping is free for the following cases:\n\n- Damaged in transit (Acme Co's fault via the carrier).\n- Wrong item shipped (Acme Co's fault).\n- Product defect (Acme Co's fault).\n\nReturn shipping is paid by the customer (deducted from the refund or charged to the original payment method) for:\n\n- Customer changed their mind.\n- Customer ordered the wrong size or color.\n- Customer no longer needs the item.\n\nThe deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns 5\u201320 lbs; quoted per-case for returns over 20 lbs.\n\n[2] Refunds cannot be split across multiple payment methods. If the customer paid with a combination of store credit and card, the refund returns to each method proportionally to the original split.\n\n## What Refunds Do Not Cover\n\nRefunds do not include the original shipping cost on orders shipped via expedited or international carriers, except for the damaged-in-transit and wrong-item-shipped cases. Restocking fees do not apply at Acme Co; we do not deduct from the refund amount for handling.\n\nGift cards are not refundable. Subscription-style orders follow the Loyalty Program cancellation rules, not this policy.\n\n[3] The deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns 5\u201320 lbs; quoted per-case for returns over 20 lbs.\n\n## Receiving and Inspection\n\nReturns are received at our Ohio returns center, typically 4\u20137 business days after the customer drops the package. The receiving team performs an inspection: condition of product, completeness (all original parts, manuals, accessories), and match against the RMA.\n\nThe inspection outcome drives the refund settlement:\n\n- **Pass** (product in resaleable condition): full refund per policy.\n- **Partial pass** (product usable but not resaleable, e.g. opened software, worn apparel): partial refund at 50\u201380% of original price.\n- **Fail** (product damaged by the customer, incomplete, or wrong item returned): no refund; the customer is contacted to authorize return-to-customer at the customer's expense or disposal at the customer's option.\n\n## Return Volume Tracking\n\nThe returns center tracks return volume by SKU and surfaces SKUs with a return rate above 8% to the merchandising team for quality review. The return-rate metric is computed as returns received in the trailing 90 days divided by units sold in the same window.\n\nA SKU placed on quality review may be temporarily de-listed from the storefront pending investigation. De-listed SKUs do not affect existing orders or open returns.\n\n[4] # Shipping FAQ\n\nCommon questions about how Acme Co ships orders, what carriers we use, and what to expect after `shipped_at` is set on an order.\n\n## How long does standard shipping take?\n\nStandard shipping is 3\u20135 business days within the contiguous US. We dispatch from our Ohio fulfillment center; rural ZIP codes may add 1\u20132 days. Standard shipping is free for orders over $50 and is calculated at checkout for smaller orders.\n\nStandard shipping is not available to PO boxes; the cart will surface a carrier change at checkout if the address is a PO box.\n\n## How long does expedited shipping take?\n\nExpedited shipping is 1\u20132 business days within the contiguous US. Orders placed before 2 PM Eastern ship the same day; orders placed after 2 PM ship the next business day. Expedited shipping is never free and is not eligible for the loyalty-tier shipping discount.\n\n## How long does international shipping take?\n\nInternational shipping varies by destination. Most European and Asia-Pacific destinations receive orders within 7\u201314 business days; Latin American and Middle Eastern destinations may take 10\u201321 business days. Customs delays are common and are outside our control.\n\nInternational orders may incur import duties and taxes assessed by the destination country. These charges are the customer's responsibility and are collected by the carrier at delivery.\n\n## Which carriers do we use?\n\nStandard domestic shipping uses USPS or UPS Ground depending on package weight; expedited uses FedEx Express. International orders ship via DHL Express for most destinations and EMS for select countries.\n\nThe carrier choice is recorded on each order in the fulfillment system but is not exposed on the `orders` table. Customers receive the tracking number via email once `shipped_at` is set.\n\n## When does the shipped_at timestamp get updated?\n\n`shipped_at` is set when the carrier scans the package at our fulfillment center, not when the label is generated. There is typically a 2\u20136 hour gap between label generation and carrier pickup, especially on weekends and holidays.\n\nFor orders where `shipped_at` has been set but the tracking number shows no movement after 48 hours, contact customer service \u2014 the package may have been mis-scanned and requires investigation.\n\n[5] # Refund Policy\n\nThis document defines how Acme Co handles refunds for orders placed through our online store and customer support channels.\n\n## Eligibility Window\n\nCustomers may request a refund within 30 days of the order's `shipped_at` date. Orders that have not shipped follow the cancellation policy instead \u2014 see the Returns Process document for the cancellation cutoff and partial-shipment edge cases.\n\nRefund eligibility is independent of the order's `paid_at` date. A refund window that has already closed cannot be reopened by customer service except under the goodwill exception described below.\n\n## Full vs Partial Refunds\n\nA full refund returns the entire order `total` (including tax, shipping, and any applied discounts already debited). Full refunds are the default for damaged-in-transit, wrong-item-shipped, and product-defect cases.\n\nA partial refund returns a subset of the order `total`. Partial refunds are the default for customer-dissatisfied and delivery-delay cases; the refunded amount is typically 10% to 80% of the order total and is set at the agent's discretion within the published guardrails.\n\nThe `refunds.amount` field records the refunded value in the same currency as `orders.total`. Net revenue calculations subtract `refunds.amount` from gross revenue.\n\n## Goodwill Exception\n\nCustomer service may issue a goodwill refund outside the 30-day window when:\n\n- The order shipped through a third-party carrier that lost the package after delivery scan.\n- The customer can demonstrate that the product became defective within the first 90 days but the defect was not discoverable on receipt.\n- A loyalty-tier customer (Gold or Platinum) requests a refund within 60 days of `shipped_at`.\n\nGoodwill refunds are capped at 50% of the order total unless escalated to a supervisor. Document the goodwill reason in the `refunds.reason` field for auditability.\n\n## Refund Method\n\nRefunds are processed to the original payment method whenever possible. Card refunds typically settle in 5\u20137 business days; bank transfers in 3\u20135 business days. Store credit is offered as an alternative and is available immediately.\n\nRefunds cannot be split across multiple payment methods. If the customer paid with a combination of store credit and card, the refund returns to each method proportionally to the original split.",
+        "correct": true,
+        "decision": "escalate",
+        "draft": "For international returns, the return shipping is at the customer's expense, unless the return is for a wrong-item-shipped or damaged-in-transit case.",
+        "draft_calls": 1,
+        "escalate_leg": "answer",
+        "expected": "escalate",
+        "faithful": true,
+        "faithfulness_judge_min": 4,
+        "faithfulness_score": 5,
+        "false_resolve": false,
+        "gate_reason": "strong",
+        "gate_strong": true,
+        "helpfulness_score": 2,
+        "judge_calls": 1,
+        "mislabeled": false,
+        "n_cleared": 5,
+        "n_results": 5,
+        "question": "What is the return shipping fee for an international return?",
+        "question_id": "e7-p3-10",
+        "top1_cosine": 0.528794241435677
+      },
+      {
+        "answer_judge_calls": 1,
+        "answered": false,
+        "context": "[1] # Warranty Terms\n\nAcme Co's product warranty terms by category. Warranty coverage is separate from the refund policy and applies after the 30-day refund window has closed.\n\n## Electronics\n\nElectronics carry a 12-month limited warranty against manufacturing defects. The warranty starts on the order's `shipped_at` date, not the `paid_at` date. Coverage includes:\n\n- Component failure under normal use.\n- Battery capacity falling below 70% of rated capacity within the warranty period.\n- Firmware-related issues that cannot be resolved by a factory reset.\n\nCoverage does not include physical damage, water damage (unless the product is rated IPX7 or higher), or damage from unauthorized modifications. The warranty is voided if the device has been opened by anyone other than an authorized Acme repair partner.\n\n## Apparel\n\nApparel carries a 90-day warranty against stitching defects, fabric defects, and dye-fastness issues. The warranty starts on the order's `shipped_at` date.\n\nApparel warranty claims do not cover wear-and-tear, fading from washing per the care label, or alterations performed by a third party. Customers who report a warranty issue within 90 days of `shipped_at` may choose between a free replacement (subject to stock) or a full refund credited to the original payment method.\n\n## Home Goods\n\nHome goods carry a 6-month warranty against manufacturing defects. The warranty starts on the order's `shipped_at` date and covers structural failure of joints, glassware breakage during normal household use, and fabric defects on upholstered items.\n\nGlassware warranty claims require a photo of the broken item; the customer is not required to return the broken piece (we ask that it be disposed of safely).\n\n## Books\n\nBooks carry a 30-day warranty against printing defects (missing pages, blurred ink, binding failure). Beyond 30 days, book warranty claims are at the discretion of customer service.\n\n## Food\n\nFood products do not carry a warranty in the traditional sense. Quality issues with food products (off-flavor, expired-on-arrival, packaging compromise) are handled as refunds under the standard refund policy regardless of the 30-day window.\n\n[2] # Refund Policy\n\nThis document defines how Acme Co handles refunds for orders placed through our online store and customer support channels.\n\n## Eligibility Window\n\nCustomers may request a refund within 30 days of the order's `shipped_at` date. Orders that have not shipped follow the cancellation policy instead \u2014 see the Returns Process document for the cancellation cutoff and partial-shipment edge cases.\n\nRefund eligibility is independent of the order's `paid_at` date. A refund window that has already closed cannot be reopened by customer service except under the goodwill exception described below.\n\n## Full vs Partial Refunds\n\nA full refund returns the entire order `total` (including tax, shipping, and any applied discounts already debited). Full refunds are the default for damaged-in-transit, wrong-item-shipped, and product-defect cases.\n\nA partial refund returns a subset of the order `total`. Partial refunds are the default for customer-dissatisfied and delivery-delay cases; the refunded amount is typically 10% to 80% of the order total and is set at the agent's discretion within the published guardrails.\n\nThe `refunds.amount` field records the refunded value in the same currency as `orders.total`. Net revenue calculations subtract `refunds.amount` from gross revenue.\n\n## Goodwill Exception\n\nCustomer service may issue a goodwill refund outside the 30-day window when:\n\n- The order shipped through a third-party carrier that lost the package after delivery scan.\n- The customer can demonstrate that the product became defective within the first 90 days but the defect was not discoverable on receipt.\n- A loyalty-tier customer (Gold or Platinum) requests a refund within 60 days of `shipped_at`.\n\nGoodwill refunds are capped at 50% of the order total unless escalated to a supervisor. Document the goodwill reason in the `refunds.reason` field for auditability.\n\n## Refund Method\n\nRefunds are processed to the original payment method whenever possible. Card refunds typically settle in 5\u20137 business days; bank transfers in 3\u20135 business days. Store credit is offered as an alternative and is available immediately.\n\nRefunds cannot be split across multiple payment methods. If the customer paid with a combination of store credit and card, the refund returns to each method proportionally to the original split.\n\n[3] ## Food\n\nFood products do not carry a warranty in the traditional sense. Quality issues with food products (off-flavor, expired-on-arrival, packaging compromise) are handled as refunds under the standard refund policy regardless of the 30-day window.\n\n## What about expedited replacement?\n\nA loyalty-tier customer at Gold or Platinum may request expedited warranty replacement; we ship the replacement before receiving the defective item back, provided the customer authorizes a hold on the original payment method. The hold is released when the defective item is received at our returns center.\n\nExpedited replacement is not available for the electronics category due to fraud risk; electronics warranty claims always require the defective unit to be received first.\n\n[4] # Shipping FAQ\n\nCommon questions about how Acme Co ships orders, what carriers we use, and what to expect after `shipped_at` is set on an order.\n\n## How long does standard shipping take?\n\nStandard shipping is 3\u20135 business days within the contiguous US. We dispatch from our Ohio fulfillment center; rural ZIP codes may add 1\u20132 days. Standard shipping is free for orders over $50 and is calculated at checkout for smaller orders.\n\nStandard shipping is not available to PO boxes; the cart will surface a carrier change at checkout if the address is a PO box.\n\n## How long does expedited shipping take?\n\nExpedited shipping is 1\u20132 business days within the contiguous US. Orders placed before 2 PM Eastern ship the same day; orders placed after 2 PM ship the next business day. Expedited shipping is never free and is not eligible for the loyalty-tier shipping discount.\n\n## How long does international shipping take?\n\nInternational shipping varies by destination. Most European and Asia-Pacific destinations receive orders within 7\u201314 business days; Latin American and Middle Eastern destinations may take 10\u201321 business days. Customs delays are common and are outside our control.\n\nInternational orders may incur import duties and taxes assessed by the destination country. These charges are the customer's responsibility and are collected by the carrier at delivery.\n\n## Which carriers do we use?\n\nStandard domestic shipping uses USPS or UPS Ground depending on package weight; expedited uses FedEx Express. International orders ship via DHL Express for most destinations and EMS for select countries.\n\nThe carrier choice is recorded on each order in the fulfillment system but is not exposed on the `orders` table. Customers receive the tracking number via email once `shipped_at` is set.\n\n## When does the shipped_at timestamp get updated?\n\n`shipped_at` is set when the carrier scans the package at our fulfillment center, not when the label is generated. There is typically a 2\u20136 hour gap between label generation and carrier pickup, especially on weekends and holidays.\n\nFor orders where `shipped_at` has been set but the tracking number shows no movement after 48 hours, contact customer service \u2014 the package may have been mis-scanned and requires investigation.\n\n[5] Shipping fees are recorded in `orders.shipping` and tax in `orders.tax`. Neither contributes to gross revenue \u2014 they are pass-through to the carrier and tax authority respectively.\n\n## Category Notes\n\n**Electronics** (`ELE-*`) is our highest-AOV category. Most SKUs are priced between $40 and $200, and the category produces about 35% of total revenue despite being 20% of the SKU count. Electronics carry the longest warranty (12 months) and the strictest return-inspection process \u2014 a returned electronics item must include all original cables, manuals, and packaging to pass inspection.\n\n**Apparel** (`APP-*`) has the highest return rate, typically 12\u201315% on the trailing 90 days, driven by size and fit issues. The merchandising team has a standing instruction to flag any apparel SKU above 18% return rate for fit-guide review.\n\n**Home goods** (`HOM-*`) includes the most diverse product mix: glassware, lighting, textiles, organizers. Glassware has special return-shipping handling \u2014 see the Returns Process document.\n\n**Books** (`BOO-*`) is the lowest-margin category, typically 25\u201335% gross margin. Books are sold at fixed list price; books are never put on flash sale because publisher agreements prohibit it.\n\n**Food** (`FOO-*`) is the smallest category by SKU count but has the highest repeat-purchase rate. Subscription-style food orders (granola, coffee, tea) are handled outside this document \u2014 see the Subscription Operations runbook.\n\n## Discontinued Products\n\nA product moves to discontinued status when the supplier confirms it is no longer available. Discontinued products keep their row in the `products` table for revenue-reporting continuity; the `status` flag is set, the SKU is de-listed from the storefront, and the product disappears from all active sort orders.\n\nDiscontinued products may still appear on historical orders; reporting queries should not exclude discontinued products from revenue aggregations unless the question is specifically about active catalog performance.",
+        "correct": true,
+        "decision": "escalate",
+        "draft": "Books carry a 30-day warranty against printing defects. Beyond 30 days, book warranty claims are at the discretion of customer service.",
+        "draft_calls": 1,
+        "escalate_leg": "answer",
+        "expected": "escalate",
+        "faithful": true,
+        "faithfulness_judge_min": 4,
+        "faithfulness_score": 5,
+        "false_resolve": false,
+        "gate_reason": "strong",
+        "gate_strong": true,
+        "helpfulness_score": 4,
+        "judge_calls": 1,
+        "mislabeled": false,
+        "n_cleared": 3,
+        "n_results": 5,
+        "question": "What is the warranty period for a book with a printing defect after 30 days?",
+        "question_id": "e7-p3-11",
+        "top1_cosine": 0.560466312958371
+      },
+      {
+        "answer_judge_calls": 1,
+        "answered": false,
+        "context": "[1] # Returns Process\n\nThe mechanical steps for processing a return, distinct from the refund policy decision. A return is the physical movement of product back to Acme Co; a refund is the financial settlement. Most refunds are paired with a return, but not all.\n\n## Cancellation vs Return\n\nIf the order has not yet shipped (`shipped_at IS NULL`), the customer requests a cancellation rather than a return. Cancellations are free, instant, and refund the full order total. The cancellation cutoff is when the order enters the fulfillment-processing state \u2014 typically 2 to 4 hours after `paid_at` on weekdays and up to 24 hours on weekends.\n\nOnce `shipped_at` is set, cancellation is no longer available; the customer must initiate a return.\n\n## Return Authorization\n\nAll returns require a Return Merchandise Authorization (RMA) number issued by customer service. The customer cannot ship product back without an RMA \u2014 unauthorized returns are refused at the warehouse and shipped back to the customer at the customer's expense.\n\nThe RMA is generated through the customer portal or by emailing customer service. The RMA includes a pre-paid shipping label for US domestic returns; international returns are at the customer's expense unless the return is for a wrong-item-shipped or damaged-in-transit case.\n\n## Return Shipping\n\nUS domestic returns use USPS or UPS Ground depending on package weight. The customer drops the package at any USPS or UPS pickup point; no scheduled pickup is needed. The pre-paid label tracks the package; the customer should keep the tracking number.\n\nReturn shipping is free for the following cases:\n\n- Damaged in transit (Acme Co's fault via the carrier).\n- Wrong item shipped (Acme Co's fault).\n- Product defect (Acme Co's fault).\n\nReturn shipping is paid by the customer (deducted from the refund or charged to the original payment method) for:\n\n- Customer changed their mind.\n- Customer ordered the wrong size or color.\n- Customer no longer needs the item.\n\nThe deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns 5\u201320 lbs; quoted per-case for returns over 20 lbs.\n\n[2] The deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns 5\u201320 lbs; quoted per-case for returns over 20 lbs.\n\n## Receiving and Inspection\n\nReturns are received at our Ohio returns center, typically 4\u20137 business days after the customer drops the package. The receiving team performs an inspection: condition of product, completeness (all original parts, manuals, accessories), and match against the RMA.\n\nThe inspection outcome drives the refund settlement:\n\n- **Pass** (product in resaleable condition): full refund per policy.\n- **Partial pass** (product usable but not resaleable, e.g. opened software, worn apparel): partial refund at 50\u201380% of original price.\n- **Fail** (product damaged by the customer, incomplete, or wrong item returned): no refund; the customer is contacted to authorize return-to-customer at the customer's expense or disposal at the customer's option.\n\n## Return Volume Tracking\n\nThe returns center tracks return volume by SKU and surfaces SKUs with a return rate above 8% to the merchandising team for quality review. The return-rate metric is computed as returns received in the trailing 90 days divided by units sold in the same window.\n\nA SKU placed on quality review may be temporarily de-listed from the storefront pending investigation. De-listed SKUs do not affect existing orders or open returns.\n\n[3] # Shipping FAQ\n\nCommon questions about how Acme Co ships orders, what carriers we use, and what to expect after `shipped_at` is set on an order.\n\n## How long does standard shipping take?\n\nStandard shipping is 3\u20135 business days within the contiguous US. We dispatch from our Ohio fulfillment center; rural ZIP codes may add 1\u20132 days. Standard shipping is free for orders over $50 and is calculated at checkout for smaller orders.\n\nStandard shipping is not available to PO boxes; the cart will surface a carrier change at checkout if the address is a PO box.\n\n## How long does expedited shipping take?\n\nExpedited shipping is 1\u20132 business days within the contiguous US. Orders placed before 2 PM Eastern ship the same day; orders placed after 2 PM ship the next business day. Expedited shipping is never free and is not eligible for the loyalty-tier shipping discount.\n\n## How long does international shipping take?\n\nInternational shipping varies by destination. Most European and Asia-Pacific destinations receive orders within 7\u201314 business days; Latin American and Middle Eastern destinations may take 10\u201321 business days. Customs delays are common and are outside our control.\n\nInternational orders may incur import duties and taxes assessed by the destination country. These charges are the customer's responsibility and are collected by the carrier at delivery.\n\n## Which carriers do we use?\n\nStandard domestic shipping uses USPS or UPS Ground depending on package weight; expedited uses FedEx Express. International orders ship via DHL Express for most destinations and EMS for select countries.\n\nThe carrier choice is recorded on each order in the fulfillment system but is not exposed on the `orders` table. Customers receive the tracking number via email once `shipped_at` is set.\n\n## When does the shipped_at timestamp get updated?\n\n`shipped_at` is set when the carrier scans the package at our fulfillment center, not when the label is generated. There is typically a 2\u20136 hour gap between label generation and carrier pickup, especially on weekends and holidays.\n\nFor orders where `shipped_at` has been set but the tracking number shows no movement after 48 hours, contact customer service \u2014 the package may have been mis-scanned and requires investigation.\n\n[4] # Refund Policy\n\nThis document defines how Acme Co handles refunds for orders placed through our online store and customer support channels.\n\n## Eligibility Window\n\nCustomers may request a refund within 30 days of the order's `shipped_at` date. Orders that have not shipped follow the cancellation policy instead \u2014 see the Returns Process document for the cancellation cutoff and partial-shipment edge cases.\n\nRefund eligibility is independent of the order's `paid_at` date. A refund window that has already closed cannot be reopened by customer service except under the goodwill exception described below.\n\n## Full vs Partial Refunds\n\nA full refund returns the entire order `total` (including tax, shipping, and any applied discounts already debited). Full refunds are the default for damaged-in-transit, wrong-item-shipped, and product-defect cases.\n\nA partial refund returns a subset of the order `total`. Partial refunds are the default for customer-dissatisfied and delivery-delay cases; the refunded amount is typically 10% to 80% of the order total and is set at the agent's discretion within the published guardrails.\n\nThe `refunds.amount` field records the refunded value in the same currency as `orders.total`. Net revenue calculations subtract `refunds.amount` from gross revenue.\n\n## Goodwill Exception\n\nCustomer service may issue a goodwill refund outside the 30-day window when:\n\n- The order shipped through a third-party carrier that lost the package after delivery scan.\n- The customer can demonstrate that the product became defective within the first 90 days but the defect was not discoverable on receipt.\n- A loyalty-tier customer (Gold or Platinum) requests a refund within 60 days of `shipped_at`.\n\nGoodwill refunds are capped at 50% of the order total unless escalated to a supervisor. Document the goodwill reason in the `refunds.reason` field for auditability.\n\n## Refund Method\n\nRefunds are processed to the original payment method whenever possible. Card refunds typically settle in 5\u20137 business days; bank transfers in 3\u20135 business days. Store credit is offered as an alternative and is available immediately.\n\nRefunds cannot be split across multiple payment methods. If the customer paid with a combination of store credit and card, the refund returns to each method proportionally to the original split.\n\n[5] Refunds cannot be split across multiple payment methods. If the customer paid with a combination of store credit and card, the refund returns to each method proportionally to the original split.\n\n## What Refunds Do Not Cover\n\nRefunds do not include the original shipping cost on orders shipped via expedited or international carriers, except for the damaged-in-transit and wrong-item-shipped cases. Restocking fees do not apply at Acme Co; we do not deduct from the refund amount for handling.\n\nGift cards are not refundable. Subscription-style orders follow the Loyalty Program cancellation rules, not this policy.",
+        "correct": true,
+        "decision": "escalate",
+        "draft": "International returns are at the customer's expense unless the return is for a wrong-item-shipped or damaged-in-transit case. The specific cost for international returns is not provided in the context.",
+        "draft_calls": 1,
+        "escalate_leg": "answer",
+        "expected": "escalate",
+        "faithful": true,
+        "faithfulness_judge_min": 4,
+        "faithfulness_score": 5,
+        "false_resolve": false,
+        "gate_reason": "strong",
+        "gate_strong": true,
+        "helpfulness_score": 4,
+        "judge_calls": 1,
+        "mislabeled": false,
+        "n_cleared": 5,
+        "n_results": 5,
+        "question": "How much does shipping an international return cost?",
+        "question_id": "e7-p3-12",
+        "top1_cosine": 0.542490838778926
+      },
+      {
+        "answer_judge_calls": 1,
+        "answered": false,
+        "context": "[1] # Warranty Terms\n\nAcme Co's product warranty terms by category. Warranty coverage is separate from the refund policy and applies after the 30-day refund window has closed.\n\n## Electronics\n\nElectronics carry a 12-month limited warranty against manufacturing defects. The warranty starts on the order's `shipped_at` date, not the `paid_at` date. Coverage includes:\n\n- Component failure under normal use.\n- Battery capacity falling below 70% of rated capacity within the warranty period.\n- Firmware-related issues that cannot be resolved by a factory reset.\n\nCoverage does not include physical damage, water damage (unless the product is rated IPX7 or higher), or damage from unauthorized modifications. The warranty is voided if the device has been opened by anyone other than an authorized Acme repair partner.\n\n## Apparel\n\nApparel carries a 90-day warranty against stitching defects, fabric defects, and dye-fastness issues. The warranty starts on the order's `shipped_at` date.\n\nApparel warranty claims do not cover wear-and-tear, fading from washing per the care label, or alterations performed by a third party. Customers who report a warranty issue within 90 days of `shipped_at` may choose between a free replacement (subject to stock) or a full refund credited to the original payment method.\n\n## Home Goods\n\nHome goods carry a 6-month warranty against manufacturing defects. The warranty starts on the order's `shipped_at` date and covers structural failure of joints, glassware breakage during normal household use, and fabric defects on upholstered items.\n\nGlassware warranty claims require a photo of the broken item; the customer is not required to return the broken piece (we ask that it be disposed of safely).\n\n## Books\n\nBooks carry a 30-day warranty against printing defects (missing pages, blurred ink, binding failure). Beyond 30 days, book warranty claims are at the discretion of customer service.\n\n## Food\n\nFood products do not carry a warranty in the traditional sense. Quality issues with food products (off-flavor, expired-on-arrival, packaging compromise) are handled as refunds under the standard refund policy regardless of the 30-day window.\n\n[2] ## Food\n\nFood products do not carry a warranty in the traditional sense. Quality issues with food products (off-flavor, expired-on-arrival, packaging compromise) are handled as refunds under the standard refund policy regardless of the 30-day window.\n\n## What about expedited replacement?\n\nA loyalty-tier customer at Gold or Platinum may request expedited warranty replacement; we ship the replacement before receiving the defective item back, provided the customer authorizes a hold on the original payment method. The hold is released when the defective item is received at our returns center.\n\nExpedited replacement is not available for the electronics category due to fraud risk; electronics warranty claims always require the defective unit to be received first.\n\n[3] # Loyalty Program\n\nAcme Co's loyalty program rewards repeat customers with tiered benefits based on annual spend.\n\n## Tiers\n\nThere are four tiers: Bronze, Silver, Gold, and Platinum. Tier is recalculated on the first day of each calendar month based on the customer's spend over the trailing 12 months.\n\nTier thresholds:\n\n- **Bronze**: Any customer with at least one order. No spend threshold.\n- **Silver**: Trailing 12-month spend of $250 or more.\n- **Gold**: Trailing 12-month spend of $1,000 or more.\n- **Platinum**: Trailing 12-month spend of $5,000 or more.\n\nSpend is computed as the sum of `orders.total` minus any `refunds.amount`, restricted to orders with `status` in `paid`, `shipped`, or `refunded`. Cancelled and pending orders do not count toward tier.\n\n## Benefits\n\nBronze members receive early access to seasonal sales (24 hours before public launch) and a free birthday gift redeemable in the month of the customer's birthday.\n\nSilver members receive everything in Bronze plus free standard shipping on orders over $25 (instead of the $50 threshold) and a 5% loyalty discount automatically applied at checkout on orders over $100.\n\nGold members receive everything in Silver plus free expedited shipping on orders over $75, a 10% loyalty discount on all orders, and access to the goodwill refund exception described in the Refund Policy. Gold members may also request expedited warranty replacement for apparel, home goods, and books (not electronics).\n\nPlatinum members receive everything in Gold plus a dedicated customer service line, complimentary gift wrapping on every order, and an annual $100 store credit issued on the customer's program anniversary.\n\n## How tier is communicated\n\nThe customer's current tier appears in the account header and on every order confirmation email. Tier changes (up or down) trigger a notification email the morning of the recalculation. Customers who drop a tier retain the previous tier's benefits for the remainder of the calendar month in which the drop occurs.\n\n## Cancellation and tier preservation\n\nCustomers who close their account lose all tier benefits immediately. Cancelled subscriptions and refunded orders reduce trailing-12-month spend and may trigger a tier drop at the next recalculation.\n\n[4] The deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns 5\u201320 lbs; quoted per-case for returns over 20 lbs.\n\n## Receiving and Inspection\n\nReturns are received at our Ohio returns center, typically 4\u20137 business days after the customer drops the package. The receiving team performs an inspection: condition of product, completeness (all original parts, manuals, accessories), and match against the RMA.\n\nThe inspection outcome drives the refund settlement:\n\n- **Pass** (product in resaleable condition): full refund per policy.\n- **Partial pass** (product usable but not resaleable, e.g. opened software, worn apparel): partial refund at 50\u201380% of original price.\n- **Fail** (product damaged by the customer, incomplete, or wrong item returned): no refund; the customer is contacted to authorize return-to-customer at the customer's expense or disposal at the customer's option.\n\n## Return Volume Tracking\n\nThe returns center tracks return volume by SKU and surfaces SKUs with a return rate above 8% to the merchandising team for quality review. The return-rate metric is computed as returns received in the trailing 90 days divided by units sold in the same window.\n\nA SKU placed on quality review may be temporarily de-listed from the storefront pending investigation. De-listed SKUs do not affect existing orders or open returns.\n\n[5] # Refund Policy\n\nThis document defines how Acme Co handles refunds for orders placed through our online store and customer support channels.\n\n## Eligibility Window\n\nCustomers may request a refund within 30 days of the order's `shipped_at` date. Orders that have not shipped follow the cancellation policy instead \u2014 see the Returns Process document for the cancellation cutoff and partial-shipment edge cases.\n\nRefund eligibility is independent of the order's `paid_at` date. A refund window that has already closed cannot be reopened by customer service except under the goodwill exception described below.\n\n## Full vs Partial Refunds\n\nA full refund returns the entire order `total` (including tax, shipping, and any applied discounts already debited). Full refunds are the default for damaged-in-transit, wrong-item-shipped, and product-defect cases.\n\nA partial refund returns a subset of the order `total`. Partial refunds are the default for customer-dissatisfied and delivery-delay cases; the refunded amount is typically 10% to 80% of the order total and is set at the agent's discretion within the published guardrails.\n\nThe `refunds.amount` field records the refunded value in the same currency as `orders.total`. Net revenue calculations subtract `refunds.amount` from gross revenue.\n\n## Goodwill Exception\n\nCustomer service may issue a goodwill refund outside the 30-day window when:\n\n- The order shipped through a third-party carrier that lost the package after delivery scan.\n- The customer can demonstrate that the product became defective within the first 90 days but the defect was not discoverable on receipt.\n- A loyalty-tier customer (Gold or Platinum) requests a refund within 60 days of `shipped_at`.\n\nGoodwill refunds are capped at 50% of the order total unless escalated to a supervisor. Document the goodwill reason in the `refunds.reason` field for auditability.\n\n## Refund Method\n\nRefunds are processed to the original payment method whenever possible. Card refunds typically settle in 5\u20137 business days; bank transfers in 3\u20135 business days. Store credit is offered as an alternative and is available immediately.\n\nRefunds cannot be split across multiple payment methods. If the customer paid with a combination of store credit and card, the refund returns to each method proportionally to the original split.",
+        "correct": true,
+        "decision": "escalate",
+        "draft": "The context does not provide information about warranty coverage for refurbished electronics.",
+        "draft_calls": 1,
+        "escalate_leg": "answer",
+        "expected": "escalate",
+        "faithful": true,
+        "faithfulness_judge_min": 4,
+        "faithfulness_score": 5,
+        "false_resolve": false,
+        "gate_reason": "strong",
+        "gate_strong": true,
+        "helpfulness_score": 5,
+        "judge_calls": 1,
+        "mislabeled": false,
+        "n_cleared": 4,
+        "n_results": 5,
+        "question": "How many months of warranty coverage do refurbished electronics get?",
+        "question_id": "e7-p3-13",
+        "top1_cosine": 0.525914099195862
+      }
+    ],
+    "faithfulness_judge_min": 4,
+    "false_resolve_rate": 0.2727272727272727,
+    "false_resolves": [
+      "e7-p3-01",
+      "e7-p3-05",
+      "e7-p3-09"
+    ],
+    "judge_model": "claude-haiku-4-5",
+    "label": "should_escalate",
+    "match_threshold": 0.3,
+    "mislabel_ratio": 0.0,
+    "mislabeled": [],
+    "n_escalated_at_content_gate": 8,
+    "n_false_resolve": 3,
+    "n_min": 2,
+    "n_mislabeled": 0,
+    "n_questions": 11,
+    "passed": true,
+    "population": "P3",
+    "tau_sim": 0.4,
+    "total_answer_judge_calls": 10,
+    "total_draft_calls": 11,
+    "total_judge_calls": 11
+  },
+  "e7_sweep": {
+    "ceiling": 0.05,
+    "curve": [
+      {
+        "deflection": 1.0,
+        "faithfulness_judge_min": 4,
+        "false_escalate": 0.0,
+        "false_resolve": 0.09090909090909091,
+        "feasible": false,
+        "index": 4,
+        "n_min": 3,
+        "p3_n_exercised": 9,
+        "p3_vacuous": false,
+        "tau_sim": 0.3
+      },
+      {
+        "deflection": 1.0,
+        "faithfulness_judge_min": 5,
+        "false_escalate": 0.0,
+        "false_resolve": 0.09090909090909091,
+        "feasible": false,
+        "index": 5,
+        "n_min": 3,
+        "p3_n_exercised": 9,
+        "p3_vacuous": false,
+        "tau_sim": 0.3
+      },
+      {
+        "deflection": 1.0,
+        "faithfulness_judge_min": 4,
+        "false_escalate": 0.0,
+        "false_resolve": 0.09090909090909091,
+        "feasible": false,
+        "index": 10,
+        "n_min": 3,
+        "p3_n_exercised": 9,
+        "p3_vacuous": false,
+        "tau_sim": 0.4
+      },
+      {
+        "deflection": 1.0,
+        "faithfulness_judge_min": 5,
+        "false_escalate": 0.0,
+        "false_resolve": 0.09090909090909091,
+        "feasible": false,
+        "index": 11,
+        "n_min": 3,
+        "p3_n_exercised": 9,
+        "p3_vacuous": false,
+        "tau_sim": 0.4
+      },
+      {
+        "deflection": 0.75,
+        "faithfulness_judge_min": 4,
+        "false_escalate": 0.25,
+        "false_resolve": 0.09090909090909091,
+        "feasible": false,
+        "index": 12,
+        "n_min": 1,
+        "p3_n_exercised": 6,
+        "p3_vacuous": false,
+        "tau_sim": 0.5
+      },
+      {
+        "deflection": 0.75,
+        "faithfulness_judge_min": 5,
+        "false_escalate": 0.25,
+        "false_resolve": 0.09090909090909091,
+        "feasible": false,
+        "index": 13,
+        "n_min": 1,
+        "p3_n_exercised": 6,
+        "p3_vacuous": false,
+        "tau_sim": 0.5
+      },
+      {
+        "deflection": 0.75,
+        "faithfulness_judge_min": 4,
+        "false_escalate": 0.25,
+        "false_resolve": 0.09090909090909091,
+        "feasible": false,
+        "index": 14,
+        "n_min": 2,
+        "p3_n_exercised": 6,
+        "p3_vacuous": false,
+        "tau_sim": 0.5
+      },
+      {
+        "deflection": 0.75,
+        "faithfulness_judge_min": 5,
+        "false_escalate": 0.25,
+        "false_resolve": 0.09090909090909091,
+        "feasible": false,
+        "index": 15,
+        "n_min": 2,
+        "p3_n_exercised": 6,
+        "p3_vacuous": false,
+        "tau_sim": 0.5
+      },
+      {
+        "deflection": 0.75,
+        "faithfulness_judge_min": 4,
+        "false_escalate": 0.25,
+        "false_resolve": 0.09090909090909091,
+        "feasible": false,
+        "index": 16,
+        "n_min": 3,
+        "p3_n_exercised": 6,
+        "p3_vacuous": false,
+        "tau_sim": 0.5
+      },
+      {
+        "deflection": 0.75,
+        "faithfulness_judge_min": 5,
+        "false_escalate": 0.25,
+        "false_resolve": 0.09090909090909091,
+        "feasible": false,
+        "index": 17,
+        "n_min": 3,
+        "p3_n_exercised": 6,
+        "p3_vacuous": false,
+        "tau_sim": 0.5
+      },
+      {
+        "deflection": 1.0,
+        "faithfulness_judge_min": 4,
+        "false_escalate": 0.0,
+        "false_resolve": 0.2727272727272727,
+        "feasible": false,
+        "index": 0,
+        "n_min": 1,
+        "p3_n_exercised": 11,
+        "p3_vacuous": false,
+        "tau_sim": 0.3
+      },
+      {
+        "deflection": 1.0,
+        "faithfulness_judge_min": 5,
+        "false_escalate": 0.0,
+        "false_resolve": 0.2727272727272727,
+        "feasible": false,
+        "index": 1,
+        "n_min": 1,
+        "p3_n_exercised": 11,
+        "p3_vacuous": false,
+        "tau_sim": 0.3
+      },
+      {
+        "deflection": 1.0,
+        "faithfulness_judge_min": 4,
+        "false_escalate": 0.0,
+        "false_resolve": 0.2727272727272727,
+        "feasible": false,
+        "index": 2,
+        "n_min": 2,
+        "p3_n_exercised": 11,
+        "p3_vacuous": false,
+        "tau_sim": 0.3
+      },
+      {
+        "deflection": 1.0,
+        "faithfulness_judge_min": 5,
+        "false_escalate": 0.0,
+        "false_resolve": 0.2727272727272727,
+        "feasible": false,
+        "index": 3,
+        "n_min": 2,
+        "p3_n_exercised": 11,
+        "p3_vacuous": false,
+        "tau_sim": 0.3
+      },
+      {
+        "deflection": 1.0,
+        "faithfulness_judge_min": 4,
+        "false_escalate": 0.0,
+        "false_resolve": 0.2727272727272727,
+        "feasible": false,
+        "index": 6,
+        "n_min": 1,
+        "p3_n_exercised": 11,
+        "p3_vacuous": false,
+        "tau_sim": 0.4
+      },
+      {
+        "deflection": 1.0,
+        "faithfulness_judge_min": 5,
+        "false_escalate": 0.0,
+        "false_resolve": 0.2727272727272727,
+        "feasible": false,
+        "index": 7,
+        "n_min": 1,
+        "p3_n_exercised": 11,
+        "p3_vacuous": false,
+        "tau_sim": 0.4
+      },
+      {
+        "deflection": 1.0,
+        "faithfulness_judge_min": 4,
+        "false_escalate": 0.0,
+        "false_resolve": 0.2727272727272727,
+        "feasible": false,
+        "index": 8,
+        "n_min": 2,
+        "p3_n_exercised": 11,
+        "p3_vacuous": false,
+        "tau_sim": 0.4
+      },
+      {
+        "deflection": 1.0,
+        "faithfulness_judge_min": 5,
+        "false_escalate": 0.0,
+        "false_resolve": 0.2727272727272727,
+        "feasible": false,
+        "index": 9,
+        "n_min": 2,
+        "p3_n_exercised": 11,
+        "p3_vacuous": false,
+        "tau_sim": 0.4
+      }
+    ],
+    "faithfulness_cutoff": 0.7,
+    "judge_model": "claude-haiku-4-5",
+    "knee": null,
+    "knee_reason": "no_point_under_ceiling",
+    "match_threshold": 0.3,
+    "n_questions": 18,
+    "points": [
+      {
+        "deflection": 1.0,
+        "faithfulness_judge_min": 4,
+        "false_escalate": 0.0,
+        "false_resolve": 0.2727272727272727,
+        "feasible": false,
+        "index": 0,
+        "metrics": {
+          "deflection": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 4,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "deflection",
+            "numerator": 4,
+            "rate": 1.0,
+            "safety": false
+          },
+          "false_escalate": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 0,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "false_escalate",
+            "numerator": 0,
+            "rate": 0.0,
+            "safety": false
+          },
+          "false_resolve": {
+            "by_population": [
+              {
+                "counts_toward_rate": false,
+                "denominator": 3,
+                "numerator": 1,
+                "population": "P1a"
+              },
+              {
+                "counts_toward_rate": true,
+                "denominator": 11,
+                "numerator": 3,
+                "population": "P3"
+              }
+            ],
+            "denominator": 11,
+            "name": "false_resolve",
+            "numerator": 3,
+            "rate": 0.2727272727272727,
+            "safety": true
+          }
+        },
+        "n_min": 1,
+        "p3_mislabel_ratio": 0.0,
+        "p3_n_exercised": 11,
+        "p3_n_mislabeled": 0,
+        "p3_n_questions": 11,
+        "p3_vacuous": false,
+        "tau_sim": 0.3
+      },
+      {
+        "deflection": 1.0,
+        "faithfulness_judge_min": 5,
+        "false_escalate": 0.0,
+        "false_resolve": 0.2727272727272727,
+        "feasible": false,
+        "index": 1,
+        "metrics": {
+          "deflection": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 4,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "deflection",
+            "numerator": 4,
+            "rate": 1.0,
+            "safety": false
+          },
+          "false_escalate": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 0,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "false_escalate",
+            "numerator": 0,
+            "rate": 0.0,
+            "safety": false
+          },
+          "false_resolve": {
+            "by_population": [
+              {
+                "counts_toward_rate": false,
+                "denominator": 3,
+                "numerator": 1,
+                "population": "P1a"
+              },
+              {
+                "counts_toward_rate": true,
+                "denominator": 11,
+                "numerator": 3,
+                "population": "P3"
+              }
+            ],
+            "denominator": 11,
+            "name": "false_resolve",
+            "numerator": 3,
+            "rate": 0.2727272727272727,
+            "safety": true
+          }
+        },
+        "n_min": 1,
+        "p3_mislabel_ratio": 0.0,
+        "p3_n_exercised": 11,
+        "p3_n_mislabeled": 0,
+        "p3_n_questions": 11,
+        "p3_vacuous": false,
+        "tau_sim": 0.3
+      },
+      {
+        "deflection": 1.0,
+        "faithfulness_judge_min": 4,
+        "false_escalate": 0.0,
+        "false_resolve": 0.2727272727272727,
+        "feasible": false,
+        "index": 2,
+        "metrics": {
+          "deflection": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 4,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "deflection",
+            "numerator": 4,
+            "rate": 1.0,
+            "safety": false
+          },
+          "false_escalate": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 0,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "false_escalate",
+            "numerator": 0,
+            "rate": 0.0,
+            "safety": false
+          },
+          "false_resolve": {
+            "by_population": [
+              {
+                "counts_toward_rate": false,
+                "denominator": 3,
+                "numerator": 1,
+                "population": "P1a"
+              },
+              {
+                "counts_toward_rate": true,
+                "denominator": 11,
+                "numerator": 3,
+                "population": "P3"
+              }
+            ],
+            "denominator": 11,
+            "name": "false_resolve",
+            "numerator": 3,
+            "rate": 0.2727272727272727,
+            "safety": true
+          }
+        },
+        "n_min": 2,
+        "p3_mislabel_ratio": 0.0,
+        "p3_n_exercised": 11,
+        "p3_n_mislabeled": 0,
+        "p3_n_questions": 11,
+        "p3_vacuous": false,
+        "tau_sim": 0.3
+      },
+      {
+        "deflection": 1.0,
+        "faithfulness_judge_min": 5,
+        "false_escalate": 0.0,
+        "false_resolve": 0.2727272727272727,
+        "feasible": false,
+        "index": 3,
+        "metrics": {
+          "deflection": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 4,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "deflection",
+            "numerator": 4,
+            "rate": 1.0,
+            "safety": false
+          },
+          "false_escalate": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 0,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "false_escalate",
+            "numerator": 0,
+            "rate": 0.0,
+            "safety": false
+          },
+          "false_resolve": {
+            "by_population": [
+              {
+                "counts_toward_rate": false,
+                "denominator": 3,
+                "numerator": 1,
+                "population": "P1a"
+              },
+              {
+                "counts_toward_rate": true,
+                "denominator": 11,
+                "numerator": 3,
+                "population": "P3"
+              }
+            ],
+            "denominator": 11,
+            "name": "false_resolve",
+            "numerator": 3,
+            "rate": 0.2727272727272727,
+            "safety": true
+          }
+        },
+        "n_min": 2,
+        "p3_mislabel_ratio": 0.0,
+        "p3_n_exercised": 11,
+        "p3_n_mislabeled": 0,
+        "p3_n_questions": 11,
+        "p3_vacuous": false,
+        "tau_sim": 0.3
+      },
+      {
+        "deflection": 1.0,
+        "faithfulness_judge_min": 4,
+        "false_escalate": 0.0,
+        "false_resolve": 0.09090909090909091,
+        "feasible": false,
+        "index": 4,
+        "metrics": {
+          "deflection": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 4,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "deflection",
+            "numerator": 4,
+            "rate": 1.0,
+            "safety": false
+          },
+          "false_escalate": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 0,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "false_escalate",
+            "numerator": 0,
+            "rate": 0.0,
+            "safety": false
+          },
+          "false_resolve": {
+            "by_population": [
+              {
+                "counts_toward_rate": false,
+                "denominator": 3,
+                "numerator": 1,
+                "population": "P1a"
+              },
+              {
+                "counts_toward_rate": true,
+                "denominator": 11,
+                "numerator": 1,
+                "population": "P3"
+              }
+            ],
+            "denominator": 11,
+            "name": "false_resolve",
+            "numerator": 1,
+            "rate": 0.09090909090909091,
+            "safety": true
+          }
+        },
+        "n_min": 3,
+        "p3_mislabel_ratio": 0.18181818181818182,
+        "p3_n_exercised": 9,
+        "p3_n_mislabeled": 2,
+        "p3_n_questions": 11,
+        "p3_vacuous": false,
+        "tau_sim": 0.3
+      },
+      {
+        "deflection": 1.0,
+        "faithfulness_judge_min": 5,
+        "false_escalate": 0.0,
+        "false_resolve": 0.09090909090909091,
+        "feasible": false,
+        "index": 5,
+        "metrics": {
+          "deflection": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 4,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "deflection",
+            "numerator": 4,
+            "rate": 1.0,
+            "safety": false
+          },
+          "false_escalate": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 0,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "false_escalate",
+            "numerator": 0,
+            "rate": 0.0,
+            "safety": false
+          },
+          "false_resolve": {
+            "by_population": [
+              {
+                "counts_toward_rate": false,
+                "denominator": 3,
+                "numerator": 1,
+                "population": "P1a"
+              },
+              {
+                "counts_toward_rate": true,
+                "denominator": 11,
+                "numerator": 1,
+                "population": "P3"
+              }
+            ],
+            "denominator": 11,
+            "name": "false_resolve",
+            "numerator": 1,
+            "rate": 0.09090909090909091,
+            "safety": true
+          }
+        },
+        "n_min": 3,
+        "p3_mislabel_ratio": 0.18181818181818182,
+        "p3_n_exercised": 9,
+        "p3_n_mislabeled": 2,
+        "p3_n_questions": 11,
+        "p3_vacuous": false,
+        "tau_sim": 0.3
+      },
+      {
+        "deflection": 1.0,
+        "faithfulness_judge_min": 4,
+        "false_escalate": 0.0,
+        "false_resolve": 0.2727272727272727,
+        "feasible": false,
+        "index": 6,
+        "metrics": {
+          "deflection": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 4,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "deflection",
+            "numerator": 4,
+            "rate": 1.0,
+            "safety": false
+          },
+          "false_escalate": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 0,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "false_escalate",
+            "numerator": 0,
+            "rate": 0.0,
+            "safety": false
+          },
+          "false_resolve": {
+            "by_population": [
+              {
+                "counts_toward_rate": false,
+                "denominator": 3,
+                "numerator": 0,
+                "population": "P1a"
+              },
+              {
+                "counts_toward_rate": true,
+                "denominator": 11,
+                "numerator": 3,
+                "population": "P3"
+              }
+            ],
+            "denominator": 11,
+            "name": "false_resolve",
+            "numerator": 3,
+            "rate": 0.2727272727272727,
+            "safety": true
+          }
+        },
+        "n_min": 1,
+        "p3_mislabel_ratio": 0.0,
+        "p3_n_exercised": 11,
+        "p3_n_mislabeled": 0,
+        "p3_n_questions": 11,
+        "p3_vacuous": false,
+        "tau_sim": 0.4
+      },
+      {
+        "deflection": 1.0,
+        "faithfulness_judge_min": 5,
+        "false_escalate": 0.0,
+        "false_resolve": 0.2727272727272727,
+        "feasible": false,
+        "index": 7,
+        "metrics": {
+          "deflection": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 4,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "deflection",
+            "numerator": 4,
+            "rate": 1.0,
+            "safety": false
+          },
+          "false_escalate": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 0,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "false_escalate",
+            "numerator": 0,
+            "rate": 0.0,
+            "safety": false
+          },
+          "false_resolve": {
+            "by_population": [
+              {
+                "counts_toward_rate": false,
+                "denominator": 3,
+                "numerator": 0,
+                "population": "P1a"
+              },
+              {
+                "counts_toward_rate": true,
+                "denominator": 11,
+                "numerator": 3,
+                "population": "P3"
+              }
+            ],
+            "denominator": 11,
+            "name": "false_resolve",
+            "numerator": 3,
+            "rate": 0.2727272727272727,
+            "safety": true
+          }
+        },
+        "n_min": 1,
+        "p3_mislabel_ratio": 0.0,
+        "p3_n_exercised": 11,
+        "p3_n_mislabeled": 0,
+        "p3_n_questions": 11,
+        "p3_vacuous": false,
+        "tau_sim": 0.4
+      },
+      {
+        "deflection": 1.0,
+        "faithfulness_judge_min": 4,
+        "false_escalate": 0.0,
+        "false_resolve": 0.2727272727272727,
+        "feasible": false,
+        "index": 8,
+        "metrics": {
+          "deflection": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 4,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "deflection",
+            "numerator": 4,
+            "rate": 1.0,
+            "safety": false
+          },
+          "false_escalate": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 0,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "false_escalate",
+            "numerator": 0,
+            "rate": 0.0,
+            "safety": false
+          },
+          "false_resolve": {
+            "by_population": [
+              {
+                "counts_toward_rate": false,
+                "denominator": 3,
+                "numerator": 0,
+                "population": "P1a"
+              },
+              {
+                "counts_toward_rate": true,
+                "denominator": 11,
+                "numerator": 3,
+                "population": "P3"
+              }
+            ],
+            "denominator": 11,
+            "name": "false_resolve",
+            "numerator": 3,
+            "rate": 0.2727272727272727,
+            "safety": true
+          }
+        },
+        "n_min": 2,
+        "p3_mislabel_ratio": 0.0,
+        "p3_n_exercised": 11,
+        "p3_n_mislabeled": 0,
+        "p3_n_questions": 11,
+        "p3_vacuous": false,
+        "tau_sim": 0.4
+      },
+      {
+        "deflection": 1.0,
+        "faithfulness_judge_min": 5,
+        "false_escalate": 0.0,
+        "false_resolve": 0.2727272727272727,
+        "feasible": false,
+        "index": 9,
+        "metrics": {
+          "deflection": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 4,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "deflection",
+            "numerator": 4,
+            "rate": 1.0,
+            "safety": false
+          },
+          "false_escalate": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 0,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "false_escalate",
+            "numerator": 0,
+            "rate": 0.0,
+            "safety": false
+          },
+          "false_resolve": {
+            "by_population": [
+              {
+                "counts_toward_rate": false,
+                "denominator": 3,
+                "numerator": 0,
+                "population": "P1a"
+              },
+              {
+                "counts_toward_rate": true,
+                "denominator": 11,
+                "numerator": 3,
+                "population": "P3"
+              }
+            ],
+            "denominator": 11,
+            "name": "false_resolve",
+            "numerator": 3,
+            "rate": 0.2727272727272727,
+            "safety": true
+          }
+        },
+        "n_min": 2,
+        "p3_mislabel_ratio": 0.0,
+        "p3_n_exercised": 11,
+        "p3_n_mislabeled": 0,
+        "p3_n_questions": 11,
+        "p3_vacuous": false,
+        "tau_sim": 0.4
+      },
+      {
+        "deflection": 1.0,
+        "faithfulness_judge_min": 4,
+        "false_escalate": 0.0,
+        "false_resolve": 0.09090909090909091,
+        "feasible": false,
+        "index": 10,
+        "metrics": {
+          "deflection": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 4,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "deflection",
+            "numerator": 4,
+            "rate": 1.0,
+            "safety": false
+          },
+          "false_escalate": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 0,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "false_escalate",
+            "numerator": 0,
+            "rate": 0.0,
+            "safety": false
+          },
+          "false_resolve": {
+            "by_population": [
+              {
+                "counts_toward_rate": false,
+                "denominator": 3,
+                "numerator": 0,
+                "population": "P1a"
+              },
+              {
+                "counts_toward_rate": true,
+                "denominator": 11,
+                "numerator": 1,
+                "population": "P3"
+              }
+            ],
+            "denominator": 11,
+            "name": "false_resolve",
+            "numerator": 1,
+            "rate": 0.09090909090909091,
+            "safety": true
+          }
+        },
+        "n_min": 3,
+        "p3_mislabel_ratio": 0.18181818181818182,
+        "p3_n_exercised": 9,
+        "p3_n_mislabeled": 2,
+        "p3_n_questions": 11,
+        "p3_vacuous": false,
+        "tau_sim": 0.4
+      },
+      {
+        "deflection": 1.0,
+        "faithfulness_judge_min": 5,
+        "false_escalate": 0.0,
+        "false_resolve": 0.09090909090909091,
+        "feasible": false,
+        "index": 11,
+        "metrics": {
+          "deflection": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 4,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "deflection",
+            "numerator": 4,
+            "rate": 1.0,
+            "safety": false
+          },
+          "false_escalate": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 0,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "false_escalate",
+            "numerator": 0,
+            "rate": 0.0,
+            "safety": false
+          },
+          "false_resolve": {
+            "by_population": [
+              {
+                "counts_toward_rate": false,
+                "denominator": 3,
+                "numerator": 0,
+                "population": "P1a"
+              },
+              {
+                "counts_toward_rate": true,
+                "denominator": 11,
+                "numerator": 1,
+                "population": "P3"
+              }
+            ],
+            "denominator": 11,
+            "name": "false_resolve",
+            "numerator": 1,
+            "rate": 0.09090909090909091,
+            "safety": true
+          }
+        },
+        "n_min": 3,
+        "p3_mislabel_ratio": 0.18181818181818182,
+        "p3_n_exercised": 9,
+        "p3_n_mislabeled": 2,
+        "p3_n_questions": 11,
+        "p3_vacuous": false,
+        "tau_sim": 0.4
+      },
+      {
+        "deflection": 0.75,
+        "faithfulness_judge_min": 4,
+        "false_escalate": 0.25,
+        "false_resolve": 0.09090909090909091,
+        "feasible": false,
+        "index": 12,
+        "metrics": {
+          "deflection": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 3,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "deflection",
+            "numerator": 3,
+            "rate": 0.75,
+            "safety": false
+          },
+          "false_escalate": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 1,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "false_escalate",
+            "numerator": 1,
+            "rate": 0.25,
+            "safety": false
+          },
+          "false_resolve": {
+            "by_population": [
+              {
+                "counts_toward_rate": false,
+                "denominator": 3,
+                "numerator": 0,
+                "population": "P1a"
+              },
+              {
+                "counts_toward_rate": true,
+                "denominator": 11,
+                "numerator": 1,
+                "population": "P3"
+              }
+            ],
+            "denominator": 11,
+            "name": "false_resolve",
+            "numerator": 1,
+            "rate": 0.09090909090909091,
+            "safety": true
+          }
+        },
+        "n_min": 1,
+        "p3_mislabel_ratio": 0.45454545454545453,
+        "p3_n_exercised": 6,
+        "p3_n_mislabeled": 5,
+        "p3_n_questions": 11,
+        "p3_vacuous": false,
+        "tau_sim": 0.5
+      },
+      {
+        "deflection": 0.75,
+        "faithfulness_judge_min": 5,
+        "false_escalate": 0.25,
+        "false_resolve": 0.09090909090909091,
+        "feasible": false,
+        "index": 13,
+        "metrics": {
+          "deflection": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 3,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "deflection",
+            "numerator": 3,
+            "rate": 0.75,
+            "safety": false
+          },
+          "false_escalate": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 1,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "false_escalate",
+            "numerator": 1,
+            "rate": 0.25,
+            "safety": false
+          },
+          "false_resolve": {
+            "by_population": [
+              {
+                "counts_toward_rate": false,
+                "denominator": 3,
+                "numerator": 0,
+                "population": "P1a"
+              },
+              {
+                "counts_toward_rate": true,
+                "denominator": 11,
+                "numerator": 1,
+                "population": "P3"
+              }
+            ],
+            "denominator": 11,
+            "name": "false_resolve",
+            "numerator": 1,
+            "rate": 0.09090909090909091,
+            "safety": true
+          }
+        },
+        "n_min": 1,
+        "p3_mislabel_ratio": 0.45454545454545453,
+        "p3_n_exercised": 6,
+        "p3_n_mislabeled": 5,
+        "p3_n_questions": 11,
+        "p3_vacuous": false,
+        "tau_sim": 0.5
+      },
+      {
+        "deflection": 0.75,
+        "faithfulness_judge_min": 4,
+        "false_escalate": 0.25,
+        "false_resolve": 0.09090909090909091,
+        "feasible": false,
+        "index": 14,
+        "metrics": {
+          "deflection": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 3,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "deflection",
+            "numerator": 3,
+            "rate": 0.75,
+            "safety": false
+          },
+          "false_escalate": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 1,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "false_escalate",
+            "numerator": 1,
+            "rate": 0.25,
+            "safety": false
+          },
+          "false_resolve": {
+            "by_population": [
+              {
+                "counts_toward_rate": false,
+                "denominator": 3,
+                "numerator": 0,
+                "population": "P1a"
+              },
+              {
+                "counts_toward_rate": true,
+                "denominator": 11,
+                "numerator": 1,
+                "population": "P3"
+              }
+            ],
+            "denominator": 11,
+            "name": "false_resolve",
+            "numerator": 1,
+            "rate": 0.09090909090909091,
+            "safety": true
+          }
+        },
+        "n_min": 2,
+        "p3_mislabel_ratio": 0.45454545454545453,
+        "p3_n_exercised": 6,
+        "p3_n_mislabeled": 5,
+        "p3_n_questions": 11,
+        "p3_vacuous": false,
+        "tau_sim": 0.5
+      },
+      {
+        "deflection": 0.75,
+        "faithfulness_judge_min": 5,
+        "false_escalate": 0.25,
+        "false_resolve": 0.09090909090909091,
+        "feasible": false,
+        "index": 15,
+        "metrics": {
+          "deflection": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 3,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "deflection",
+            "numerator": 3,
+            "rate": 0.75,
+            "safety": false
+          },
+          "false_escalate": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 1,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "false_escalate",
+            "numerator": 1,
+            "rate": 0.25,
+            "safety": false
+          },
+          "false_resolve": {
+            "by_population": [
+              {
+                "counts_toward_rate": false,
+                "denominator": 3,
+                "numerator": 0,
+                "population": "P1a"
+              },
+              {
+                "counts_toward_rate": true,
+                "denominator": 11,
+                "numerator": 1,
+                "population": "P3"
+              }
+            ],
+            "denominator": 11,
+            "name": "false_resolve",
+            "numerator": 1,
+            "rate": 0.09090909090909091,
+            "safety": true
+          }
+        },
+        "n_min": 2,
+        "p3_mislabel_ratio": 0.45454545454545453,
+        "p3_n_exercised": 6,
+        "p3_n_mislabeled": 5,
+        "p3_n_questions": 11,
+        "p3_vacuous": false,
+        "tau_sim": 0.5
+      },
+      {
+        "deflection": 0.75,
+        "faithfulness_judge_min": 4,
+        "false_escalate": 0.25,
+        "false_resolve": 0.09090909090909091,
+        "feasible": false,
+        "index": 16,
+        "metrics": {
+          "deflection": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 3,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "deflection",
+            "numerator": 3,
+            "rate": 0.75,
+            "safety": false
+          },
+          "false_escalate": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 1,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "false_escalate",
+            "numerator": 1,
+            "rate": 0.25,
+            "safety": false
+          },
+          "false_resolve": {
+            "by_population": [
+              {
+                "counts_toward_rate": false,
+                "denominator": 3,
+                "numerator": 0,
+                "population": "P1a"
+              },
+              {
+                "counts_toward_rate": true,
+                "denominator": 11,
+                "numerator": 1,
+                "population": "P3"
+              }
+            ],
+            "denominator": 11,
+            "name": "false_resolve",
+            "numerator": 1,
+            "rate": 0.09090909090909091,
+            "safety": true
+          }
+        },
+        "n_min": 3,
+        "p3_mislabel_ratio": 0.45454545454545453,
+        "p3_n_exercised": 6,
+        "p3_n_mislabeled": 5,
+        "p3_n_questions": 11,
+        "p3_vacuous": false,
+        "tau_sim": 0.5
+      },
+      {
+        "deflection": 0.75,
+        "faithfulness_judge_min": 5,
+        "false_escalate": 0.25,
+        "false_resolve": 0.09090909090909091,
+        "feasible": false,
+        "index": 17,
+        "metrics": {
+          "deflection": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 3,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "deflection",
+            "numerator": 3,
+            "rate": 0.75,
+            "safety": false
+          },
+          "false_escalate": {
+            "by_population": [
+              {
+                "counts_toward_rate": true,
+                "denominator": 4,
+                "numerator": 1,
+                "population": "P2"
+              }
+            ],
+            "denominator": 4,
+            "name": "false_escalate",
+            "numerator": 1,
+            "rate": 0.25,
+            "safety": false
+          },
+          "false_resolve": {
+            "by_population": [
+              {
+                "counts_toward_rate": false,
+                "denominator": 3,
+                "numerator": 0,
+                "population": "P1a"
+              },
+              {
+                "counts_toward_rate": true,
+                "denominator": 11,
+                "numerator": 1,
+                "population": "P3"
+              }
+            ],
+            "denominator": 11,
+            "name": "false_resolve",
+            "numerator": 1,
+            "rate": 0.09090909090909091,
+            "safety": true
+          }
+        },
+        "n_min": 3,
+        "p3_mislabel_ratio": 0.45454545454545453,
+        "p3_n_exercised": 6,
+        "p3_n_mislabeled": 5,
+        "p3_n_questions": 11,
+        "p3_vacuous": false,
+        "tau_sim": 0.5
+      }
+    ],
+    "recommended_config": null
+  },
+  "generated_at": "2026-09-20T10:46:11+00:00"
+}
