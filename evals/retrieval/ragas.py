@@ -183,8 +183,14 @@ def _load_ragas_runtime() -> _RagasRuntime:
             Faithfulness,
         )
     except ImportError as e:  # pragma: no cover - exercised in the slim CI env
+        # Name the underlying ImportError: it is often NOT a missing package
+        # but a broken transitive dependency (e.g. pyarrow needing a newer
+        # NumPy than the backend pin), and "install the package" would send the
+        # reader to the wrong fix.
         raise RuntimeError(
-            "--include-ragas requires the pinned `ragas` package. "
+            "--include-ragas requires the pinned `ragas` package and a working "
+            "import of its dependencies "
+            f"({type(e).__name__}: {e}). "
             "Run `pip install -r evals/retrieval/requirements.txt`."
         ) from e
 
@@ -450,6 +456,18 @@ async def _score_sample(
             api_errors=api_errors,
             judge_calls=counter.calls,
         )
+
+
+def preflight_ragas_runtime() -> None:
+    """Fail fast if the RAGAS runtime cannot be imported.
+
+    RAGAS is imported lazily on the scoring path, which runs only AFTER every
+    retrieval and generation call has been paid for. A broken install (the
+    2026-10-11 pyarrow/NumPy conflict) used to surface there, minutes and
+    hundreds of model calls into the run. The runner calls this before any
+    paid work so the same fault dies in seconds, with the cause named.
+    """
+    _load_ragas_runtime()
 
 
 async def score_with_ragas(

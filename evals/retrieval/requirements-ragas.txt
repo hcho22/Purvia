@@ -10,3 +10,13 @@ langchain-openai==0.3.19
 langchain-text-splitters==0.3.8
 langsmith==0.2.10
 pydantic==2.10.4
+
+# RAGAS pulls `datasets` -> `pyarrow` transitively with only a lower bound
+# (datasets 5.x wants pyarrow>=24). pyarrow 26.0.0 requires NumPy 2, but
+# backend/requirements.txt pins numpy<2 (torch under docling), so an unpinned
+# resolve turned the weekly run into an ImportError at `import ragas` the day
+# pyarrow 26 shipped (2026-10-11 run: no snapshot, gates UNMEASURED). These two
+# are the last versions verified to import under numpy<2 (the 2026-10-04 run).
+# Do not bump pyarrow past 25.x until the backend numpy pin lifts.
+datasets==5.0.1
+pyarrow==25.0.1
