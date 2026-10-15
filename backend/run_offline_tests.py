@@ -38,6 +38,7 @@ INTEGRATION_ONLY: dict[str, frozenset[IntegrationDependency]] = {
     "test_conversation_status_machine.py": frozenset(
         {IntegrationDependency.POSTGRES}
     ),
+    "test_keyword_stem_tolerance.py": frozenset({IntegrationDependency.POSTGRES}),
     "test_llamaparse_smoke.py": frozenset({IntegrationDependency.LLAMA_CLOUD}),
     "test_permissions.py": frozenset(
         {IntegrationDependency.POSTGRES, IntegrationDependency.SUPABASE}

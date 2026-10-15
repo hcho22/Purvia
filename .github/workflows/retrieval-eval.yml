@@ -166,6 +166,7 @@ jobs:
               # is the load-bearing trigger: a future migration that re-opens the
               # F1/F2/F3 holes this test guards fails BEFORE merge.
               - 'backend/test_sec_rls_hardening.py'
+              - 'backend/test_keyword_stem_tolerance.py'
               - '.github/workflows/retrieval-eval.yml'
             guards:
               - 'evals/retrieval/**'
@@ -637,3 +638,18 @@ jobs:
             exit 1
           fi
           python -m backend.test_sec_rls_hardening
+
+      - name: Run keyword stem-prefix tier regression (deterministic - may block)
+        env:
+          DATABASE_URL: ${{ env.DB_URL }}
+        run: |
+          # ADR-0014: q40 x partial viewer returns zero rows on the ADR-0009
+          # function and the gold chunk after the migration; the old rows are an
+          # exact prefix of the new rows for the whole golden set; visibility is
+          # unchanged. Runs in one rolled-back transaction on this job's stack.
+          # Same anti-silent-skip preflight as the RLS-hardening step above.
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "::error::DATABASE_URL is empty - the keyword stem-prefix regression would clean-skip and pass while testing nothing."
+            exit 1
+          fi
+          python -m backend.test_keyword_stem_tolerance
