@@ -106,6 +106,7 @@ from .ragas import (  # noqa: E402
     RAGAS_JUDGE_MODEL,
     RAGAS_METRICS,
     build_ragas_section,
+    preflight_ragas_runtime,
     ragas_cell_enabled,
     score_with_ragas,
 )
@@ -1910,6 +1911,10 @@ async def amain() -> int:
     # operator's --mode / --viewers selection includes cells RAGAS will skip,
     # so a later zero-row or missing-cell failure identifies the selection.
     if args.include_ragas:
+        # Import the RAGAS runtime NOW, before any retrieval or paid generation
+        # call: the scoring step that needs it runs last, so a broken install
+        # would otherwise be found only after the whole sweep was paid for.
+        preflight_ragas_runtime()
         for skipped_mode in (m for m in modes if m != "hybrid"):
             log.warning(
                 "RAGAS scoring skipped for mode=%s (hybrid-only)", skipped_mode
