@@ -53,7 +53,10 @@ the CLI never applies it as a forward migration.
 - The tier changes the support-widget deflection path, not only the eval and the assistant.
   `run_deflection_pipeline` (`backend/escalation.py`) retrieves through `hybrid_search`, which calls this `keyword_search`.
   A tier-3 row can therefore enter the context that the deflection drafter and both content gates (faithfulness and answer completeness) consume, and so reach an auto-sent answer.
-  The deterministic legs are unchanged: visibility is identical, and a keyword-only hit carries no cosine, so the escalation retrieval gate still reads such a turn as weak retrieval and defers exactly as before.
+  Visibility is identical, and a turn whose rows are all keyword-only still carries no cosine, so the escalation retrieval gate reads it as weak retrieval and defers as before.
+  On mixed turns, tier-3 rows can change which rows fill the fused top_k that the retrieval gate counts, so its verdict can change in either direction: a tier-3 boost can push a higher-cosine row out of the top_k (strong to weak), or put dual-leg rows in place of keyword-only rows (weak to strong).
+  Every row the gate counts still carries a real cosine, and both content gates still apply to any draft.
+  On the seeded E7 set the tier fills no keyword slot, so no gate input changed there (see Evidence).
 - The similarity scale in the keyword leg gains a third tier; consumers use it only for
   order and RRF rank, which is order-only.
 
