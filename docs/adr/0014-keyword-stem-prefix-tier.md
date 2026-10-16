@@ -48,11 +48,28 @@ the CLI never applies it as a forward migration.
 
 ## Consequences
 
-- A keyword-only hit carries no cosine, so the escalation retrieval gate still reads such
-  a turn as weak retrieval; it defers exactly as before. Only the retrieved context
-  changes (the eval and the assistant now see the chunk).
+- The tier changes the support-widget deflection path, not only the eval and the assistant.
+  `run_deflection_pipeline` (`backend/escalation.py`) retrieves through `hybrid_search`, which calls this `keyword_search`.
+  A tier-3 row can therefore enter the context that the deflection drafter and both content gates (faithfulness and answer completeness) consume, and so reach an auto-sent answer.
+  The deterministic legs are unchanged: visibility is identical, and a keyword-only hit carries no cosine, so the escalation retrieval gate still reads such a turn as weak retrieval and defers exactly as before.
 - The similarity scale in the keyword leg gains a third tier; consumers use it only for
   order and RRF rank, which is order-only.
+
+## Evidence
+
+Deterministic, against Postgres in a rolled-back transaction:
+
+- `backend/test_keyword_stem_tolerance.py` pins q40 x partial viewer (zero rows before, the gold chunk after), the old rows as an exact prefix of the new rows across the 60-question golden set, and unchanged visibility.
+- All 18 E7 escalation questions (`evals/retrieval/escalation_gold.yaml`) return identical keyword rows before and after the migration.
+  This holds at match_count 5, 10, 20 and 50 over the seeded corpus as `chunk_text` splits it (16 chunks), which covers the deflection path's hybrid keyword pool (top_k 5 x 4 = 20).
+  The tier fills no slot for any E7 question, so the retrieved context E7 scores on the seeded corpus is unchanged.
+
+Open evidence gaps, both live and both paid:
+
+1. The weekly RAGAS run has not been measured on this change; the branch's diagnostic run (38826620138) measured retrieval only, without importing RAGAS.
+2. The live E7 P2/P3 measurement has not been made on this branch; that diagnostic run's E7 output was empty.
+
+Both run once, together with the full weekly RAGAS run, when the Anthropic API limit is raised.
 
 ## Alternatives considered and rejected
 

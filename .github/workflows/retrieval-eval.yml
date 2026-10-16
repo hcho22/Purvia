@@ -270,6 +270,7 @@ jobs:
           cache-dependency-path: |
             evals/retrieval/requirements-ci.txt
             evals/retrieval/requirements-ragas.txt
+            evals/retrieval/constraints-ragas-weekly.txt
 
       - name: Install Python deps
         run: |
@@ -300,13 +301,12 @@ jobs:
 
       - name: Validate pinned RAGAS runtime imports
         run: |
-          # Resolve the RAGAS stack under the backend's own numpy pin, exactly as
-          # the weekly job does (it installs backend/requirements.txt first).
-          # Without it this step resolved the newest NumPy and passed while the
-          # weekly's pyarrow 26 + numpy<2 import crashed (2026-10-11).
-          grep -E '^numpy' backend/requirements.txt > "$RUNNER_TEMP/numpy-constraint.txt"
-          pip install -c "$RUNNER_TEMP/numpy-constraint.txt" \
-            -r evals/retrieval/requirements-ragas.txt numpy
+          # Resolve the RAGAS stack under the same constraints the weekly installs
+          # with, so this step imports the versions the weekly will run. Without
+          # them it resolved the newest NumPy and passed while the weekly's
+          # pyarrow 26 + numpy<2 import crashed (2026-10-11).
+          pip install -c evals/retrieval/constraints-ragas-weekly.txt \
+            -r evals/retrieval/requirements-ragas.txt
           RAGAS_RUNTIME_REQUIRED=1 python -m evals.retrieval.test_ragas_scoring
 
   retrieval-eval:

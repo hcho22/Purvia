@@ -18,5 +18,7 @@ pydantic==2.10.4
 # pyarrow 26 shipped (2026-10-11 run: no snapshot, gates UNMEASURED). These two
 # are the last versions verified to import under numpy<2 (the 2026-10-04 run).
 # Do not bump pyarrow past 25.x until the backend numpy pin lifts.
+# constraints-ragas-weekly.txt pins the rest of the tree; keep these two equal
+# to it.
 datasets==5.0.1
 pyarrow==25.0.1
