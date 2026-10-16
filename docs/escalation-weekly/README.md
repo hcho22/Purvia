@@ -38,7 +38,8 @@ The runtime rubric, prompt and model are unchanged here.
 While this risk is open the weekly can still go red on it.
 A week whose drafter writes that no-disclaimer shape for `e7-p3-10` gets an offline escalate and, about half the time, a runtime pass, so the parity leg reads DISAGREE on that row (offline `answers=false`, runtime `answers=true`), the runner exits 1, and the gate-finding issue fires again.
 That red is this open risk surfacing, not a regression of the offline-judge fix, and it does not move the false-resolve rate, which the offline judge scores.
-`backend/test_answer_gate_rubric.py` carries the triple as a real-context live row: the offline half asserts it must escalate, and the runtime half prints its verdicts as KNOWN OPEN RISK without failing until the runtime gate is fixed.
+`backend/test_answer_gate_rubric.py` carries the triple as a real-context live row: the offline half asserts it must escalate, and the runtime half prints its verdicts as KNOWN OPEN RISK without failing.
+That exemption never retires on its own: it is removed by hand, in the change that fixes the runtime gate, and the row is asserted only after that.
 
 ### 2026-07-31 - the main leg's `false-resolve 100% (3/3)` was an eval artifact, not a live pipeline breach (issue #96)
 

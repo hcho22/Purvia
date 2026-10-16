@@ -85,14 +85,19 @@ What that costs, stated plainly:
     to temperature 0 (issue #104's other half) - the live layer neutralizes the
     ambient `JUDGE_MODEL` / `JUDGE_TEMPERATURE` exactly as the unit layer does, so
     a developer shell cannot un-pin the run the failure message describes as
-    pinned - each case is asserted UNANIMOUS over `_REPS` calls. The original
-    rows were measured stable at 5/5 during the issue-#104 investigation; the
-    FORMER KNOWN LIMITATION row's current expectation was measured 3/3 on
-    2026-10-15. One row is not asserted: the RUNTIME half of the real-context
-    `e7-p3-10` row (`_RUNTIME_KNOWN_OPEN_RISK`) let that triple through 5 of 10
-    times on 2026-10-15. That one row on that one implementation is reported as a
-    KNOWN OPEN RISK and not asserted, so the layer is not red on a product defect
-    it cannot fix; it starts asserting once the runtime gate is fixed. The pin
+    pinned - each case is asserted UNANIMOUS over `_REPS` calls. The hand-written
+    rows were measured stable at 5/5 when they were added, except the FORMER
+    KNOWN LIMITATION row, whose current expectation was measured 3/3 on
+    2026-10-15. Of the real-context rows, the runtime gate rejected `e7-p3-01`,
+    `e7-p3-05-disclaimer` and `e7-p3-09` 5/5 on 2026-10-15; the bare-draft
+    `e7-p3-05` row was taken from the 2026-10-11 snapshot without a live run, so
+    its first live run is its measurement. One row is not asserted: the RUNTIME
+    half of the real-context `e7-p3-10` row (`_RUNTIME_KNOWN_OPEN_RISK`) let that
+    triple through 5 of 10 times on 2026-10-15. That one row on that one
+    implementation is reported as a KNOWN OPEN RISK and not asserted, so the
+    layer is not red on a product defect it cannot fix. The exemption never
+    retires on its own: it is removed by hand, in the change that fixes the
+    runtime gate, and the row is asserted only after that. The pin
     removes the SAMPLER, which is best-effort
     rather than a guarantee — no `seed` is passed — so a split can still come
     from the provider rather than from the rubric. It fails the test either way,
@@ -758,15 +763,19 @@ _CASES: list[tuple[str, str, str, str, bool, str]] = [
 ]
 
 
-# The four rows where the weekly parity leg saw the two judges disagree. They carry
-# the REAL retrieved context (8-10 KB, every warranty category / the whole returns
-# section / the whole tier list) verbatim: the hand-written slices above are short
-# enough that a judge never saw a context it could mistake for ground truth, which
-# is why this layer passed through PR #156 and the failure surfaced only in the next
-# weekly. e7-p3-01, e7-p3-05 and e7-p3-09 are the OFFLINE judge's misses (answers=
-# true 5/5 in 2026-09-20 .. 2026-10-11 while the runtime gate rejected them 5/5),
-# from an unmodified-main run. e7-p3-10 is the RUNTIME gate's miss on 2026-09-20,
-# copied from that snapshot: who pays, not how much. All four must NOT answer.
+# The four questions where the weekly parity leg saw the two judges disagree, plus
+# one drafter variant. They carry the REAL retrieved context (8-10 KB, every
+# warranty category / the whole returns section / the whole tier list) verbatim:
+# the hand-written slices above are short enough that a judge never saw a context
+# it could mistake for ground truth, which is why this layer passed through PR #156
+# and the failure surfaced only in the next weekly. e7-p3-01, e7-p3-05 and
+# e7-p3-09 are the OFFLINE judge's misses (auto-resolved in the 2026-09-20 ..
+# 2026-10-11 weeklies while the runtime gate rejected them). e7-p3-05 carries the
+# no-disclaimer draft that breached, copied from the 2026-10-11 snapshot;
+# e7-p3-05-disclaimer is the same question and context with the draft an
+# unmodified-main run produced on 2026-10-15, which adds that the amount is not
+# provided. e7-p3-10 is the RUNTIME gate's miss on 2026-09-20, copied from that
+# snapshot: who pays, not how much. All five must NOT answer.
 _REAL_CONTEXT_FIXTURE = (
     ROOT / "backend" / "test-fixtures" / "e7_offline_answer_judge_rows.json"
 )
@@ -774,7 +783,12 @@ _REAL_CONTEXT_WHY = {
     "e7-p3-01": "an accurate 'I don't have that information' is still a non-answer; "
     "the real warranty context lists every category but jewelry",
     "e7-p3-05": "the corpus's own answer is a deferral ('quoted per-case'); "
-    "reporting it accurately leaves the customer with no fee",
+    "reporting it accurately leaves the customer with no fee. THE REGRESSION "
+    "GUARD: this is the draft that breached, with no volunteered disclaimer; if "
+    "it passes while e7-p3-05-disclaimer escalates, the judge is keying on the "
+    "drafter's phrasing",
+    "e7-p3-05-disclaimer": "the same deferral with the drafter's 'not provided "
+    "in the context' disclaimer added; still no fee for the customer",
     "e7-p3-09": "an accurate 'I don't have that information' is still a non-answer; "
     "the real context lists four tiers and no Diamond",
     "e7-p3-10": "the draft faithfully states who pays, but the customer asked how "
@@ -792,8 +806,8 @@ def _real_context_label(row_id: str) -> str:
 # OPEN PRODUCT RISK recorded in the issue-#163 erratum
 # (docs/escalation-weekly/README.md). Asserting it would leave this hand-run layer
 # red or flaky on a known product defect rather than on a rubric regression. The
-# offline half still asserts it. Remove this exemption in the change that fixes the
-# runtime gate.
+# offline half still asserts it. Nothing retires this exemption automatically:
+# remove it by hand in the change that fixes the runtime gate.
 _RUNTIME_KNOWN_OPEN_RISK = _real_context_label("e7-p3-10")
 
 
@@ -861,7 +875,8 @@ def test_live_rubric_discrimination() -> None:
     runs anywhere. Requires unanimity over `_REPS` calls per case: both judges are
     pinned to temperature 0, so a split verdict is a finding, not a flake. The one
     exception is `_RUNTIME_KNOWN_OPEN_RISK` on the runtime implementation, whose
-    verdicts are printed as a KNOWN OPEN RISK instead of asserted. That
+    verdicts are printed as a KNOWN OPEN RISK instead of asserted until the
+    exemption is removed by hand. That
     claim only holds if the pin the failure message asserts is the pin that
     actually ran, so the ambient judge environment is neutralized for the duration
     of this layer - see the comment on `saved_env` below.
@@ -991,9 +1006,18 @@ def test_live_rubric_discrimination() -> None:
                         f"  KNOWN OPEN RISK [{impl_name:>7}] {label}: "
                         f"answers={verdicts} (want {must_answer}); reported, NOT "
                         "asserted - the runtime gate let this triple through 5 of "
-                        "10 on 2026-10-15, and this row starts asserting once the "
-                        "runtime gate is fixed"
+                        "10 on 2026-10-15. The exemption never retires on its own: "
+                        "remove _RUNTIME_KNOWN_OPEN_RISK by hand in the change that "
+                        "fixes the runtime gate, and only then is this row asserted"
                     )
+                    if all(answers is must_answer for answers in verdicts):
+                        print(
+                            f"  EXEMPTION MAY BE REMOVABLE [{impl_name:>7}] {label}: "
+                            f"the runtime gate escalated it {_REPS}/{_REPS} this run. "
+                            "If the runtime gate has been fixed, delete "
+                            "_RUNTIME_KNOWN_OPEN_RISK so this row is asserted again; "
+                            "one clean run is not proof against a 5-of-10 leak rate"
+                        )
                     known_open_risks.append(f"[{impl_name}] {label}: answers={verdicts}")
                     continue
                 unanimous = len(set(verdicts)) == 1
