@@ -97,10 +97,9 @@ What that costs, stated plainly:
     implementation is reported as a KNOWN OPEN RISK and not asserted, so the
     layer is not red on a product defect it cannot fix. The exemption never
     retires on its own: it is removed by hand, in the change that fixes the
-    runtime gate, and the row is asserted only after that. The pin
-    removes the SAMPLER, which is best-effort
-    rather than a guarantee — no `seed` is passed — so a split can still come
-    from the provider rather than from the rubric. It fails the test either way,
+    runtime gate, and the row is asserted only after that. The pin removes the
+    SAMPLER, which is best-effort rather than a guarantee — no `seed` is passed —
+    so a split can still come from the provider rather than from the rubric. It fails the test either way,
     because both causes need looking at and neither should be retried away.
 
 The offline half stays fixture-free in a different sense: recording fake clients
