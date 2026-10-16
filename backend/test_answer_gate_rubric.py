@@ -50,10 +50,14 @@ policy or the disposition — "Who decides a book warranty claim after 30 days?"
 is fully answered by "customer service, at their discretion", yet the rubric
 reads that draft as a deferral and escalates it.
 
-The last row of `_CASES` pins that shape at its CURRENT behaviour so a future
-rubric change cannot alter it unnoticed. Fixing the clause means editing both
-rubric strings, which invalidates the live measurement they were validated
-against, so it is deferred rather than smuggled in here.
+The last row of `_CASES` pins that shape. It was pinned at escalate (answers=False)
+when the clause was written, measured 5/5 stable then. A live run on 2026-10-15
+found BOTH judges answering it (3/3 each, and the pre-fix offline judge too), with
+neither rubric nor `backend/escalation.py` changed since: the models moved under
+the pin. That is the outcome invariant 8's own test calls correct (the customer
+asked WHO decides and the draft says who), so the row now expects it. The clause
+is still unconditional on paper, so this is observed behaviour, not a guarantee:
+re-check the row whenever either judge model or rubric changes.
 
 LIVE CALLS vs RECORDED FIXTURES — the deliberate choice
 -------------------------------------------------------
@@ -684,43 +688,32 @@ _CASES: list[tuple[str, str, str, str, bool, str]] = [
         True,
         "opposite direction, third instance",
     ),
-    # KNOWN LIMITATION, pinned at CURRENT behaviour - not at desired behaviour.
-
+    # FORMER KNOWN LIMITATION, now pinned at the OBSERVED (and desired) behaviour.
     #
     # Here the disposition IS the requested information: the customer asked WHO
     # decides, and the draft tells them who. By invariant 8's own test - does the
-    # customer end up holding what they asked for - this should auto-send. The
-    # issue-#104 clause is stated unconditionally, so the rubric reads it as a
-    # deferral and escalates instead, and `must_answer=False` records that rather
-    # than asserting it is correct.
+    # customer end up holding what they asked for - this should auto-send. It was
+    # pinned at escalate because the issue-#104 clause is stated unconditionally and
+    # the judges then read it as a deferral. On 2026-10-15 both judges answered it
+    # 3/3 (and the pre-fix offline judge did too), with no rubric or backend change,
+    # so the pin was stale and the live layer was red on a shape that is correct.
     #
-    # This errs toward ESCALATION, which is the SAFE direction under the operating
-    # objective (maximize deflection subject to false-resolve <= ceiling): a human
-    # picks the conversation up and the customer is answered, just not by the bot.
-    # The failure this PR fixes was the unsafe direction - auto-resolving a
-    # customer who got nothing. So it is a real cost in deflection, not a risk, and
-    # is deferred rather than rushed.
-    #
-    # It is here so a future rubric edit that flips this shape says so out loud
-    # instead of moving live send/escalate behaviour unobserved. Fixing it means
-    # conditioning the clause on the request ("...when the customer asked for that
-    # value"), which requires re-validating both rubric strings against live
-    # models; until then, flip this row's expectation in the same change that
-    # fixes the clause.
+    # It is still here so a future rubric or model change that flips this shape says
+    # so out loud instead of moving live send/escalate behaviour unobserved. The
+    # clause remains unconditional, so treat True as observed, not guaranteed.
     (
-        "KNOWN LIMITATION: the disposition IS the requested information",
+        "FORMER KNOWN LIMITATION: the disposition IS the requested information",
         "Who decides a book warranty claim after 30 days?",
         "Beyond 30 days, book warranty claims are decided by customer service, at "
         "their discretion.",
         "Books carry a 30-day warranty against printing defects (missing pages, "
         "blurred ink, binding failure). Beyond 30 days, book warranty claims are at "
         "the discretion of customer service.",
-        False,
+        True,
         "the customer asked WHO decides and the draft says who, so invariant 8's "
-        "test says auto-send; the unconditional issue-#104 clause escalates it "
-        "anyway. Pinned as-is - see the KNOWN LIMITATION note in the module "
-        "docstring. If this row starts failing, the clause was made conditional "
-        "and the expectation must move with it",
+        "test says auto-send. Both judges answered it 3/3 on 2026-10-15; if this "
+        "row starts failing, a judge model or rubric moved and the issue-#104 "
+        "clause is reading it as a deferral again - see the module docstring",
     ),
 ]
 
