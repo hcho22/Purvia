@@ -71,7 +71,7 @@ The first run used 299 OpenAI calls.
 Review then found that the `same_kind` field description excluded a range, an estimate, 'varies' and a who-pays, when or where fact for every question, while the kind rule in the prompt excludes them only where an exact amount is asked.
 Read literally, that description would escalate a faithful who-pays answer to a who-pays question.
 Both descriptions, runtime and offline, now state the rule's condition, and a constructed who-pays answer to a who-pays question was added to the measured trade as a row that must send.
-The second run measured that final head with 298 OpenAI calls and no Anthropic calls, and every call was valid (no failed judge call).
+The second run re-measured the runtime gate on that final head with OpenAI calls only: 298 calls, every one valid (no failed judge call).
 
 | Measure on the committed gate | Second run (final head) | First run | Phase-1 candidate A |
 |---|---|---|---|
@@ -91,10 +91,11 @@ Against the old gate's $0.00071 and 1.26 s, the committed gate costs about $0.00
 
 ### The offline (Claude) half, on the should-answer rows
 
-The second run also measured the offline judge (`claude-haiku-4-5`) on the final head, for the should-answer rows only, with 28 Anthropic calls.
+The offline judge (`claude-haiku-4-5`) was measured separately on the same final head, for the should-answer rows only, in two separate runs with 28 Anthropic calls: 8 for the E7 P2 plus parity leg and 20 for the stored should-answer rows.
+None of the runtime re-measure's 298 OpenAI calls belong to these runs; the E7 run's own OpenAI calls (4 drafter calls, 4 runtime answer-gate parity calls, and its corpus-seed and query embedding calls) were not counted.
 
-- One weekly-path run of the P2 leg with the parity leg (`e7_runner --include-p2 --include-parity`, 8 Anthropic calls): the offline judge auto-resolved all 4 P2 rows, and the parity leg passed 4 of 4, with no mismatch and nothing unmeasured, `e7-p2-02` ("3-5 business days") included.
-- The 20 should-answer rows of the measured trade through the real `judge_answering` (20 Anthropic calls): 20 of 20 answered, each with `same_kind` true. That includes the 7 `e7-p2-02` range drafts and the who-pays row, and matches the runtime gate, which sends all 20.
+- One weekly-path run of the P2 leg with the parity leg (`e7_runner --include-p2 --include-parity`): the offline judge auto-resolved all 4 P2 rows, and the parity leg passed 4 of 4, with no mismatch and nothing unmeasured, `e7-p2-02` ("3-5 business days") included.
+- The 20 should-answer rows of the measured trade through the real `judge_answering`: 20 of 20 answered, each with `same_kind` true. That includes the 7 `e7-p2-02` range drafts and the who-pays row, and matches the runtime gate, which sends all 20.
 - The should-escalate side of the offline judge and the offline half of the live rubric layer were not run.
 
 ## Decision

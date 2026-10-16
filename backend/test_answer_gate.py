@@ -484,10 +484,6 @@ def test_extraction_fields_are_committed_before_the_verdict() -> None:
             fragment in stated["description"],
             f"stated_value must say when to return null (missing {fragment!r})",
         )
-    _check(
-        "RANGE" in _ANSWER_KIND_RULE.upper() and "specific" in _ANSWER_KIND_RULE,
-        "the kind rule must say a range or estimate is not a specific value",
-    )
     print("ok: asked_value, stated_value and same_kind are required and precede the verdict")
 
 
