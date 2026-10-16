@@ -13,16 +13,28 @@ The `2026-09-20`, `2026-09-27`, `2026-10-04` and `2026-10-11` snapshots read fal
 The rows that auto-resolved are `e7-p3-01`, `e7-p3-05` and `e7-p3-09` (two of the three in the middle two weeks).
 Their drafts were a bare "I don't have that information." (jewelry warranty, Diamond tier) and "quoted on a per-case basis" (over-20-lbs return fee).
 The runtime gate rejected every one of them in the same snapshots.
-The OFFLINE Claude answer judge was the outlier, and it was deterministic: replaying the captured inputs, 5 of 5 identical calls said `answers=true` on each of the three rows.
+On those three rows the OFFLINE Claude answer judge was the outlier, and it was deterministic: replaying the captured inputs, 5 of 5 identical calls said `answers=true` on each of them.
+Those are 3 of the 4 parity mismatches on 2026-09-20 and every mismatch in the three weeks after; the fourth went the other way (see the open product risk below).
 
 What started it: PR #156 (merged 2026-09-15) began showing that judge the retrieved context.
 Before it the same drafts were scored `answers=false` in every weekly from 2026-08-09 to 2026-09-13.
 With the context in view, a forced single-boolean tool call graded the draft's truth against the context and counted an accurate deferral as an answer.
 What exposed it: only the next weekly, because the LLM-judged legs are not per-PR and the live rubric layer used one-section hand-written contexts that never looked like ground truth.
-What a buyer saw: nothing wrong from these rows. The shipped pipeline, run end to end with only the runtime gates, escalated every P3 question in every run (0 false-resolves in 55 runs, 5 per question) and answered every P2 question (0 false-escalates in 20).
+What a buyer saw: nothing wrong from these three rows. The shipped pipeline, run end to end with only the runtime gates, escalated every P3 question in every run (0 false-resolves in 55 runs, 5 per question) and answered every P2 question (0 false-escalates in 20).
 
-Fixed forward from the next weekly run onward (these snapshots are kept as the record): `runner.judge_answering` now has the judge name the asked value and the stated value before it decides, and the verdict requires a non-empty stated value.
+The offline judge is fixed forward from the next weekly run onward (these snapshots are kept as the record): `runner.judge_answering` now has the judge name the asked value and the stated value before it decides, and the verdict requires a non-empty stated value.
 See `docs/evals.md` § 6.
+
+**OPEN PRODUCT RISK, not fixed by this change: the runtime gate passes the `e7-p3-10` adjacent-fact draft.**
+The fourth 2026-09-20 parity mismatch, `e7-p3-10`, was the RUNTIME gate (gpt-4o-mini, temperature 0) passing a draft the offline judge rejected.
+The question was "What is the return shipping fee for an international return?" and the draft was "For international returns, the return shipping is at the customer's expense, unless the return is for a wrong-item-shipped or damaged-in-transit case."
+That is the adjacent-fact non-answer the rubric names: it says who pays, and the customer asked how much.
+The weekly scored it as an escalation because the P3 leg's verdict is the offline judge's; the shipped send path uses the runtime gate, which would have auto-sent it.
+In the 2026-10-15 end-to-end pipeline runs the question escalated 35 of 35 times, so those runs did not leak.
+But replaying that verbatim (question, context, draft) triple through the runtime `answer_gate` 10 times on 2026-10-15 (gpt-4o-mini, temperature 0, default cutoff) let it through 5 of 10 and escalated 5 of 10, with no judge failure.
+The drafter writes that shape regularly: 7 of the 18 distinct `e7-p3-10` drafts across the committed weekly snapshots and replays carry no disclaimer and state only who pays.
+The runtime rubric, prompt and model are unchanged here.
+`backend/test_answer_gate_rubric.py` carries the triple as a real-context live row: the offline half asserts it must escalate, and the runtime half prints its verdicts as KNOWN OPEN RISK without failing until the runtime gate is fixed.
 
 ### 2026-07-31 - the main leg's `false-resolve 100% (3/3)` was an eval artifact, not a live pipeline breach (issue #96)
 

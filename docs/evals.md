@@ -274,13 +274,18 @@ The P2/P3 legs mirror the runtime deflection pipeline's **two** content gates (`
 
 **The offline answer verdict is not a bare boolean (issue #163).**
 From the 2026-09-20 weekly onward the P3 leg read false-resolve 18-27% while `e7-p3-01`, `e7-p3-05` and `e7-p3-09` auto-resolved, and the parity leg showed the runtime gate rejecting all three.
-The shipped pipeline was not leaking on these rows: run end to end with only the runtime gates it escalated every P3 question in every run (0 false-resolves in 55 runs) and answered every P2 question (0 false-escalates in 20).
+The shipped pipeline was not leaking on those three rows: run end to end with only the runtime gates it escalated every P3 question in every run (0 false-resolves in 55 runs) and answered every P2 question (0 false-escalates in 20).
 The offline Haiku judge was the outlier.
 Once it was shown the retrieved context (PR #156) a forced single-boolean call let it grade the draft's truth against that context, so an accurate "I don't have that information" or an accurate "quoted on a per-case basis" read as an answer.
 Restating the rule in the prompt barely moved it, and free-text reasoning first made it worse.
 `runner.judge_answering` now has the judge commit to `asked_value` and `stated_value` before it decides, and the verdict is `answers AND stated_value is non-empty`.
+A payload that breaks that tool schema raises, so the run is UNMEASURED instead of scoring a malformed reply as a correct escalation.
 Do not drop those fields, and do not port them to the runtime `answer_gate`: gpt-4o-mini counts "10% to 80%" as a stated value for the exact-amount question and regressed there.
-`backend/test_answer_gate_rubric.py` pins the mechanism with no model (verdict cells, field order) and the live layer carries the three failing rows with their verbatim retrieved contexts (`backend/test-fixtures/e7_offline_answer_judge_rows.json`).
+The runtime gate has an **open product risk** of its own, not fixed by this change.
+The fourth 2026-09-20 parity mismatch, `e7-p3-10`, was the runtime gate passing the adjacent-fact draft "international returns are at the customer's expense" for a question that asked how much the fee is.
+The question escalated 35 of 35 times in the 2026-10-15 end-to-end runs, but replaying that verbatim triple through the runtime `answer_gate` 10 times (gpt-4o-mini, temperature 0, default cutoff) let it through 5 of 10, and 7 of the 18 distinct `e7-p3-10` drafts across the committed snapshots and replays have exactly that no-disclaimer shape.
+The full record is the issue-#163 erratum in `docs/escalation-weekly/README.md`.
+`backend/test_answer_gate_rubric.py` pins the mechanism with no model (verdict cells, malformed payloads, field order) and the live layer carries all four 2026-09-20 mismatch rows with their verbatim retrieved contexts (`backend/test-fixtures/e7_offline_answer_judge_rows.json`); the runtime half of `e7-p3-10` is reported as a KNOWN OPEN RISK rather than asserted.
 
 This golden set is the **support-face layer** of the one layered format (§2.2, US-108): each row carries one `escalation` label, and the P2/P3 gold is authored as **US-107 content anchors** (`gold_anchors`, bare span or `{text, doc}`) on the same primitive as the base retrieval gold — not the legacy `gold_stable_ids` chunk-index list. `e7.resolve_escalation_gold` resolves those anchors to the current chunk `stable_id`(s) at eval time (fail-loud on zero-resolve) in the `--include-p1b` path, so the no-access P1b replay revokes exactly the resolved gold and a `chunk_size`/overlap re-seed needs zero re-labeling here too. A `no_context` (P1a) row carries no anchor by definition.
 

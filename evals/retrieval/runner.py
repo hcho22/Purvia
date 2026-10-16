@@ -900,6 +900,13 @@ async def judge_answer(
 # rows. Do NOT port the extraction fields to the runtime gate: gpt-4o-mini counts
 # "10% to 80%" as a stated value for the exact-amount question (e7-p3-03), and the
 # same replay measured 49 wrong of 500 there.
+# Not every parity mismatch in those weeks was this judge. The fourth on 2026-09-20,
+# e7-p3-10, was the RUNTIME gate passing an adjacent-fact draft this judge rejected
+# ("international returns are at the customer's expense": who pays, not how much).
+# The question escalated in the 2026-10-15 end-to-end runs, but replaying that exact
+# triple through the runtime gate (gpt-4o-mini, temperature 0) let it through 5 of 10
+# times. That is an OPEN PRODUCT RISK this offline-only fix does not touch; see the
+# issue-#163 erratum in docs/escalation-weekly/README.md.
 ANSWER_JUDGE_MAX_TOKENS = 400
 
 ANSWER_JUDGE_PROMPT_TEMPLATE = (
@@ -993,7 +1000,9 @@ async def judge_answering(
     commit to the value the ANSWER actually gives before it decides, and a verdict
     of "answers" with no stated value is self-contradictory, so it resolves to
     False (escalate). See the block comment above `ANSWER_JUDGE_MAX_TOKENS` for
-    why a bare boolean is not enough.
+    why a bare boolean is not enough. A payload that breaks the tool schema (no
+    boolean `answers`, no string-or-null `stated_value`) RAISES, so the run is
+    UNMEASURED rather than scoring a malformed reply as a correct escalation.
     """
     response = await anthropic_client.messages.create(
         model=JUDGE_MODEL,
@@ -1015,9 +1024,21 @@ async def judge_answering(
             getattr(block, "type", None) == "tool_use"
             and block.name == "submit_answering"
         ):
-            stated_value = block.input.get("stated_value")
-            states_a_value = isinstance(stated_value, str) and bool(stated_value.strip())
-            return bool(block.input["answers"]) and states_a_value
+            payload = block.input
+            answers = payload.get("answers")
+            if not isinstance(answers, bool):
+                raise RuntimeError(
+                    f"submit_answering payload has no boolean 'answers': {payload!r}"
+                )
+            if "stated_value" not in payload or not isinstance(
+                payload["stated_value"], (str, type(None))
+            ):
+                raise RuntimeError(
+                    "submit_answering payload has no string-or-null 'stated_value': "
+                    f"{payload!r}"
+                )
+            stated_value = payload["stated_value"]
+            return answers and bool(stated_value and stated_value.strip())
     raise RuntimeError("judge response did not contain submit_answering tool_use block")
 
 
