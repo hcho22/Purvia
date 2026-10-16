@@ -44,7 +44,7 @@ The legs differ sharply on determinism and CI placement (US-059):
   on is the **consolidated false-resolve rate vs the buyer's ceiling**
   (`assert_false_resolve_ceiling`, US-059) — a pinned safety invariant, never a
   per-PR block (the per-PR run never scores the P3 faithfulness leg, so it carries
-  an accepted up-to-a-week detection latency).
+  an accepted up-to-a-month detection latency).
 
 P2 and P3 run the **identical** pipeline traversal — `retrieve → retrieval_gate →
 [if strong] draft → offline faithfulness judge → [if faithful] offline
@@ -2065,7 +2065,7 @@ def render_e7_metrics_section(metrics: E7Metrics) -> list[str]:
 # ceiling gate is INERT there, and the retrieval-leg P1a/P1b false-resolves are
 # independently pinned by the P1a/P1b gate checks (a zero-tolerance invariant). The
 # weekly sweep adds the LLM-judged P3 faithfulness leg, so the faithfulness-leg
-# false-resolve is what this ceiling actually catches — at an accepted up-to-a-week
+# false-resolve is what this ceiling actually catches — at an accepted up-to-a-month
 # detection latency (docs/evals.md "E7 CI placement"; F3/P5).
 #
 # A `None` rate (no unanswerable rows scored) is "not measured", NOT a breach, so
@@ -2170,7 +2170,7 @@ def render_e7_false_resolve_ceiling_section(
         "the weekly sweep, so per-PR (P1a/P1b only) this rate is not measured and the "
         "gate is inert (the retrieval-leg P1a/P1b false-resolves are pinned "
         "separately); the faithfulness-leg false-resolve carries an accepted "
-        "up-to-a-week detection latency.",
+        "up-to-a-month detection latency.",
     ]
 
 
