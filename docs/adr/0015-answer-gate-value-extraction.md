@@ -63,6 +63,25 @@ The inputs were:
 
 A passes the range draft 0 of 8 at temperature 0 and 2 of 8 at temperature 1, so it narrows that regression without removing it.
 
+## Final-head re-measure (2026-10-16)
+
+The same measurement was repeated once on the committed implementation, using the repository's real `answer_gate` and `faithfulness_gate` and the committed live tests.
+It used 299 OpenAI calls and no Anthropic calls, and every run was valid (no failed judge call).
+
+| Measure on the committed gate | Result | Phase-1 candidate A |
+|---|---|---|
+| `e7-p3-10` verbatim triple, temperature 0 | 0 of 20 passed | 0 of 20 |
+| same triple, temperature 1 (margin proxy) | 0 of 20 passed | 0 of 20 (old gate: 10 of 20) |
+| 85 stored triples: should-escalate drafts sent | 1 of 66 (the `e7-p3-07` known gap) | 1 of 66 |
+| 85 stored triples: should-answer drafts withheld | 0 of 19 | 0 of 19 |
+| live rubric layer, runtime half (16 cases, 3 reps, unanimous) | all pass | not run |
+| live measured-trade test, runtime half (49 rows) | false-escalate 0 of 19, false-resolve 0 of 29, known gap still sends | not run |
+| judge latency per reply (p50 faithfulness + answer) | 1.33 s | 1.40 s |
+| judge cost per reply | $0.00078 | $0.00076 |
+
+Against the old gate's $0.00071 and 1.26 s, the committed gate costs about $0.00007 and 0.07 s more per reply that reaches the answer gate.
+The offline (Claude) half of the live layer was not run, as above.
+
 ## Decision
 
 1. **Keep `gpt-4o-mini` at temperature 0 as the runtime judge. Do not adopt gpt-5-mini.**
@@ -83,7 +102,7 @@ A passes the range draft 0 of 8 at temperature 0 and 2 of 8 at temperature 1, so
 
 ## Consequences
 
-- **Cost and latency:** about $0.00005 and 0.14 s more per reply that reaches the answer gate (more input and about 26 more output tokens per call).
+- **Cost and latency:** about $0.00005 to $0.00007 and 0.07 to 0.14 s more per reply that reaches the answer gate (more input and about 26 more output tokens per call; phase 1 measured the higher figures, the committed gate the lower).
 - **A thinner margin removed, not a certainty:** the temperature-1 sample on the `e7-p3-10` triple went from 10 of 20 passing to 0 of 20. That is a proxy for how little serving noise it takes to flip the verdict, not a production rate.
 - **A is weaker than the status quo on one shape:** the bare range draft at temperature 1 (2 of 8 against 0 of 8). Accepted, because the `e7-p3-10` shape has been seen failing in practice and the range shape has not.
 - **Known remaining gap, asserted as such:** a value of the right kind stated for the wrong branch. `e7-p3-07` asks for the goodwill refund cap once a case is escalated to a supervisor, and a draft stating the un-escalated 50% names a real, specific, same-kind value. Every rubric measured passed it (the status quo in the replay and 4 of 10 at temperature 1, A 8 of 8 at temperature 0, A3 8 of 8). `backend/test_answer_gate_rubric.py` holds that draft as `known_gap_answers` and asserts the runtime gate still sends it, so the gap turns the live layer red the day it changes and must then be re-recorded here.
