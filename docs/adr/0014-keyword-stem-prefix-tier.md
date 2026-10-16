@@ -33,8 +33,10 @@ refuses to let an unscorable row vanish.
   Tier 3 only fills slots the first two tiers left empty, so the old rows are always an
   exact prefix of the new rows (same chunk, similarity and order). This is pinned across
   the whole golden set by `backend/test_keyword_stem_tolerance.py`.
-- Short lexemes, digits and identifiers (`err-4102`) are never widened, so exact-token
-  lookups stay exact.
+- Short lexemes, digits and whole identifiers carrying digits or hyphens (`err-4102`,
+  `acme-widget`) are never widened, so exact-token lookups stay exact.
+  Letter-only parts of 6 or more letters inside a compound identifier do get the prefix tier: `WEBHOOK_RETRY_MAX` splits into `webhook`, `retri` and `max`, so `webhoo:*` is added, and `ACME-WIDGETS` adds `widge:*`.
+  Those rows still rank below every tier 1 and tier 2 match.
 - The visibility predicate and granting-principal projection are copied verbatim, so
   this is a recall change only. No `role` / `is_bot` (core invariant 1).
 

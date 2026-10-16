@@ -238,10 +238,15 @@ async def _run() -> None:
         checks += 1
         print("  isolation: ungranted member, non-member, soft-deleted doc -> 0 rows")
 
-        # ---- Exact tokens stay exact: digits/identifiers are never prefix-widened ----
+        # ---- Identifier queries return the pre-migration rows ----
+        # Whole identifiers carrying digits or hyphens (ERR-4102) are never widened.
+        # A 6+ letter part of a compound identifier is (`webhook` in WEBHOOK_RETRY_MAX
+        # adds `webhoo:*`), below tiers 1 and 2; on this corpus every chunk it reaches
+        # already matches tier 2, so the rows stay unchanged.
         for q in ident_queries:
             assert await _search(conn, owner, q, 5) == old_ident[q], (
-                f"identifier query {q!r} changed; digits/identifiers must not be widened"
+                f"identifier query {q!r} changed; tier 3 must not displace or add to "
+                "the exact identifier matches on this corpus"
             )
         checks += 1
         print("  identifiers: exact-token queries return exactly the pre-migration rows")

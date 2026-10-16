@@ -15,8 +15,10 @@
 -- Tier 1 (AND) and tier 2 (exact-lexeme OR) are byte-for-byte unchanged and always
 -- rank above tier 3; tier 3 only fills slots the first two tiers left empty, so a
 -- query that already filled `match_count` returns identical rows, similarities and
--- order. Short lexemes (< 6 letters), digits and identifiers (`err-4102`) are never
--- widened, so exact-token lookups stay exact.
+-- order. Short lexemes (< 6 letters), digits and whole identifiers carrying digits
+-- or hyphens (`err-4102`) are never widened, so exact-token lookups stay exact.
+-- Letter-only parts of 6+ letters inside a compound identifier do get tier 3
+-- (`webhook` in WEBHOOK_RETRY_MAX adds `webhoo:*`), still ranked below tiers 1-2.
 --
 -- The prefix tsquery uses the `simple` config so the truncated stem is compared to
 -- the chunk's already-stemmed lexemes as-is (it is not re-stemmed), and it is
@@ -76,7 +78,8 @@ as $$
         )
       ) as tsq_or_raw,
       -- tier 3: drop the last character of each 6+ letter lexeme and prefix-match.
-      -- Letters only (`^[a-z]{6,}$`): identifiers and numbers are never widened.
+      -- Letters only (`^[a-z]{6,}$`): digit-bearing and hyphenated lexemes are never
+      -- widened; a 6+ letter part of a compound identifier still is.
       to_tsquery(
         'simple'::regconfig,
         array_to_string(

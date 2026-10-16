@@ -167,6 +167,8 @@ jobs:
               # F1/F2/F3 holes this test guards fails BEFORE merge.
               - 'backend/test_sec_rls_hardening.py'
               - 'backend/test_keyword_stem_tolerance.py'
+              # The stem-tolerance test executes its rollback script too.
+              - 'supabase/rollbacks/**'
               - '.github/workflows/retrieval-eval.yml'
             guards:
               - 'evals/retrieval/**'
