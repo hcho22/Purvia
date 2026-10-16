@@ -187,6 +187,10 @@ jobs:
               # import, so a fixture-only edit that breaks it must fail here, not
               # on the next unrelated PR that happens to trigger the job.
               - 'backend/test-fixtures/e7_offline_answer_judge_rows.json'
+              # The measured-trade fixture (ADR-0015) is read by the rubric guard's
+              # keyless fixture-shape test, so an edit that empties a population
+              # (invariant 12) must fail here too.
+              - 'backend/test-fixtures/answer_gate_measured_trade.json'
               # The two runtime-gate modules are guards in this job too: they pin
               # the JUDGE_TEMPERATURE resolution matrix and that both gates
               # actually send the pin. A PR touching only one of them is the edit

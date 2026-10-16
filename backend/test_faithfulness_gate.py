@@ -409,8 +409,9 @@ def test_judge_reasoning_effort_omitted_unless_set() -> None:
                 f"{cast(_FakeCompletions, fake.chat.completions).extra_kwargs!r}",
             )
 
-        # The adopted gpt-5-mini judge config (JUDGE_TEMPERATURE=none +
-        # JUDGE_REASONING_EFFORT=minimal): temperature omitted, reasoning effort sent.
+        # The ADR-0013 gpt-5-mini judge config (JUDGE_TEMPERATURE=none +
+        # JUDGE_REASONING_EFFORT=minimal; measured worse and not adopted, ADR-0015):
+        # temperature omitted, reasoning effort sent.
         os.environ["JUDGE_TEMPERATURE"] = "none"
         os.environ["JUDGE_REASONING_EFFORT"] = "minimal"
         _, fake = _run(_judgment(True, 0.9), "x")

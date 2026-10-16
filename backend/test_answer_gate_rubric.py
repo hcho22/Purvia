@@ -39,6 +39,38 @@ CONTEXT, no draft that merely restates what the CONTEXT does contain can be that
 value. The `_CASES` rows below carry the corpus slice each draft was written
 from, and the live layer threads it into both implementations.
 
+THE FIX THIS FILE NOW PINS (ADR-0015, 2026-10-16)
+-------------------------------------------------
+The residual above was closed in the prompt but not in the verdict: a single
+boolean on the adjacent-fact draft was a thin argmax. On the verbatim `e7-p3-10`
+triple the `answers` token's P(true) read 0.22 to 0.44 across identical calls and
+sampling at temperature 1 passed it 10 of 20, so the temperature-0 verdict could
+flip with serving noise (the erratum recorded 5 of 10 passing; a 40-run
+measurement on 2026-10-15 recorded 0, which is what a thin argmax looks like from
+the lucky side). The runtime gate now has the judge commit to `asked_value`,
+`stated_value` and `same_kind` BEFORE it decides, and the verdict requires a stated
+value of the asked kind. The unit layer pins the mechanism with no model (verdict
+cells, field order, the lockstep rules, the offline mirror carrying the same
+fields); the live layer pins what it CONCLUDES, on both implementations:
+`_CASES` (hand-written and real-context rows, three reps, unanimous) and
+`answer_gate_measured_trade.json` (the measured trade: 19 should-answer drafts that
+must still send, the 24 distinct `e7-p3-10` drafts that must not, a constructed
+who-pays answer to a who-pays question that must send next to a constructed range
+for an exact-amount question that must not, and the one KNOWN REMAINING GAP below).
+
+THE KNOWN REMAINING GAP, asserted as such
+-----------------------------------------
+`e7-p3-07` asks for the goodwill refund cap ONCE A CASE IS ESCALATED to a
+supervisor. A draft that states the UN-escalated cap ("50% of the order total")
+names a real, specific value of the asked kind, for the wrong branch. Every rubric
+measured on 2026-10-15 sent it: the old gate (in the replay, and 4 of 10 at
+temperature 1), this one (8 of 8 at temperature 0) and a variant with a same-case
+field (8 of 8). The measured-trade fixture holds that draft as `known_gap_answers`
+and the live layer asserts the gate STILL sends it. That is deliberate: a gap that
+is only printed can close or widen unnoticed; one asserted as it is today turns red
+the day it changes, and the failure message says to update ADR-0015 and the row.
+Only the runtime half is asserted (the offline judge was not measured on it).
+
 A KNOWN LIMITATION of the issue-#104 clause
 -------------------------------------------
 The clause is stated UNCONDITIONALLY: a reply that only reports the answer is
@@ -91,16 +123,18 @@ What that costs, stated plainly:
     2026-10-15. Of the real-context rows, the runtime gate rejected `e7-p3-01`,
     `e7-p3-05-disclaimer` and `e7-p3-09` 5/5 on 2026-10-15; the bare-draft
     `e7-p3-05` row was taken from the 2026-10-11 snapshot without a live run, so
-    its first live run is its measurement. One row is not asserted: the RUNTIME
-    half of the real-context `e7-p3-10` row (`_RUNTIME_KNOWN_OPEN_RISK`) let that
-    triple through 5 of 10 times on 2026-10-15. That one row on that one
-    implementation is reported as a KNOWN OPEN RISK and not asserted, so the
-    layer is not red on a product defect it cannot fix. The exemption never
-    retires on its own: it is removed by hand, in the change that fixes the
-    runtime gate, and the row is asserted only after that. The pin removes the
+    its first live run is its measurement. Every row is now asserted on every
+    implementation it runs on: the exemption that used to cover the RUNTIME half of
+    the real-context `e7-p3-10` row was removed in the change that made the gate
+    extract the asked and stated value (ADR-0015), as its own text required. The
+    offline half of this layer has not been run on that change: the Claude judge's
+    `same_kind` was measured only on the measured trade's should-answer rows (20 of
+    20 answered, ADR-0015), so the first hand run with both keys is this layer's
+    first offline measurement. The pin removes the
     SAMPLER, which is best-effort rather than a guarantee — no `seed` is passed —
-    so a split can still come from the provider rather than from the rubric. It fails the test either way,
-    because both causes need looking at and neither should be retried away.
+    so a split can still come from the provider rather than from the rubric. It
+    fails the test either way, because both causes need looking at and neither
+    should be retried away.
 
 The offline half stays fixture-free in a different sense: recording fake clients
 invoke both judge entry points and assert that the final emitted prompts and tool
@@ -123,12 +157,14 @@ from __future__ import annotations
 
 import ast
 import asyncio
+import contextlib
 import json
 import os
+import re
 import sys
 import types
 from pathlib import Path
-from typing import Any, Awaitable, Callable
+from typing import Any, Awaitable, Callable, Iterator
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
@@ -224,6 +260,15 @@ _SHARED_RULES = {
     "context restatement cannot invent the absent value": (
         "merely restates what the CONTEXT does contain can be that value"
     ),
+    # --- the ADR-0015 addition ---
+    "commits asked and stated value before deciding": "commit to two fields",
+    "no stated value means no answer": (
+        "`stated_value` is null and the ANSWER does not answer the QUESTION"
+    ),
+    "the stated value must be the same kind": "the SAME KIND of thing",
+    "a range or estimate is not an exact amount": (
+        "a range, an estimate, 'varies', or a fact about who pays"
+    ),
 }
 
 _PROMPT_QUESTION = "How much is international return shipping?"
@@ -238,7 +283,14 @@ class _RecordingRuntimeCompletions:
     async def parse(self, **kwargs: Any) -> Any:
         self.calls.append(kwargs)
         message = types.SimpleNamespace(
-            parsed=AnswerJudgment(answers=True, score=1.0), refusal=None
+            parsed=AnswerJudgment(
+                asked_value="the fee amount",
+                stated_value="the customer pays",
+                same_kind=True,
+                answers=True,
+                score=1.0,
+            ),
+            refusal=None,
         )
         return types.SimpleNamespace(
             choices=[types.SimpleNamespace(message=message)]
@@ -257,6 +309,7 @@ class _RecordingAnthropicMessages:
             input={
                 "asked_value": "the fee amount",
                 "stated_value": "the customer pays",
+                "same_kind": True,
                 "answers": True,
             },
         )
@@ -373,6 +426,74 @@ def test_both_tool_schemas_describe_the_disposition_case() -> None:
     print("ok: both tool schemas describe the disposition case")
 
 
+# The two halves of the ADR-0015 kind condition, as the rule states them.
+_KIND_PAIRS = "(an amount for an amount, a duration for a duration, a yes/no for a yes/no)"
+_NOT_AN_EXACT_AMOUNT = (
+    "a range, an estimate, 'varies', or a fact about who pays, when, or where"
+)
+
+
+def _sentence_stating(text: str, fragment: str) -> str:
+    sentences = [s for s in re.split(r"(?<=[.?!])\s+", text) if fragment in s]
+    _check(
+        len(sentences) == 1,
+        f"want exactly one sentence stating {fragment!r}, got {sentences!r}",
+    )
+    return sentences[0]
+
+
+def test_same_kind_field_and_kind_rule_state_the_same_condition() -> None:
+    """The `same_kind` field description and the kind rule state ONE condition.
+
+    The judge reads both in the same call: the rule in the prompt, the description
+    in the schema it fills. The condition is that the stated value is the same kind
+    as the one asked, and only where an EXACT AMOUNT is asked must it also be a
+    specific amount rather than a range, an estimate, 'varies', or a fact about who
+    pays, when, or where. A description that drops the exact-amount scope tells the
+    judge that a who-pays answer is never the same kind, so a faithful "the customer
+    pays" for "who pays?" escalates and latches the conversation. Checked on the
+    emitted prompt and schema of both implementations, so a reworded literal on
+    either side fails here.
+    """
+    runtime_call = _capture_runtime_call()
+    offline_call = _capture_offline_call()
+    texts = (
+        (
+            "runtime kind rule (emitted system prompt)",
+            "\n".join(message["content"] for message in runtime_call["messages"]),
+        ),
+        (
+            "runtime AnswerJudgment.same_kind (emitted schema)",
+            runtime_call["response_format"].model_json_schema()["properties"][
+                "same_kind"
+            ]["description"],
+        ),
+        (
+            "offline kind rule (emitted prompt)",
+            "\n".join(message["content"] for message in offline_call["messages"]),
+        ),
+        (
+            "offline submit_answering.same_kind (emitted tool schema)",
+            offline_call["tools"][0]["input_schema"]["properties"]["same_kind"][
+                "description"
+            ],
+        ),
+    )
+    for what, text in texts:
+        _check(
+            _KIND_PAIRS in text,
+            f"{what} must state the same-kind pairs {_KIND_PAIRS!r}: {text!r}",
+        )
+        exclusion = _sentence_stating(text, _NOT_AN_EXACT_AMOUNT)
+        _check(
+            "exact amount" in exclusion,
+            f"{what} states the range/who-pays exclusion without scoping it to an "
+            f"exact amount, which is not the condition the kind rule states: "
+            f"{exclusion!r}",
+        )
+    print("ok: the same_kind field and the kind rule state the same condition on both sides")
+
+
 class _ScriptedAnthropicMessages:
     """Returns one scripted `submit_answering` payload, whatever it is asked."""
 
@@ -394,62 +515,71 @@ def _offline_verdict(payload: dict[str, Any]) -> bool:
 
 
 def test_offline_verdict_requires_a_stated_value() -> None:
-    """The offline verdict is `answers AND the judge named the value it gave`.
+    """The offline verdict is `answers AND the judge named the value it gave AND the
+    value is of the asked kind`.
 
     This is the 2026-09-20 .. 2026-10-11 weekly breach, pinned WITHOUT a model: a
     bare-boolean judge shown the retrieved context graded the draft's truth instead
     of whether it answers, and returned `answers=true` for an accurate "I don't have
     that information". The judge must now commit to `stated_value` first, and a
     verdict of "answers" with no stated value is self-contradictory, so it resolves
-    toward ESCALATION. Every cell here is a verdict the weekly P3 leg turns into a
-    false-resolve if it comes back True.
+    toward ESCALATION. `same_kind` (ADR-0015) is the runtime gate's own extra field,
+    mirrored here so the weekly measures the verdict the buyer ships. Every cell is a
+    verdict the weekly P3 leg turns into a false-resolve if it comes back True.
     """
     asked = "the return shipping fee for a return over 20 lbs"
+
+    def payload(stated: Any, answers: bool = True, same_kind: bool = True) -> dict[str, Any]:
+        return {
+            "asked_value": asked,
+            "stated_value": stated,
+            "same_kind": same_kind,
+            "answers": answers,
+        }
+
     cases = [
         # (payload, expected verdict, why)
+        (payload("$14.95"), True, "a real value was stated and the judge says it answers"),
         (
-            {"asked_value": asked, "stated_value": "$14.95", "answers": True},
-            True,
-            "a real value was stated and the judge says it answers",
-        ),
-        (
-            {"asked_value": asked, "stated_value": None, "answers": True},
+            payload(None),
             False,
             "THE BREACH: the judge said it answers but named no value the customer holds",
         ),
+        (payload(""), False, "an empty stated value is no value"),
+        (payload("   "), False, "a whitespace-only stated value is no value"),
+        (payload("null"), False, "the word null instead of JSON null is no value"),
+        (payload(" NULL "), False, "the word null, padded, in any case, is no value"),
+        (payload("$14.95", answers=False), False, "a stated value never overrides an explicit non-answer verdict"),
+        (payload(None, answers=False), False, "a plain deferral stays a non-answer"),
         (
-            {"asked_value": asked, "stated_value": "", "answers": True},
+            payload("customer's expense", same_kind=False),
             False,
-            "an empty stated value is no value",
+            "ADR-0015: a value of the wrong kind (who pays, for a fee amount) is no answer",
         ),
         (
-            {"asked_value": asked, "stated_value": "   ", "answers": True},
+            payload("10% to 80%", same_kind=False),
             False,
-            "a whitespace-only stated value is no value",
+            "ADR-0015: a range is not an exact amount",
         ),
         (
-            {"asked_value": asked, "stated_value": "$14.95", "answers": False},
+            payload("$14.95", answers=False, same_kind=False),
             False,
-            "a stated value never overrides an explicit non-answer verdict",
-        ),
-        (
-            {"asked_value": asked, "stated_value": None, "answers": False},
-            False,
-            "a plain deferral stays a non-answer",
+            "every flag against the draft stays a non-answer",
         ),
     ]
-    for payload, expected, why in cases:
-        got = _offline_verdict(payload)
+    for p, expected, why in cases:
+        got = _offline_verdict(p)
         _check(
             got is expected,
-            f"offline verdict for {payload!r} was {got!r}, want {expected!r} - {why}",
+            f"offline verdict for {p!r} was {got!r}, want {expected!r} - {why}",
         )
-    print(f"ok: the offline verdict requires a stated value ({len(cases)} cells)")
+    print(f"ok: the offline verdict requires a stated value of the asked kind ({len(cases)} cells)")
 
 
 def test_offline_judge_raises_on_a_malformed_payload() -> None:
-    """A payload with no boolean `answers` or no string-or-null `stated_value`
-    is no verdict at all, so it RAISES. `asked_value` is not validated.
+    """A payload with no boolean `answers`, no string-or-null `stated_value` or no
+    boolean `same_kind` is no verdict at all, so it RAISES. `asked_value` is not
+    validated.
 
     Scoring it False would read as the answer leg correctly escalating a P3 row,
     and if the runtime gate also said False the parity leg would record agreement:
@@ -476,6 +606,28 @@ def test_offline_judge_raises_on_a_malformed_payload() -> None:
             {"asked_value": asked, "stated_value": "$14.95", "answers": "false"},
             "answers is not a boolean (bool('false') would read as True)",
         ),
+        (
+            {"asked_value": asked, "stated_value": "$14.95", "answers": True},
+            "the payload omits same_kind (ADR-0015)",
+        ),
+        (
+            {
+                "asked_value": asked,
+                "stated_value": "$14.95",
+                "same_kind": "true",
+                "answers": True,
+            },
+            "same_kind is not a boolean (a truthy string would pass it)",
+        ),
+        (
+            {
+                "asked_value": asked,
+                "stated_value": "$14.95",
+                "same_kind": None,
+                "answers": True,
+            },
+            "same_kind is null (null is not 'the same kind')",
+        ),
     ]
     for payload, why in cases:
         try:
@@ -500,12 +652,13 @@ def test_offline_tool_schema_commits_the_values_before_the_verdict() -> None:
     schema = _capture_offline_call()["tools"][0]["input_schema"]
     order = list(schema["properties"])
     _check(
-        order == ["asked_value", "stated_value", "answers"],
+        order == ["asked_value", "stated_value", "same_kind", "answers"],
         f"offline tool properties must be ordered asked_value, stated_value, "
-        f"answers (verdict LAST), got {order!r}",
+        f"same_kind, answers (verdict LAST), got {order!r}",
     )
     _check(
-        set(schema["required"]) == {"asked_value", "stated_value", "answers"},
+        set(schema["required"])
+        == {"asked_value", "stated_value", "same_kind", "answers"},
         f"offline tool must REQUIRE all three fields, got {schema['required']!r}",
     )
     stated = schema["properties"]["stated_value"]
@@ -526,7 +679,27 @@ def test_offline_tool_schema_commits_the_values_before_the_verdict() -> None:
             f"stated_value must say when to return null (missing {fragment!r}): "
             f"{stated['description']!r}",
         )
-    print("ok: the offline tool commits asked_value and stated_value before the verdict")
+    print("ok: the offline tool commits asked_value, stated_value and same_kind before the verdict")
+
+
+def test_runtime_and_offline_commit_the_same_fields_in_the_same_order() -> None:
+    """Invariant 8, structurally: the runtime `AnswerJudgment` and the offline
+    `submit_answering` tool must ask the judge for the SAME extraction fields in the
+    SAME order, with the verdict after them. The runtime adds only `score` (its
+    cutoff input), which the offline verdict does not use.
+
+    Prompt wording is checked by `test_both_rubrics_state_every_shared_rule`; this
+    is the schema half, so a field added to one side and not the other fails here
+    instead of turning the weekly into a measurement of a different verdict.
+    """
+    runtime = [f for f in AnswerJudgment.model_fields if f != "score"]
+    offline = list(_capture_offline_call()["tools"][0]["input_schema"]["properties"])
+    _check(
+        runtime == offline,
+        f"runtime fields {runtime!r} and offline fields {offline!r} must match "
+        "one to one, verdict last",
+    )
+    print(f"ok: runtime and offline judges commit the same {len(runtime)} fields in the same order")
 
 
 def test_non_answer_failures_are_structured_independently_of_reason() -> None:
@@ -800,17 +973,6 @@ def _real_context_label(row_id: str) -> str:
     return f"{row_id} REAL retrieved context"
 
 
-# The ONE row the live layer measures but does not assert, on the runtime
-# implementation only. Replayed 10 times on 2026-10-15 (gpt-4o-mini, temperature 0,
-# default cutoff) the runtime gate let this exact triple through 5 of 10 times, an
-# OPEN PRODUCT RISK recorded in the issue-#163 erratum
-# (docs/escalation-weekly/README.md). Asserting it would leave this hand-run layer
-# red or flaky on a known product defect rather than on a rubric regression. The
-# offline half still asserts it. Nothing retires this exemption automatically:
-# remove it by hand in the change that fixes the runtime gate.
-_RUNTIME_KNOWN_OPEN_RISK = _real_context_label("e7-p3-10")
-
-
 def _real_context_cases() -> list[tuple[str, str, str, str, bool, str]]:
     _check(
         _REAL_CONTEXT_FIXTURE.is_file(),
@@ -868,18 +1030,198 @@ def _skip(reason: str) -> None:
     raise _Skipped(reason)
 
 
+# --- shared live-layer plumbing ---------------------------------------------
+
+Judge = Callable[[str, str, str], Awaitable[tuple[bool, bool]]]
+
+
+@contextlib.contextmanager
+def _neutral_judge_env() -> Iterator[None]:
+    """Neutralize the ambient judge environment for the duration of a live run.
+
+    The runtime half calls the real `answer_gate`, which resolves its knobs from the
+    ambient environment - and the developer most likely to run this file is the one
+    debugging the pin, whose shell may well export `JUDGE_TEMPERATURE=none` (the
+    documented escape hatch), a bring-your-own `JUDGE_MODEL` the plain OpenAI client
+    built below cannot serve, or the ADR-0013 `JUDGE_REASONING_EFFORT` that a
+    non-reasoning model 400s on. Any of them silently changes the run whose
+    unanimity assertion and SPLIT message both state "gpt-4o-mini at temperature 0",
+    so a run whose stated mitigation was never in effect would be reportable as a
+    clean measurement - invariant 12, in the module that argues it hardest. This bug
+    class was fixed once already in the unit-layer gate tests and came back here
+    because the fix was applied only where the finding pointed.
+    """
+    names = ("JUDGE_MODEL", "JUDGE_TEMPERATURE", "JUDGE_REASONING_EFFORT")
+    saved = {k: os.environ.get(k) for k in names}
+    for key in names:
+        os.environ.pop(key, None)
+    try:
+        yield
+    finally:
+        for key, value in saved.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
+def _live_impls() -> list[tuple[str, Judge]]:
+    """The judge implementations a live run can exercise with the keys at hand."""
+    openai_key = os.environ.get("OPENAI_API_KEY")
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+    impls: list[tuple[str, Judge]] = []
+    if openai_key:
+        from openai import AsyncOpenAI
+
+        oc = AsyncOpenAI(api_key=openai_key)
+
+        async def runtime(question: str, context: str, draft: str) -> tuple[bool, bool]:
+            # `answer_gate` fails CLOSED, so an expired key, a rate limit, a
+            # timeout or a network blip all return answers=False - the same value a
+            # correct non-answer verdict returns. Reading only `.answers` would
+            # print `ok` for every must_answer=False case while zero rubric
+            # evaluation happened, which is exactly the invariant-12 shape the
+            # project forbids. The structured failure signal separates the two,
+            # independently of diagnostic wording.
+            decision = await answer_gate(
+                oc, question, draft, DEFAULT_ANSWER_CUTOFF, context=context
+            )
+            return decision.answers, decision.judge_failed
+
+        impls.append(("runtime", runtime))
+    if anthropic_key:
+        try:
+            import anthropic
+        except ImportError as exc:
+            print(
+                "note: ANTHROPIC_API_KEY is set but the OFFLINE mirror's "
+                f"dependencies are not installed ({exc.name or exc}); skipping "
+                "the OFFLINE mirror half"
+            )
+        else:
+            ac = anthropic.AsyncAnthropic(api_key=anthropic_key)
+
+            # The offline mirror RAISES on a failed call or a payload with no
+            # boolean `answers`, no string-or-null `stated_value` or no boolean
+            # `same_kind` rather than failing closed, so it cannot silently report
+            # a dead judge as a verdict and never needs a failure tag.
+            async def offline(question: str, context: str, draft: str) -> tuple[bool, bool]:
+                return await judge_answering(ac, question, context, draft), False
+
+            impls.append(("offline", offline))
+    return impls
+
+
+def _require_live_keys() -> None:
+    if not os.environ.get("OPENAI_API_KEY") and not os.environ.get("ANTHROPIC_API_KEY"):
+        _skip("neither OPENAI_API_KEY nor ANTHROPIC_API_KEY is set")
+
+
+# --- the measured-trade fixture (ADR-0015) ---------------------------------
+
+_TRADE_FIXTURE = ROOT / "backend" / "test-fixtures" / "answer_gate_measured_trade.json"
+_TRADE_EXPECTATIONS = ("answers", "escalates", "known_gap_answers")
+# The counts the ADR-0015 numbers are quoted from. A change here is a change to the
+# measured trade, so it is made on purpose, with the ADR and the PR text.
+_TRADE_N_ANSWERS = 19
+_TRADE_N_P310_DRAFTS = 24
+_TRADE_GAP_ID = "e7-p3-07 wrong-branch"
+
+
+def _trade_rows() -> list[dict[str, Any]]:
+    _check(
+        _TRADE_FIXTURE.is_file(),
+        f"missing fixture {_TRADE_FIXTURE}: the measured-trade rows are read from it",
+    )
+    data = json.loads(_TRADE_FIXTURE.read_text(encoding="utf-8"))
+    contexts = data["contexts"]
+    rows = []
+    for row in data["rows"]:
+        _check(
+            row["expect"] in _TRADE_EXPECTATIONS,
+            f"{row['id']}: expect must be one of {_TRADE_EXPECTATIONS}, got {row['expect']!r}",
+        )
+        _check(
+            row["qid"] in contexts and contexts[row["qid"]].strip(),
+            f"{row['id']}: no retrieved context stored for {row['qid']!r}",
+        )
+        rows.append({**row, "context": contexts[row["qid"]]})
+    return rows
+
+
+def test_measured_trade_fixture_is_well_formed() -> None:
+    """The fixture the live trade test reads must measure what the ADR quotes.
+
+    Always runs, no keys: a fixture that quietly lost its should-answer rows would
+    let the live test pass a gate that escalates everything (invariant 12: measured
+    nothing is not a measurement), so the populations are counted here, not just
+    iterated there.
+    """
+    rows = _trade_rows()
+    ids = [r["id"] for r in rows]
+    _check(len(ids) == len(set(ids)), "measured-trade row ids must be unique")
+    for r in rows:
+        _check(r["question"].strip() and r["draft"].strip(), f"{r['id']}: empty question or draft")
+    answers = [r for r in rows if r["expect"] == "answers" and not r.get("constructed")]
+    gap = [r for r in rows if r["expect"] == "known_gap_answers"]
+    p310 = [r for r in rows if r["qid"] == "e7-p3-10" and not r.get("constructed")]
+    _check(
+        len(answers) == _TRADE_N_ANSWERS,
+        f"want {_TRADE_N_ANSWERS} real should-answer rows (the 'no loss' side of the "
+        f"trade), got {len(answers)}",
+    )
+    _check(
+        {r["qid"] for r in answers} == {f"e7-p2-0{i}" for i in range(1, 5)},
+        "the should-answer rows must cover all four gold P2 questions",
+    )
+    _check(
+        len(p310) == _TRADE_N_P310_DRAFTS and all(r["expect"] == "escalates" for r in p310),
+        f"want {_TRADE_N_P310_DRAFTS} e7-p3-10 drafts, all expected to escalate, got "
+        f"{len(p310)}",
+    )
+    _check(
+        [r["id"] for r in gap] == [_TRADE_GAP_ID],
+        f"exactly one known-gap row ({_TRADE_GAP_ID!r}) is expected, got {[r['id'] for r in gap]}",
+    )
+    _check(
+        "50%" in gap[0]["draft"] and "escalated" in gap[0]["question"],
+        "the known gap is the un-escalated cap stated for an after-escalation question",
+    )
+    real = {c[0]: c for c in _CASES}[_real_context_label("e7-p3-10")]
+    _check(
+        any(r["draft"] == real[2] and r["context"] == real[3] for r in p310),
+        "the verbatim e7-p3-10 triple of the real-context fixture must be among the "
+        "measured-trade rows, with the same context",
+    )
+    _check(
+        any(r["population"] == "range" and r["expect"] == "escalates" for r in rows),
+        "the constructed range draft (the shape the stated-value mechanism alone "
+        "mishandles) must be in the trade",
+    )
+    _check(
+        any(
+            r["population"] == "who_pays" and r["expect"] == "answers" and r.get("constructed")
+            for r in rows
+        ),
+        "the constructed who-pays answer to a who-pays question (the case the "
+        "exact-amount scope of `same_kind` exists for) must be in the trade, "
+        "expected to send",
+    )
+    print(
+        f"ok: the measured-trade fixture holds {len(answers)} should-answer, "
+        f"{len(p310)} e7-p3-10, 1 known-gap, the range and the who-pays rows"
+    )
+
+
 def test_live_rubric_discrimination() -> None:
     """Exercise the REAL rubric, on both implementations, against labelled cases.
 
     Skips cleanly when a key or package is absent so the unit layer above still
     runs anywhere. Requires unanimity over `_REPS` calls per case: both judges are
-    pinned to temperature 0, so a split verdict is a finding, not a flake. The one
-    exception is `_RUNTIME_KNOWN_OPEN_RISK` on the runtime implementation, whose
-    verdicts are printed as a KNOWN OPEN RISK instead of asserted until the
-    exemption is removed by hand. That
+    pinned to temperature 0, so a split verdict is a finding, not a flake. That
     claim only holds if the pin the failure message asserts is the pin that
     actually ran, so the ambient judge environment is neutralized for the duration
-    of this layer - see the comment on `saved_env` below.
+    of this layer - see `_neutral_judge_env`.
 
     A judge that was CALLED AND FAILED is a third outcome, distinct from both a
     clean skip and a verdict: it is reported as UNMEASURED and fails the test. The
@@ -888,84 +1230,11 @@ def test_live_rubric_discrimination() -> None:
     no rubric at all - invariant 12's "measured nothing must never be reportable as
     a measurement", in the one layer whose entire job is to measure the rubric.
     """
-    openai_key = os.environ.get("OPENAI_API_KEY")
-    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not openai_key and not anthropic_key:
-        _skip("neither OPENAI_API_KEY nor ANTHROPIC_API_KEY is set")
-
-    # The LIVE layer must neutralize the SAME judge env the unit layer does. Its
-    # runtime half calls the real `answer_gate`, which resolves both knobs from the
-    # ambient environment - and the developer most likely to run this file is the
-    # one debugging the pin, whose shell may well export `JUDGE_TEMPERATURE=none`
-    # (the documented escape hatch) or a bring-your-own `JUDGE_MODEL` the plain
-    # OpenAI client built below cannot serve. Either silently un-pins the half whose
-    # unanimity assertion and SPLIT message both state "at temperature 0", so a run
-    # whose stated mitigation was never in effect would be reportable as a clean
-    # measurement - invariant 12, in the module that argues it hardest. This bug
-    # class was fixed once already in the unit-layer gate tests and came back here
-    # because the fix was applied only where the finding pointed.
-    saved_env = {k: os.environ.get(k) for k in ("JUDGE_MODEL", "JUDGE_TEMPERATURE")}
-    for key in saved_env:
-        os.environ.pop(key, None)
-
+    _require_live_keys()
     failures: list[str] = []
-    known_open_risks: list[str] = []
-
-    Judge = Callable[[str, str, str], Awaitable[tuple[bool, bool]]]
-
-    def _build_impls() -> list[tuple[str, Judge]]:
-        impls: list[tuple[str, Judge]] = []
-        if openai_key:
-            from openai import AsyncOpenAI
-
-            oc = AsyncOpenAI(api_key=openai_key)
-
-            async def runtime(
-                question: str, context: str, draft: str
-            ) -> tuple[bool, bool]:
-                # `answer_gate` fails CLOSED, so an expired key, a rate limit, a
-                # timeout or a network blip all return answers=False - the same
-                # value a correct non-answer verdict returns. Reading only
-                # `.answers` would print `ok` for every must_answer=False case
-                # while zero rubric evaluation happened, which is exactly the
-                # invariant-12 shape the project forbids. The structured failure
-                # signal separates the two, independently of diagnostic wording.
-                decision = await answer_gate(
-                    oc,
-                    question,
-                    draft,
-                    DEFAULT_ANSWER_CUTOFF,
-                    context=context,
-                )
-                return decision.answers, decision.judge_failed
-
-            impls.append(("runtime", runtime))
-        if anthropic_key:
-            try:
-                import anthropic
-            except ImportError as exc:
-                print(
-                    "note: ANTHROPIC_API_KEY is set but the OFFLINE mirror's "
-                    f"dependencies are not installed ({exc.name or exc}); skipping "
-                    "the OFFLINE mirror half"
-                )
-            else:
-                ac = anthropic.AsyncAnthropic(api_key=anthropic_key)
-
-                # The offline mirror RAISES on a failed call or a payload with no
-                # boolean `answers` or no string-or-null `stated_value` rather
-                # than failing closed, so it cannot silently report a dead judge
-                # as a verdict and never needs a failure tag.
-                async def offline(
-                    question: str, context: str, draft: str
-                ) -> tuple[bool, bool]:
-                    return await judge_answering(ac, question, context, draft), False
-
-                impls.append(("offline", offline))
-        return impls
 
     async def run() -> None:
-        impls = _build_impls()
+        impls = _live_impls()
         if not impls:
             _skip("no usable judge implementation")
         # Record WHICH judge answered and at what temperature: the determinism the
@@ -1001,25 +1270,6 @@ def test_live_rubric_discrimination() -> None:
                     continue
 
                 verdicts = [answers for answers, _ in results]
-                if impl_name == "runtime" and label == _RUNTIME_KNOWN_OPEN_RISK:
-                    print(
-                        f"  KNOWN OPEN RISK [{impl_name:>7}] {label}: "
-                        f"answers={verdicts} (want {must_answer}); reported, NOT "
-                        "asserted - the runtime gate let this triple through 5 of "
-                        "10 on 2026-10-15. The exemption never retires on its own: "
-                        "remove _RUNTIME_KNOWN_OPEN_RISK by hand in the change that "
-                        "fixes the runtime gate, and only then is this row asserted"
-                    )
-                    if all(answers is must_answer for answers in verdicts):
-                        print(
-                            f"  EXEMPTION MAY BE REMOVABLE [{impl_name:>7}] {label}: "
-                            f"the runtime gate escalated it {_REPS}/{_REPS} this run. "
-                            "If the runtime gate has been fixed, delete "
-                            "_RUNTIME_KNOWN_OPEN_RISK so this row is asserted again; "
-                            "one clean run is not proof against a 5-of-10 leak rate"
-                        )
-                    known_open_risks.append(f"[{impl_name}] {label}: answers={verdicts}")
-                    continue
                 unanimous = len(set(verdicts)) == 1
                 got = verdicts[0] if unanimous else verdicts
                 ok = unanimous and verdicts[0] is must_answer
@@ -1045,31 +1295,118 @@ def test_live_rubric_discrimination() -> None:
                         f"{must_answer} — {why}"
                     )
 
-    try:
+    with _neutral_judge_env():
         asyncio.run(run())
-    finally:
-        for key, value in saved_env.items():
-            if value is None:
-                os.environ.pop(key, None)
-            else:
-                os.environ[key] = value
 
     _check(not failures, "live rubric discrimination failed:\n  - " + "\n  - ".join(failures))
     print("ok: the live rubric separates deferral-shaped non-answers from real answers")
-    for report in known_open_risks:
-        print(f"  KNOWN OPEN RISK, measured but not asserted: {report}")
+
+
+def test_live_measured_trade() -> None:
+    """The measured trade of ADR-0015, held on the live judges (one pass, T=0).
+
+    * every `answers` row (19 real should-answer drafts from the gold P2 questions,
+      and a constructed who-pays answer to a who-pays question) must still SEND:
+      the mechanism may not cost a deflection it did not cost on 2026-10-15 (0 of
+      19, and 0 of 8 on the hand-written answerable rows);
+    * every `escalates` row (the 24 distinct `e7-p3-10` drafts, the disclaimed
+      `e7-p3-07` drafts and a constructed bare range draft for an exact-amount
+      question) must NOT send;
+    * the `known_gap_answers` row is the `e7-p3-07` wrong-branch draft: the gate
+      sends it TODAY and this test asserts that it still does, so the gap cannot
+      close or widen unnoticed (see the module docstring). Runtime half only.
+
+    One pass rather than `_REPS`: this is a population check, not a unanimity check.
+    The same judge-failed -> UNMEASURED rule as the discrimination test applies.
+    """
+    _require_live_keys()
+    rows = _trade_rows()
+    failures: list[str] = []
+    summary: list[str] = []
+
+    async def run() -> None:
+        impls = _live_impls()
+        if not impls:
+            _skip("no usable judge implementation")
+        print(
+            f"  live measured trade: {len(rows)} rows x {len(impls)} implementation(s) "
+            f"= {len(rows) * len(impls)} live judge calls"
+        )
+        sem = asyncio.Semaphore(6)
+
+        async def one(judge: Judge, row: dict[str, Any]) -> tuple[bool, bool]:
+            async with sem:
+                return await judge(row["question"], row["context"], row["draft"])
+
+        for impl_name, judge in impls:
+            results = await asyncio.gather(*[one(judge, row) for row in rows])
+            if any(failed for _, failed in results):
+                n = sum(1 for _, failed in results if failed)
+                print(f"  UNMEASURED [{impl_name:>7}] {n} of {len(rows)} calls failed")
+                failures.append(
+                    f"[{impl_name}] HARNESS FAILURE - {n} judge call(s) failed, so the "
+                    "trade was not measured on this implementation. Fix credentials or "
+                    "connectivity and re-run."
+                )
+                continue
+            false_escalate = 0
+            false_resolve = 0
+            gap_sent: bool | None = None
+            for row, (answers, _) in zip(rows, results):
+                if row["expect"] == "answers" and not answers:
+                    false_escalate += 1
+                    failures.append(
+                        f"[{impl_name}] {row['id']}: a should-answer draft was withheld "
+                        "- the stricter verdict cost a deflection (ADR-0015 measured none withheld)"
+                    )
+                elif row["expect"] == "escalates" and answers:
+                    false_resolve += 1
+                    failures.append(
+                        f"[{impl_name}] {row['id']}: a must-escalate draft SENT - "
+                        f"{row['population']} shape ({row['draft'][:90]!r})"
+                    )
+                elif row["expect"] == "known_gap_answers":
+                    gap_sent = answers
+            n_answers = sum(1 for r in rows if r["expect"] == "answers")
+            n_escal = sum(1 for r in rows if r["expect"] == "escalates")
+            summary.append(
+                f"[{impl_name}] false-escalate {false_escalate}/{n_answers}, "
+                f"false-resolve {false_resolve}/{n_escal}, known gap "
+                f"{'still sends' if gap_sent else 'no longer sends'} ({_TRADE_GAP_ID})"
+            )
+            if impl_name == "runtime" and gap_sent is not True:
+                failures.append(
+                    f"[runtime] {_TRADE_GAP_ID}: the KNOWN REMAINING GAP changed - the "
+                    "runtime gate no longer sends the wrong-branch draft. If that is an "
+                    "improvement, set the row to expect='escalates', and update "
+                    "ADR-0015's known-gap paragraph and the banner above "
+                    "`_ANSWER_EXTRACTION_RULE` in backend/escalation.py. If it is a "
+                    "one-off split from the provider, re-run before touching anything."
+                )
+
+    with _neutral_judge_env():
+        asyncio.run(run())
+
+    for line in summary:
+        print(f"  {line}")
+    _check(not failures, "live measured trade failed:\n  - " + "\n  - ".join(failures))
+    print("ok: the live gate holds the measured trade (no loss on should-answer, known gap as recorded)")
 
 
 def main() -> int:
     tests = [
         test_both_rubrics_state_every_shared_rule,
         test_both_tool_schemas_describe_the_disposition_case,
+        test_same_kind_field_and_kind_rule_state_the_same_condition,
         test_offline_verdict_requires_a_stated_value,
         test_offline_judge_raises_on_a_malformed_payload,
         test_offline_tool_schema_commits_the_values_before_the_verdict,
+        test_runtime_and_offline_commit_the_same_fields_in_the_same_order,
         test_non_answer_failures_are_structured_independently_of_reason,
         test_boot_warning_call_site_is_wired_to_the_widget_surface,
+        test_measured_trade_fixture_is_well_formed,
         test_live_rubric_discrimination,
+        test_live_measured_trade,
     ]
     # A skipped group measured NOTHING and must never be counted into the passing
     # total (invariant 12, in the module that argues it hardest). In CI the guard

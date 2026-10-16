@@ -46,6 +46,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from escalation import (  # noqa: E402
+    _ANSWER_EXTRACTION_RULE,
+    _ANSWER_JUDGE_SYSTEM_PROMPT,
+    _ANSWER_KIND_RULE,
     AnswerDecision,
     AnswerJudgment,
     answer_gate,
@@ -129,8 +132,25 @@ def _completion(
     return types.SimpleNamespace(choices=[choice] if choices else [])
 
 
-def _judgment(answers: bool, score: float) -> Callable[[], Any]:
-    return lambda: _completion(parsed=AnswerJudgment(answers=answers, score=score))
+def _judgment(
+    answers: bool,
+    score: float,
+    *,
+    stated_value: str | None = "90 days",
+    same_kind: bool = True,
+) -> Callable[[], Any]:
+    """A judge payload. The extraction fields default to a genuine stated value of
+    the asked kind, so the existing cells keep meaning what they meant; the ADR-0015
+    cells override them to build the self-contradictory verdicts."""
+    return lambda: _completion(
+        parsed=AnswerJudgment(
+            asked_value="the warranty period",
+            stated_value=stated_value,
+            same_kind=same_kind,
+            answers=answers,
+            score=score,
+        )
+    )
 
 
 def _run(
@@ -299,9 +319,9 @@ def test_reasoning_effort_reaches_this_gate() -> None:
     (`_judge_sampling_kwargs`), so both runtime gates must carry it identically.
     Its full semantics (omit-when-unset, verbatim-when-set) are pinned once in
     `test_faithfulness_gate.py`; here we pin that THIS gate's call also omits it by
-    default and splats it when set - the adopted gpt-5-mini config
-    (`JUDGE_TEMPERATURE=none` + `JUDGE_REASONING_EFFORT=minimal`) drives the answer
-    gate too.
+    default and splats it when set - a reasoning-model judge config such as
+    `JUDGE_TEMPERATURE=none` + `JUDGE_REASONING_EFFORT=minimal` (ADR-0013's gpt-5-mini
+    config, which ADR-0015 measured and did not adopt) drives the answer gate too.
     """
     saved = {k: os.environ.get(k) for k in ("JUDGE_TEMPERATURE", "JUDGE_REASONING_EFFORT")}
     try:
@@ -376,6 +396,108 @@ def test_every_judge_failure_fails_closed_in_one_call() -> None:
 
 
 
+def test_answer_requires_a_stated_value_of_the_asked_kind() -> None:
+    """ADR-0015: `answers` alone is no longer enough to send.
+
+    The verdict is `answers AND a stated value AND same_kind AND score >= cutoff`.
+    Every cell below is a verdict the old single-boolean gate would have SENT (the
+    judge said "answers" at a high score), so each one is the failure mode this
+    mechanism exists to close, pinned without a model. All of them are ordinary
+    non-answers (`judge_failed` False), not judge outages: they latch like any other
+    deliberate escalate. Reason precedence is part of the contract because the tag
+    is what an operator reads to see WHY a would-be send was withheld.
+    """
+    sent = "non_answer: no_stated_value"
+    kind = "non_answer: stated_value_wrong_kind"
+    cells = [
+        # (judgment kwargs, answers, reason, why)
+        (dict(stated_value="90 days"), True, "answers", "a real value of the asked kind"),
+        (dict(stated_value=None), False, sent, "THE ADJACENT-FACT SHAPE: no value named"),
+        (dict(stated_value=""), False, sent, "an empty stated value is no value"),
+        (dict(stated_value="   "), False, sent, "a whitespace-only stated value"),
+        (dict(stated_value="null"), False, sent, "the word null instead of JSON null"),
+        (dict(stated_value=" NULL "), False, sent, "the word null, padded, any case"),
+        (
+            dict(stated_value="customer's expense", same_kind=False),
+            False,
+            kind,
+            "a named value of the wrong kind (who pays for a fee amount)",
+        ),
+        (
+            dict(stated_value="10% to 80%", same_kind=False),
+            False,
+            kind,
+            "a range for an exact amount",
+        ),
+        (
+            dict(stated_value=None, same_kind=False),
+            False,
+            sent,
+            "no value outranks wrong kind in the reason tag",
+        ),
+    ]
+    for kwargs, expected, reason, why in cells:
+        d, fake = _run(_judgment(True, 0.95, **kwargs), "x")
+        _check(d.answers is expected, f"{why}: answers={d.answers!r}, want {expected}")
+        _check(d.reason == reason, f"{why}: reason {d.reason!r}, want {reason!r}")
+        _check(d.addressed is True, f"{why}: the raw judge verdict must still surface")
+        _check(d.judge_failed is False, f"{why}: this is a verdict, not a judge outage")
+        _check(fake.calls == 1, f"{why}: one call, got {fake.calls}")
+
+    # An explicit "does not answer" keeps its own tag even when a value was named.
+    d, _ = _run(_judgment(False, 0.9, stated_value="90 days"), "x")
+    _check(
+        d.answers is False and d.reason == "non_answer: judge_unaddressed",
+        f"answers=False must win the reason, got {d!r}",
+    )
+    # A real value of the right kind still loses to the score cutoff.
+    d, _ = _run(_judgment(True, 0.49, stated_value="90 days"), "x")
+    _check(
+        d.answers is False and d.reason.startswith("non_answer: score "),
+        f"below-cutoff must keep the score reason, got {d!r}",
+    )
+    print(f"ok: a would-be send needs a stated value of the asked kind ({len(cells)} cells)")
+
+
+def test_extraction_fields_are_committed_before_the_verdict() -> None:
+    """The model fills the structured output in property order, so the extraction
+    fields coming BEFORE `answers` is the mechanism, not decoration: moving
+    `answers` up (or making a field optional, which strict structured output turns
+    into a different schema) silently returns the gate to the single boolean that
+    was a thin argmax on the adjacent-fact draft (ADR-0015)."""
+    schema = AnswerJudgment.model_json_schema()
+    order = list(schema["properties"])
+    _check(
+        order == ["asked_value", "stated_value", "same_kind", "answers", "score"],
+        f"AnswerJudgment fields must be ordered asked_value, stated_value, "
+        f"same_kind, answers, score (verdict LAST), got {order!r}",
+    )
+    _check(
+        set(schema["required"]) == set(order),
+        f"every field must be REQUIRED (strict structured output), got {schema['required']!r}",
+    )
+    stated = schema["properties"]["stated_value"]
+    nullable = any(opt.get("type") == "null" for opt in stated.get("anyOf", []))
+    _check(nullable, f"stated_value must be nullable (null is how the judge says none): {stated!r}")
+    for fragment in ("quoted per case", "someone's discretion", "adjacent fact"):
+        _check(
+            fragment in stated["description"],
+            f"stated_value must say when to return null (missing {fragment!r})",
+        )
+    print("ok: asked_value, stated_value and same_kind are required and precede the verdict")
+
+
+def test_extraction_rules_reach_the_judge_prompt() -> None:
+    """Both ADR-0015 paragraphs are part of the system prompt the judge is sent."""
+    _, fake = _run(_judgment(True, 0.9), "x")
+    comp = cast(_FakeCompletions, fake.chat.completions)
+    system = next((m["content"] for m in (comp.messages_used or []) if m["role"] == "system"), "")
+    _check(system == _ANSWER_JUDGE_SYSTEM_PROMPT, "the gate must send the shared system prompt")
+    for label, rule in (("extraction", _ANSWER_EXTRACTION_RULE), ("kind", _ANSWER_KIND_RULE)):
+        _check(rule in system, f"the {label} rule must be in the judge's system prompt")
+    print("ok: the extraction and kind rules reach the judge's system prompt")
+
+
 def test_decision_is_frozen() -> None:
     d = AnswerDecision(answers=True, addressed=True, score=0.9, reason="answers")
     try:
@@ -398,6 +520,9 @@ def main() -> int:
         test_judge_sampling_is_pinned_deterministic,
         test_reasoning_effort_reaches_this_gate,
         test_every_judge_failure_fails_closed_in_one_call,
+        test_answer_requires_a_stated_value_of_the_asked_kind,
+        test_extraction_fields_are_committed_before_the_verdict,
+        test_extraction_rules_reach_the_judge_prompt,
         test_decision_is_frozen,
     ]
     for t in tests:

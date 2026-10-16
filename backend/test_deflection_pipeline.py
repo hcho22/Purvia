@@ -181,7 +181,15 @@ class _FakeJudge:
         self.chat = types.SimpleNamespace(
             completions=_JudgeCompletions(
                 {"supported": supported, "score": score},
-                {"answers": answers, "score": answer_score},
+                {
+                    # ADR-0015: the judge also commits to the asked/stated value and
+                    # same-kind before the verdict; a genuine answer names a value.
+                    "asked_value": "the value the customer asked for",
+                    "stated_value": "the value the draft states" if answers is True else None,
+                    "same_kind": answers is True,
+                    "answers": answers,
+                    "score": answer_score,
+                },
                 failure=failure,
             )
         )

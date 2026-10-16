@@ -898,17 +898,46 @@ async def judge_answer(
 # Replayed on captured and freshly drafted (question, context, draft) tuples, the
 # bare-boolean judge was wrong on 38 of 280 verdicts, every one in the false-resolve
 # direction; this shape was wrong on 0 of 300 with no false-escalate on the answerable
-# rows. Do NOT port the extraction fields to the runtime gate: gpt-4o-mini counts
-# "10% to 80%" as a stated value for the exact-amount question (e7-p3-03), and the
-# same replay measured 49 wrong of 500 there.
+# rows.
+# THE RUNTIME GATE NOW USES THE SAME MECHANISM (ADR-0015), with one extra field. It
+# was ported on 2026-10-16 after the fixed-up port was measured on gpt-4o-mini: the
+# extraction fields ALONE let that model count "10% to 80%" as the stated value of
+# the exact-amount question (e7-p3-03's shape: 3 of 8 at temperature 0, 7 of 8 at
+# temperature 1, against 0 of 8 for the old gate), so the port adds `same_kind`
+# (is the stated value the same KIND of thing as the asked one, and specific) and
+# the verdict requires it; with it the same draft passed 0 of 8 and 2 of 8. This
+# mirror carries `same_kind` too, because a mirror that is looser than the gate it
+# measures reports the wrong weekly number. `same_kind` can only turn an "answers"
+# into "does not answer", so it can lower the offline false-resolve rate and raise
+# the offline false-escalate rate, never the reverse, and the parity leg fails the
+# weekly on any disagreement with the runtime gate. On Claude it has been measured on
+# the should-answer rows only (ADR-0015: parity 4 of 4 on the P2 leg, 20 of 20 stored
+# should-answer drafts answered); the first weekly after it merges is its first
+# measurement on the should-escalate rows. A payload that lacks a boolean `same_kind`
+# RAISES (UNMEASURED) rather than scoring.
 # Not every parity mismatch in those weeks was this judge. The fourth on 2026-09-20,
 # e7-p3-10, was the RUNTIME gate passing an adjacent-fact draft this judge rejected
 # ("international returns are at the customer's expense": who pays, not how much).
-# The question escalated in the 2026-10-15 end-to-end runs, but replaying that exact
-# triple through the runtime gate (gpt-4o-mini, temperature 0) let it through 5 of 10
-# times. That is an OPEN PRODUCT RISK this offline-only fix does not touch; see the
-# issue-#163 erratum in docs/escalation-weekly/README.md.
+# See the issue-#163 erratum and its 2026-10-16 follow-up in
+# docs/escalation-weekly/README.md.
 ANSWER_JUDGE_MAX_TOKENS = 400
+
+# The two paragraphs the runtime gate appends to its rubric (ADR-0015). Independent
+# string literals by design, kept word for word in step with
+# `escalation._ANSWER_EXTRACTION_RULE` / `_ANSWER_KIND_RULE`; the lockstep guard in
+# backend/test_answer_gate_rubric.py fails if either side drops one.
+ANSWER_EXTRACTION_RULE = (
+    " Before you decide, commit to two fields: `asked_value`, the specific value "
+    "the QUESTION asks for, and `stated_value`, the specific value the ANSWER "
+    "actually hands the customer for that, quoted. If the ANSWER gives no such "
+    "value, `stated_value` is null and the ANSWER does not answer the QUESTION."
+)
+ANSWER_KIND_RULE = (
+    " The value must be the SAME KIND of thing as the one asked for (an amount for "
+    "an amount, a duration for a duration, a yes/no for a yes/no) and must be "
+    "specific: a range, an estimate, 'varies', or a fact about who pays, when, or "
+    "where is not an exact amount. Set `same_kind` accordingly."
+)
 
 ANSWER_JUDGE_PROMPT_TEMPLATE = (
     "You are a strict answer-completeness judge for an automated customer-support "
@@ -930,7 +959,10 @@ ANSWER_JUDGE_PROMPT_TEMPLATE = (
     "merely restates what the CONTEXT does contain can be that value. Judge ONLY "
     "whether the question is "
     "answered — not grounding, tone, or politeness (a blunt but responsive answer "
-    "still answers; a warm apology that gives no information does not).\n\n"
+    "still answers; a warm apology that gives no information does not)."
+    + ANSWER_EXTRACTION_RULE
+    + ANSWER_KIND_RULE
+    + "\n\n"
     "CONTEXT:\n{context}\n\n"
     "QUESTION:\n{question}\n\n"
     "ANSWER:\n{answer}\n\n"
@@ -944,8 +976,8 @@ ANSWER_JUDGE_TOOL = {
         "type": "object",
         "properties": {
             # Property ORDER is load-bearing: the model fills these in order, so the
-            # two extraction fields are committed BEFORE the verdict. Keep `answers`
-            # last (pinned by backend/test_answer_gate_rubric).
+            # two extraction fields and `same_kind` are committed BEFORE the verdict.
+            # Keep `answers` last (pinned by backend/test_answer_gate_rubric).
             "asked_value": {
                 "type": "string",
                 "description": (
@@ -963,6 +995,17 @@ ANSWER_JUDGE_TOOL = {
                     "adjacent fact."
                 ),
             },
+            "same_kind": {
+                "type": "boolean",
+                "description": (
+                    "True iff stated_value is the same KIND of thing as "
+                    "asked_value (an amount for an amount, a duration for a "
+                    "duration, a yes/no for a yes/no). Only where an exact "
+                    "amount is asked must it also be a specific amount rather "
+                    "than a range, an estimate, 'varies', or a fact about who "
+                    "pays, when, or where. False if stated_value is null."
+                ),
+            },
             "answers": {
                 "type": "boolean",
                 "description": (
@@ -977,7 +1020,7 @@ ANSWER_JUDGE_TOOL = {
                 ),
             },
         },
-        "required": ["asked_value", "stated_value", "answers"],
+        "required": ["asked_value", "stated_value", "same_kind", "answers"],
     },
 }
 
@@ -997,14 +1040,15 @@ async def judge_answering(
     it is still not a grounding check, which is `judge_answer`'s concern, exactly
     as the runtime answer gate keeps the two dimensions orthogonal.
 
-    The verdict is `answers AND stated_value is a non-empty string`: the judge must
-    commit to the value the ANSWER actually gives before it decides, and a verdict
-    of "answers" with no stated value is self-contradictory, so it resolves to
-    False (escalate). See the block comment above `ANSWER_JUDGE_MAX_TOKENS` for
-    why a bare boolean is not enough. A payload with no boolean `answers` or no
-    string-or-null `stated_value` RAISES, so the run is UNMEASURED rather than
-    scoring a malformed reply as a correct escalation. `asked_value` is not
-    validated.
+    The verdict is `answers AND stated_value is a non-empty string AND same_kind`:
+    the judge must commit to the value the ANSWER actually gives, and to whether it
+    is the same kind of value as the one asked, before it decides; a verdict of
+    "answers" with no stated value or a wrong-kind one is self-contradictory, so it
+    resolves to False (escalate). See the block comment above
+    `ANSWER_JUDGE_MAX_TOKENS` for why a bare boolean is not enough. A payload with
+    no boolean `answers`, no string-or-null `stated_value` or no boolean `same_kind`
+    RAISES, so the run is UNMEASURED rather than scoring a malformed reply as a
+    correct escalation. `asked_value` is not validated.
     """
     response = await anthropic_client.messages.create(
         model=JUDGE_MODEL,
@@ -1039,8 +1083,20 @@ async def judge_answering(
                     "submit_answering payload has no string-or-null 'stated_value': "
                     f"{payload!r}"
                 )
+            if not isinstance(payload.get("same_kind"), bool):
+                raise RuntimeError(
+                    f"submit_answering payload has no boolean 'same_kind': {payload!r}"
+                )
             stated_value = payload["stated_value"]
-            return answers and bool(stated_value and stated_value.strip())
+            # The literal string "null" is no value either: a model writing the word
+            # instead of the JSON token. Same normalization as the runtime gate's
+            # `escalation._has_stated_value`; it can only move toward escalation.
+            has_value = bool(
+                stated_value
+                and stated_value.strip()
+                and stated_value.strip().lower() != "null"
+            )
+            return answers and has_value and payload["same_kind"]
     raise RuntimeError("judge response did not contain submit_answering tool_use block")
 
 
