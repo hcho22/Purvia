@@ -199,9 +199,9 @@ jobs:
               # invariant 10). The edit that breaks that scoping is a main.py-only
               # edit, which without this entry would run no guard at all.
               - 'backend/main.py'
-              # test_ragas_scoring checks that the weekly RAGAS constraints still
-              # satisfy every requirement file the weekly installs with them, so a
-              # bump in either side must re-run it before Sunday's install fails.
+              # test_ragas_scoring checks that the monthly RAGAS constraints still
+              # satisfy every requirement file the scheduled run installs with them, so a
+              # bump in either side must re-run it before the next scheduled install fails.
               - 'backend/requirements.txt'
               - 'evals/retrieval/constraints-ragas-weekly.txt'
               - '.github/workflows/retrieval-eval.yml'
@@ -214,9 +214,9 @@ jobs:
   # enforced only by a command in a markdown file.
   #
   # The answer-gate rubric guard (backend/test_answer_gate_rubric.py, issue #104)
-  # joins them for the same reason. It is the ONLY layer below the weekly E7 sweep
+  # joins them for the same reason. It is the ONLY layer below the monthly E7 sweep
   # that can catch the runtime rubric and its offline mirror drifting apart, and
-  # drift makes the weekly false-resolve number a measurement of something the
+  # drift makes the scheduled false-resolve number a measurement of something the
   # buyer does not ship (AGENTS.md invariant 8). A drift guard that runs only when
   # someone remembers to run it provides none of that protection - which is how
   # the issue-#104 gap survived from PR #99 to the 2026-08-03 sweep.
@@ -242,12 +242,12 @@ jobs:
   # The judge-SDK-compat guard (evals/retrieval/test_judge_sdk_compat.py) is a
   # dependency-drift tripwire: the anthropic 1.0 major REMOVED the `temperature`
   # kwarg from messages.create(), so a loose `anthropic>=...` in
-  # evals/retrieval/requirements.txt let CI resolve 1.2.0 and crash BOTH weeklies
+  # evals/retrieval/requirements.txt let CI resolve 1.2.0 and crash BOTH scheduled evals
   # at the deterministic offline judge (issues #124/#125). It asserts the pin still
   # excludes the temperature-less 1.x major - offline, no anthropic import needed,
   # so it runs in this slim job and fails the PR that would re-open the crash.
   #
-  # The E7 answer-gate parity guard pins the additive weekly check itself: it
+  # The E7 answer-gate parity guard pins the additive scheduled check itself: it
   # replays exact P2/P3 question/draft/context inputs, refuses runtime failures as
   # UNMEASURED, and surfaces both verdicts on a mismatch.
   #
@@ -316,9 +316,9 @@ jobs:
 
       - name: Validate pinned RAGAS runtime imports
         run: |
-          # Resolve the RAGAS stack under the same constraints the weekly installs
-          # with, so this step imports the versions the weekly will run. Without
-          # them it resolved the newest NumPy and passed while the weekly's
+          # Resolve the RAGAS stack under the same constraints the scheduled run installs
+          # with, so this step imports the versions the scheduled run will run. Without
+          # them it resolved the newest NumPy and passed while the scheduled run's
           # pyarrow 26 + numpy<2 import crashed (2026-10-11).
           pip install -c evals/retrieval/constraints-ragas-weekly.txt \
             -r evals/retrieval/requirements-ragas.txt
@@ -472,10 +472,10 @@ jobs:
           # cannot breach; the retrieval-leg P1a/P1b false-resolves are pinned above.
           #
           # NO --include-p2/--include-p3/--sweep: those draft + call the OFFLINE
-          # Claude faithfulness judge, so they are LLM-judged and live in the weekly
+          # Claude faithfulness judge, so they are LLM-judged and live in the scheduled
           # escalation workflow (escalation-eval-weekly.yml). A judge wobble must
           # never red-bar an innocent merge; the faithfulness-leg false-resolve
-          # carries an accepted up-to-a-week detection latency, mitigated by this
+          # carries an accepted up-to-a-month detection latency, mitigated by this
           # deterministic retrieval-leg tripwire (docs/evals.md "E7 CI placement").
           # No ANTHROPIC_API_KEY is needed or passed — this runs on the slim
           # requirements-ci.txt env installed above (e7_runner's deterministic path

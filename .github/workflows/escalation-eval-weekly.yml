@@ -1,7 +1,7 @@
-# US-059: weekly E7 escalation-eval workflow. Runs the FULL deflection-pipeline
+# US-059: monthly E7 escalation-eval workflow. Runs the FULL deflection-pipeline
 # eval — the deterministic P1a/P1b legs PLUS the LLM-judged P2/P3 legs, the
 # offline/runtime answer-gate parity replay, and the knob sweep
-# (deflection-vs-false-resolve curve + knee) — on a weekly schedule and on manual
+# (deflection-vs-false-resolve curve + knee) — on a monthly schedule and on manual
 # `workflow_dispatch`. The LLM-judged legs draft answers and score their
 # content gates with the OFFLINE cross-family Claude judge, so they belong here
 # (scheduled) and NEVER on the per-PR path: a judge wobble must not red-bar an
@@ -15,7 +15,7 @@
 #     content-gate (P3) false-resolve rate above it exits the runner non-zero,
 #     fails THIS workflow, and files an issue. It is never downgraded to a comment.
 #     That content-gate leg IS the gated rate and is only scored here, so it carries
-#     an accepted up-to-a-week detection latency (documented in docs/evals.md "E7 CI
+#     an accepted up-to-a-month detection latency (documented in docs/evals.md "E7 CI
 #     placement"; mitigated by the per-PR retrieval-leg tripwire, which hard-fails
 #     unconditionally on any P1a/P1b retrieval-leg false-resolve immediately).
 #     Because that ceiling is fed SOLELY by P3, a P3 leg that never EXERCISES the
@@ -38,19 +38,20 @@
 # and files its own deduped `e7-weekly-harness-failure` issue rather than going
 # quiet; see the snapshot check below for why that state has to exist. Keeps
 # its own concurrency group + snapshot dir so it never tangles with the daily
-# nightly retrieval workflow or the weekly RAGAS workflow.
+# retrieval-eval workflow or the monthly RAGAS workflow.
 
-name: Escalation eval (weekly)
+name: Escalation eval (monthly)
 
 on:
   schedule:
-    # 06:00 UTC Sundays — staggered off the nightly retrieval (02:00 UTC) and the
-    # weekly RAGAS (04:00 UTC) so the three never compete for runner resources.
-    - cron: '0 6 * * 0'
+    # 06:00 UTC on the 1st of each month - staggered off the retrieval eval (02:00 UTC),
+    # the permissions-scale eval (03:00 UTC) and RAGAS (04:00 UTC) so the four
+    # never compete for runner resources.
+    - cron: '0 6 1 * *'
   workflow_dispatch:
 
 permissions:
-  # contents: write — commit the weekly snapshot to docs/escalation-weekly/.
+  # contents: write — commit the monthly snapshot to docs/escalation-weekly/.
   # issues: write — file / close gate-finding issues.
   contents: write
   issues: write
@@ -61,7 +62,7 @@ concurrency:
 
 jobs:
   weekly-escalation:
-    name: Weekly E7 deflection sweep
+    name: Monthly E7 deflection sweep
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -69,7 +70,7 @@ jobs:
       - name: Checkout main
         uses: actions/checkout@v4
         with:
-          # Need the full token to push the weekly snapshot back.
+          # Need the full token to push the monthly snapshot back.
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python 3.11
@@ -80,7 +81,7 @@ jobs:
           cache-dependency-path: backend/requirements.txt
 
       - name: Install Supabase CLI
-        # Pinned to match local dev + retrieval-eval.yml + the weekly RAGAS
+        # Pinned to match local dev + retrieval-eval.yml + the monthly RAGAS
         # workflow: an unpinned `latest` drifted to a CLI whose default auth key
         # format breaks the eval runner's self-minted JWTs (403). See
         # retrieval-eval.yml for the full rationale; keep these pins in lockstep.
@@ -183,7 +184,7 @@ jobs:
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
             echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::error title=E7 weekly UNMEASURED::The runner ${EXIT_DESC} without writing a snapshot, so no pinned safety invariant was evaluated this week. This is not a gate finding; nothing was measured."
+            echo "::error title=E7 weekly UNMEASURED::The runner ${EXIT_DESC} without writing a snapshot, so no pinned safety invariant was evaluated this run. This is not a gate finding; nothing was measured."
           fi
 
       # Mint the eval-publish App token immediately before publishing, NOT at job
@@ -240,7 +241,7 @@ jobs:
           # Record the branch for the 'Alarm on stranded eval publish' step so a
           # failure below names the exact branch the snapshot is stranded on.
           echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
-          git commit -m "chore(evals): weekly E7 escalation eval ${DATE}"
+          git commit -m "chore(evals): monthly E7 escalation eval ${DATE}"
           # Push the commit to a fresh remote branch and rewind local main (below),
           # leaving the checkout clean.
           git push origin "HEAD:refs/heads/${BRANCH}"
@@ -251,18 +252,18 @@ jobs:
           # legible cause instead; the 'Alarm on stranded eval publish' step turns
           # it into a visible issue.
           if [ -z "${GH_TOKEN}" ]; then
-            echo "::error title=E7 weekly snapshot NOT published - eval-publish App token is empty::The ${DATE} escalation snapshot was committed and pushed to \`${BRANCH}\` but no auto-merging PR was opened, so it is stranded there, unpublished to main. Ensure the EVAL_PUBLISH_APP_ID / EVAL_PUBLISH_APP_PRIVATE_KEY repo secrets (the eval-publish GitHub App) are set and valid, then re-run."
+            echo "::error title=E7 monthly snapshot NOT published - eval-publish App token is empty::The ${DATE} escalation snapshot was committed and pushed to \`${BRANCH}\` but no auto-merging PR was opened, so it is stranded there, unpublished to main. Ensure the EVAL_PUBLISH_APP_ID / EVAL_PUBLISH_APP_PRIVATE_KEY repo secrets (the eval-publish GitHub App) are set and valid, then re-run."
             exit 1
           fi
           # shellcheck disable=SC2016  # Markdown backticks stay literal here.
           BODY=$(printf '%s\n' \
-            "Automated docs-only eval snapshot from the \`Escalation eval (weekly)\` workflow (run ${GITHUB_RUN_ID})." \
+            "Automated docs-only eval snapshot from the \`Escalation eval (monthly)\` workflow (run ${GITHUB_RUN_ID})." \
             '' \
-            'Publishes the weekly E7 escalation receipts under `docs/escalation-weekly/` via an auto-merging PR instead of a direct `git push` to `main`, so the required security-gate checks on `main` are satisfied - a docs-only PR trips them as skipped=pass.' \
+            'Publishes the monthly E7 escalation receipts under `docs/escalation-weekly/` via an auto-merging PR instead of a direct `git push` to `main`, so the required security-gate checks on `main` are satisfied - a docs-only PR trips them as skipped=pass.' \
             '' \
             'Opened with the eval-publish GitHub App installation token so the required check workflows run; a PR opened with the default `GITHUB_TOKEN` would not trigger them. Auto-merge (squash) is enabled and it merges once checks pass.')
           PR_URL=$(gh pr create --base main --head "$BRANCH" \
-            --title "chore(evals): weekly E7 escalation eval ${DATE}" \
+            --title "chore(evals): monthly E7 escalation eval ${DATE}" \
             --body "${BODY}")
           gh pr merge --auto --squash --delete-branch "$PR_URL"
           echo "opened auto-merging PR: ${PR_URL}"
@@ -296,7 +297,7 @@ jobs:
           }
           LABEL=e7-weekly-publish-failure
           gh label create "${LABEL}" --color B60205 \
-            --description "E7 weekly snapshot failed to publish to main" --force || true
+            --description "E7 monthly snapshot failed to publish to main" --force || true
           if [ "${PUBLISH_OUTCOME}" = "failure" ]; then
             # A transient gh blip yields empty here, so err toward filing a
             # possibly-duplicate (self-healing) issue rather than leaving the alarm
@@ -306,7 +307,7 @@ jobs:
               gh issue create --label "${LABEL}" \
                 --title "E7 weekly: snapshot failed to publish to main" \
                 --body "$(printf '%s\n' \
-                  "The \`Escalation eval (weekly)\` publish step failed, so this week's snapshot was produced but NOT published to \`main\`." \
+                  "The \`Escalation eval (monthly)\` publish step failed, so this run's snapshot was produced but NOT published to \`main\`." \
                   "" \
                   "The most common cause is a failed mint of the eval-publish GitHub App token that \`gh pr create\` authenticates with - missing or invalid \`EVAL_PUBLISH_APP_ID\` / \`EVAL_PUBLISH_APP_PRIVATE_KEY\` repo secrets. Check the publish step's log for the \`::error::\` line naming the cause." \
                   "" \
@@ -382,9 +383,9 @@ jobs:
               gh issue create --label "${HARNESS_LABEL}" \
                 --title "E7 weekly: no snapshot produced — the safety invariants are UNMEASURED" \
                 --body "$(printf '%s\n' \
-                  "The weekly E7 runner ${EXIT_DESC} without writing \`/tmp/e7-weekly.json\`." \
+                  "The monthly E7 runner ${EXIT_DESC} without writing \`/tmp/e7-weekly.json\`." \
                   "" \
-                  "**No pinned safety invariant was evaluated this week.** That includes the false-resolve ceiling (the Risk #3 buyer number), which is fed SOLELY by the P3 leg scored in this workflow - so it is not green, it is unknown, and it stays unknown until a run produces a snapshot." \
+                  "**No pinned safety invariant was evaluated this run.** That includes the false-resolve ceiling (the Risk #3 buyer number), which is fed SOLELY by the P3 leg scored in this workflow - so it is not green, it is unknown, and it stays unknown until a run produces a snapshot." \
                   "" \
                   "Nothing was published to \`docs/escalation-weekly/\`. The per-PR deterministic P1a/P1b tripwire in \`retrieval-eval.yml\` is unaffected and still blocks merges." \
                   "" \
@@ -468,7 +469,7 @@ jobs:
             if [ -z "${body}" ]; then
               body="- The runner exited ${RUNNER_EXIT} on a pinned safety invariant; see the attached snapshot."
             fi
-            footer="Full report - docs/escalation-weekly/$(date -u +%Y-%m-%d).md. This is the scheduled weekly E7 sweep (US-059); it does not block merges, but a pinned safety invariant fired."
+            footer="Full report - docs/escalation-weekly/$(date -u +%Y-%m-%d).md. This is the scheduled monthly E7 sweep (US-059); it does not block merges, but a pinned safety invariant fired."
             body="${body}"$'\n\n'"${footer}"
             gh label create "${LABEL}" --color B60205 \
               --description "E7 weekly escalation gate finding" --force || true
@@ -491,7 +492,7 @@ jobs:
             # not clear a still-real finding.
             for num in $(open_issue_numbers "${LABEL}"); do
               gh issue close "${num}" \
-                --comment "Auto-closed: the scheduled weekly E7 sweep was green (no pinned safety invariant fired)."
+                --comment "Auto-closed: the scheduled monthly E7 sweep was green (no pinned safety invariant fired)."
               echo "auto-closed issue #${num}"
             done
           fi
