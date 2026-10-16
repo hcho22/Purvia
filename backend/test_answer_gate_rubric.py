@@ -47,13 +47,19 @@ quoted case-by-case / at someone's discretion / decided by staff / unpublished
 right for the two E7 rows it was built from, which both ask for a value the
 corpus defers. It is wrong for a question whose correct answer genuinely IS the
 policy or the disposition — "Who decides a book warranty claim after 30 days?"
-is fully answered by "customer service, at their discretion", yet the rubric
-reads that draft as a deferral and escalates it.
+is fully answered by "customer service, at their discretion", yet the clause,
+read literally, calls that draft a deferral, and both judges escalated it when
+the clause was written.
 
-The last row of `_CASES` pins that shape at its CURRENT behaviour so a future
-rubric change cannot alter it unnoticed. Fixing the clause means editing both
-rubric strings, which invalidates the live measurement they were validated
-against, so it is deferred rather than smuggled in here.
+The `_CASES` row labelled "FORMER KNOWN LIMITATION: the disposition IS the
+requested information" pins that shape. It was pinned at escalate (answers=False)
+when the clause was written, measured 5/5 stable then. A live run on 2026-10-15
+found BOTH judges answering it (3/3 each, and the pre-fix offline judge too), with
+neither rubric nor `backend/escalation.py` changed since: the models moved under
+the pin. That is the outcome invariant 8's own test calls correct (the customer
+asked WHO decides and the draft says who), so the row now expects it. The clause
+is still unconditional on paper, so this is observed behaviour, not a guarantee:
+re-check the row whenever either judge model or rubric changes.
 
 LIVE CALLS vs RECORDED FIXTURES — the deliberate choice
 -------------------------------------------------------
@@ -79,11 +85,21 @@ What that costs, stated plainly:
     to temperature 0 (issue #104's other half) - the live layer neutralizes the
     ambient `JUDGE_MODEL` / `JUDGE_TEMPERATURE` exactly as the unit layer does, so
     a developer shell cannot un-pin the run the failure message describes as
-    pinned - each case is asserted UNANIMOUS over `_REPS` calls, and every case in
-    the table was measured stable at 5/5
-    during the investigation. The pin removes the SAMPLER, which is best-effort
-    rather than a guarantee — no `seed` is passed — so a split can still come
-    from the provider rather than from the rubric. It fails the test either way,
+    pinned - each case is asserted UNANIMOUS over `_REPS` calls. The hand-written
+    rows were measured stable at 5/5 when they were added, except the FORMER
+    KNOWN LIMITATION row, whose current expectation was measured 3/3 on
+    2026-10-15. Of the real-context rows, the runtime gate rejected `e7-p3-01`,
+    `e7-p3-05-disclaimer` and `e7-p3-09` 5/5 on 2026-10-15; the bare-draft
+    `e7-p3-05` row was taken from the 2026-10-11 snapshot without a live run, so
+    its first live run is its measurement. One row is not asserted: the RUNTIME
+    half of the real-context `e7-p3-10` row (`_RUNTIME_KNOWN_OPEN_RISK`) let that
+    triple through 5 of 10 times on 2026-10-15. That one row on that one
+    implementation is reported as a KNOWN OPEN RISK and not asserted, so the
+    layer is not red on a product defect it cannot fix. The exemption never
+    retires on its own: it is removed by hand, in the change that fixes the
+    runtime gate, and the row is asserted only after that. The pin removes the
+    SAMPLER, which is best-effort rather than a guarantee — no `seed` is passed —
+    so a split can still come from the provider rather than from the rubric. It fails the test either way,
     because both causes need looking at and neither should be retried away.
 
 The offline half stays fixture-free in a different sense: recording fake clients
@@ -93,8 +109,9 @@ always-on layer and catches both rubric drift and an unwired prompt literal.
 
 Layers (the project convention — see CLAUDE.md "How to test"):
   * unit layer, ALWAYS runs, no network/keys/DB: rubric lockstep + rule presence,
-    executable structured judge-failure behavior, plus the boot warning's
-    call-site wiring in `main.py`.
+    the offline verdict's stated-value rule, malformed-payload raise and tool
+    field order, executable structured judge-failure behavior, plus the boot
+    warning's call-site wiring in `main.py`.
   * integration layer, SKIPS CLEANLY without keys: live discrimination on both
     implementations.
 
@@ -106,6 +123,7 @@ from __future__ import annotations
 
 import ast
 import asyncio
+import json
 import os
 import sys
 import types
@@ -234,7 +252,13 @@ class _RecordingAnthropicMessages:
     async def create(self, **kwargs: Any) -> Any:
         self.calls.append(kwargs)
         block = types.SimpleNamespace(
-            type="tool_use", name="submit_answering", input={"answers": True}
+            type="tool_use",
+            name="submit_answering",
+            input={
+                "asked_value": "the fee amount",
+                "stated_value": "the customer pays",
+                "answers": True,
+            },
         )
         return types.SimpleNamespace(content=[block])
 
@@ -347,6 +371,162 @@ def test_both_tool_schemas_describe_the_disposition_case() -> None:
                 f"(missing {fragment!r}): {description!r}",
             )
     print("ok: both tool schemas describe the disposition case")
+
+
+class _ScriptedAnthropicMessages:
+    """Returns one scripted `submit_answering` payload, whatever it is asked."""
+
+    def __init__(self, payload: dict[str, Any]) -> None:
+        self.payload = payload
+
+    async def create(self, **kwargs: Any) -> Any:
+        block = types.SimpleNamespace(
+            type="tool_use", name="submit_answering", input=self.payload
+        )
+        return types.SimpleNamespace(content=[block])
+
+
+def _offline_verdict(payload: dict[str, Any]) -> bool:
+    client = types.SimpleNamespace(messages=_ScriptedAnthropicMessages(payload))
+    return asyncio.run(
+        judge_answering(client, _PROMPT_QUESTION, _PROMPT_CONTEXT, _PROMPT_DRAFT)
+    )
+
+
+def test_offline_verdict_requires_a_stated_value() -> None:
+    """The offline verdict is `answers AND the judge named the value it gave`.
+
+    This is the 2026-09-20 .. 2026-10-11 weekly breach, pinned WITHOUT a model: a
+    bare-boolean judge shown the retrieved context graded the draft's truth instead
+    of whether it answers, and returned `answers=true` for an accurate "I don't have
+    that information". The judge must now commit to `stated_value` first, and a
+    verdict of "answers" with no stated value is self-contradictory, so it resolves
+    toward ESCALATION. Every cell here is a verdict the weekly P3 leg turns into a
+    false-resolve if it comes back True.
+    """
+    asked = "the return shipping fee for a return over 20 lbs"
+    cases = [
+        # (payload, expected verdict, why)
+        (
+            {"asked_value": asked, "stated_value": "$14.95", "answers": True},
+            True,
+            "a real value was stated and the judge says it answers",
+        ),
+        (
+            {"asked_value": asked, "stated_value": None, "answers": True},
+            False,
+            "THE BREACH: the judge said it answers but named no value the customer holds",
+        ),
+        (
+            {"asked_value": asked, "stated_value": "", "answers": True},
+            False,
+            "an empty stated value is no value",
+        ),
+        (
+            {"asked_value": asked, "stated_value": "   ", "answers": True},
+            False,
+            "a whitespace-only stated value is no value",
+        ),
+        (
+            {"asked_value": asked, "stated_value": "$14.95", "answers": False},
+            False,
+            "a stated value never overrides an explicit non-answer verdict",
+        ),
+        (
+            {"asked_value": asked, "stated_value": None, "answers": False},
+            False,
+            "a plain deferral stays a non-answer",
+        ),
+    ]
+    for payload, expected, why in cases:
+        got = _offline_verdict(payload)
+        _check(
+            got is expected,
+            f"offline verdict for {payload!r} was {got!r}, want {expected!r} - {why}",
+        )
+    print(f"ok: the offline verdict requires a stated value ({len(cases)} cells)")
+
+
+def test_offline_judge_raises_on_a_malformed_payload() -> None:
+    """A payload with no boolean `answers` or no string-or-null `stated_value`
+    is no verdict at all, so it RAISES. `asked_value` is not validated.
+
+    Scoring it False would read as the answer leg correctly escalating a P3 row,
+    and if the runtime gate also said False the parity leg would record agreement:
+    a malformed judge reply published as a passing measurement on the pinned
+    safety metric (invariant 12). Raising kills the run, which the weekly reports
+    as UNMEASURED. A null or blank `stated_value` is NOT malformed - it is the
+    judge's legitimate "no value" and stays a False verdict above.
+    """
+    asked = "the return shipping fee for a return over 20 lbs"
+    cases = [
+        (
+            {"asked_value": asked, "answers": True},
+            "the payload omits stated_value",
+        ),
+        (
+            {"asked_value": asked, "stated_value": 14.95, "answers": True},
+            "stated_value is neither a string nor null",
+        ),
+        (
+            {"asked_value": asked, "stated_value": "$14.95"},
+            "the payload omits answers",
+        ),
+        (
+            {"asked_value": asked, "stated_value": "$14.95", "answers": "false"},
+            "answers is not a boolean (bool('false') would read as True)",
+        ),
+    ]
+    for payload, why in cases:
+        try:
+            got = _offline_verdict(payload)
+        except RuntimeError:
+            continue
+        raise AssertionError(
+            f"offline judge returned {got!r} for {payload!r} instead of raising - "
+            f"{why}, so the reply broke the tool schema and must fail the run"
+        )
+    print(f"ok: the offline judge raises on a malformed payload ({len(cases)} cells)")
+
+
+def test_offline_tool_schema_commits_the_values_before_the_verdict() -> None:
+    """The extraction fields exist, are required, and come BEFORE `answers`.
+
+    The model fills a tool payload in property order, so `asked_value` and
+    `stated_value` being committed first is the mechanism, not decoration; moving
+    `answers` up (or dropping a field from `required`) silently reverts the judge
+    to the bare boolean that read an accurate deferral as an answer.
+    """
+    schema = _capture_offline_call()["tools"][0]["input_schema"]
+    order = list(schema["properties"])
+    _check(
+        order == ["asked_value", "stated_value", "answers"],
+        f"offline tool properties must be ordered asked_value, stated_value, "
+        f"answers (verdict LAST), got {order!r}",
+    )
+    _check(
+        set(schema["required"]) == {"asked_value", "stated_value", "answers"},
+        f"offline tool must REQUIRE all three fields, got {schema['required']!r}",
+    )
+    stated = schema["properties"]["stated_value"]
+    _check(
+        stated["type"] == ["string", "null"],
+        f"stated_value must be nullable (null is how the judge says 'none'), "
+        f"got {stated['type']!r}",
+    )
+    for fragment in (
+        "unavailable",
+        "not provided",
+        "quoted per case",
+        "someone's discretion",
+        "adjacent fact",
+    ):
+        _check(
+            fragment in stated["description"],
+            f"stated_value must say when to return null (missing {fragment!r}): "
+            f"{stated['description']!r}",
+        )
+    print("ok: the offline tool commits asked_value and stated_value before the verdict")
 
 
 def test_non_answer_failures_are_structured_independently_of_reason() -> None:
@@ -553,45 +733,112 @@ _CASES: list[tuple[str, str, str, str, bool, str]] = [
         True,
         "opposite direction, third instance",
     ),
-    # KNOWN LIMITATION, pinned at CURRENT behaviour - not at desired behaviour.
-
+    # FORMER KNOWN LIMITATION, now pinned at the OBSERVED (and desired) behaviour.
     #
     # Here the disposition IS the requested information: the customer asked WHO
     # decides, and the draft tells them who. By invariant 8's own test - does the
-    # customer end up holding what they asked for - this should auto-send. The
-    # issue-#104 clause is stated unconditionally, so the rubric reads it as a
-    # deferral and escalates instead, and `must_answer=False` records that rather
-    # than asserting it is correct.
+    # customer end up holding what they asked for - this should auto-send. It was
+    # pinned at escalate because the issue-#104 clause is stated unconditionally and
+    # the judges then read it as a deferral. On 2026-10-15 both judges answered it
+    # 3/3 (and the pre-fix offline judge did too), with no rubric or backend change,
+    # so the pin was stale and the live layer was red on a shape that is correct.
     #
-    # This errs toward ESCALATION, which is the SAFE direction under the operating
-    # objective (maximize deflection subject to false-resolve <= ceiling): a human
-    # picks the conversation up and the customer is answered, just not by the bot.
-    # The failure this PR fixes was the unsafe direction - auto-resolving a
-    # customer who got nothing. So it is a real cost in deflection, not a risk, and
-    # is deferred rather than rushed.
-    #
-    # It is here so a future rubric edit that flips this shape says so out loud
-    # instead of moving live send/escalate behaviour unobserved. Fixing it means
-    # conditioning the clause on the request ("...when the customer asked for that
-    # value"), which requires re-validating both rubric strings against live
-    # models; until then, flip this row's expectation in the same change that
-    # fixes the clause.
+    # It is still here so a future rubric or model change that flips this shape says
+    # so out loud instead of moving live send/escalate behaviour unobserved. The
+    # clause remains unconditional, so treat True as observed, not guaranteed.
     (
-        "KNOWN LIMITATION: the disposition IS the requested information",
+        "FORMER KNOWN LIMITATION: the disposition IS the requested information",
         "Who decides a book warranty claim after 30 days?",
         "Beyond 30 days, book warranty claims are decided by customer service, at "
         "their discretion.",
         "Books carry a 30-day warranty against printing defects (missing pages, "
         "blurred ink, binding failure). Beyond 30 days, book warranty claims are at "
         "the discretion of customer service.",
-        False,
+        True,
         "the customer asked WHO decides and the draft says who, so invariant 8's "
-        "test says auto-send; the unconditional issue-#104 clause escalates it "
-        "anyway. Pinned as-is - see the KNOWN LIMITATION note in the module "
-        "docstring. If this row starts failing, the clause was made conditional "
-        "and the expectation must move with it",
+        "test says auto-send. Both judges answered it 3/3 on 2026-10-15; if this "
+        "row starts failing, a judge model or rubric moved and the issue-#104 "
+        "clause is reading it as a deferral again - see the module docstring",
     ),
 ]
+
+
+# The four questions where the weekly parity leg saw the two judges disagree, plus
+# one drafter variant. They carry the REAL retrieved context (8-10 KB, every
+# warranty category / the whole returns section / the whole tier list) verbatim:
+# the hand-written slices above are short enough that a judge never saw a context
+# it could mistake for ground truth, which is why this layer passed through PR #156
+# and the failure surfaced only in the next weekly. e7-p3-01, e7-p3-05 and
+# e7-p3-09 are the OFFLINE judge's misses (auto-resolved in the 2026-09-20 ..
+# 2026-10-11 weeklies while the runtime gate rejected them). e7-p3-05 carries the
+# no-disclaimer draft that breached, copied from the 2026-10-11 snapshot;
+# e7-p3-05-disclaimer is the same question and context with the draft an
+# unmodified-main run produced on 2026-10-15, which adds that the amount is not
+# provided. e7-p3-10 is the RUNTIME gate's miss on 2026-09-20, copied from that
+# snapshot: who pays, not how much. All five must NOT answer.
+_REAL_CONTEXT_FIXTURE = (
+    ROOT / "backend" / "test-fixtures" / "e7_offline_answer_judge_rows.json"
+)
+_REAL_CONTEXT_WHY = {
+    "e7-p3-01": "an accurate 'I don't have that information' is still a non-answer; "
+    "the real warranty context lists every category but jewelry",
+    "e7-p3-05": "the corpus's own answer is a deferral ('quoted per-case'); "
+    "reporting it accurately leaves the customer with no fee. THE REGRESSION "
+    "GUARD: this is the draft that breached, with no volunteered disclaimer; if "
+    "it passes while e7-p3-05-disclaimer escalates, the judge is keying on the "
+    "drafter's phrasing",
+    "e7-p3-05-disclaimer": "the same deferral with the drafter's 'not provided "
+    "in the context' disclaimer added; still no fee for the customer",
+    "e7-p3-09": "an accurate 'I don't have that information' is still a non-answer; "
+    "the real context lists four tiers and no Diamond",
+    "e7-p3-10": "the draft faithfully states who pays, but the customer asked how "
+    "much, and the real returns context publishes no international fee",
+}
+
+
+def _real_context_label(row_id: str) -> str:
+    return f"{row_id} REAL retrieved context"
+
+
+# The ONE row the live layer measures but does not assert, on the runtime
+# implementation only. Replayed 10 times on 2026-10-15 (gpt-4o-mini, temperature 0,
+# default cutoff) the runtime gate let this exact triple through 5 of 10 times, an
+# OPEN PRODUCT RISK recorded in the issue-#163 erratum
+# (docs/escalation-weekly/README.md). Asserting it would leave this hand-run layer
+# red or flaky on a known product defect rather than on a rubric regression. The
+# offline half still asserts it. Nothing retires this exemption automatically:
+# remove it by hand in the change that fixes the runtime gate.
+_RUNTIME_KNOWN_OPEN_RISK = _real_context_label("e7-p3-10")
+
+
+def _real_context_cases() -> list[tuple[str, str, str, str, bool, str]]:
+    _check(
+        _REAL_CONTEXT_FIXTURE.is_file(),
+        f"missing fixture {_REAL_CONTEXT_FIXTURE}: the live layer's real-context "
+        "rows (the issue-#163 parity mismatches) are read from it",
+    )
+    rows = json.loads(_REAL_CONTEXT_FIXTURE.read_text(encoding="utf-8"))["rows"]
+    ids = [row["id"] for row in rows]
+    _check(
+        sorted(ids) == sorted(_REAL_CONTEXT_WHY),
+        f"{_REAL_CONTEXT_FIXTURE.name} rows {ids} must match _REAL_CONTEXT_WHY "
+        f"{sorted(_REAL_CONTEXT_WHY)} one to one: every fixture row needs its label "
+        "and every labelled row must still be in the fixture",
+    )
+    return [
+        (
+            _real_context_label(row["id"]),
+            row["question"],
+            row["draft"],
+            row["context"],
+            False,
+            _REAL_CONTEXT_WHY[row["id"]],
+        )
+        for row in rows
+    ]
+
+
+_CASES.extend(_real_context_cases())
 
 
 def _cost_note(n_impls: int) -> str:
@@ -626,7 +873,10 @@ def test_live_rubric_discrimination() -> None:
 
     Skips cleanly when a key or package is absent so the unit layer above still
     runs anywhere. Requires unanimity over `_REPS` calls per case: both judges are
-    pinned to temperature 0, so a split verdict is a finding, not a flake. That
+    pinned to temperature 0, so a split verdict is a finding, not a flake. The one
+    exception is `_RUNTIME_KNOWN_OPEN_RISK` on the runtime implementation, whose
+    verdicts are printed as a KNOWN OPEN RISK instead of asserted until the
+    exemption is removed by hand. That
     claim only holds if the pin the failure message asserts is the pin that
     actually ran, so the ambient judge environment is neutralized for the duration
     of this layer - see the comment on `saved_env` below.
@@ -659,6 +909,7 @@ def test_live_rubric_discrimination() -> None:
         os.environ.pop(key, None)
 
     failures: list[str] = []
+    known_open_risks: list[str] = []
 
     Judge = Callable[[str, str, str], Awaitable[tuple[bool, bool]]]
 
@@ -701,9 +952,10 @@ def test_live_rubric_discrimination() -> None:
             else:
                 ac = anthropic.AsyncAnthropic(api_key=anthropic_key)
 
-                # The offline mirror RAISES on a failed/unparseable judge call
-                # rather than failing closed, so it cannot silently report a dead
-                # judge as a verdict and never needs a failure tag.
+                # The offline mirror RAISES on a failed call or a payload with no
+                # boolean `answers` or no string-or-null `stated_value` rather
+                # than failing closed, so it cannot silently report a dead judge
+                # as a verdict and never needs a failure tag.
                 async def offline(
                     question: str, context: str, draft: str
                 ) -> tuple[bool, bool]:
@@ -749,6 +1001,25 @@ def test_live_rubric_discrimination() -> None:
                     continue
 
                 verdicts = [answers for answers, _ in results]
+                if impl_name == "runtime" and label == _RUNTIME_KNOWN_OPEN_RISK:
+                    print(
+                        f"  KNOWN OPEN RISK [{impl_name:>7}] {label}: "
+                        f"answers={verdicts} (want {must_answer}); reported, NOT "
+                        "asserted - the runtime gate let this triple through 5 of "
+                        "10 on 2026-10-15. The exemption never retires on its own: "
+                        "remove _RUNTIME_KNOWN_OPEN_RISK by hand in the change that "
+                        "fixes the runtime gate, and only then is this row asserted"
+                    )
+                    if all(answers is must_answer for answers in verdicts):
+                        print(
+                            f"  EXEMPTION MAY BE REMOVABLE [{impl_name:>7}] {label}: "
+                            f"the runtime gate escalated it {_REPS}/{_REPS} this run. "
+                            "If the runtime gate has been fixed, delete "
+                            "_RUNTIME_KNOWN_OPEN_RISK so this row is asserted again; "
+                            "one clean run is not proof against a 5-of-10 leak rate"
+                        )
+                    known_open_risks.append(f"[{impl_name}] {label}: answers={verdicts}")
+                    continue
                 unanimous = len(set(verdicts)) == 1
                 got = verdicts[0] if unanimous else verdicts
                 ok = unanimous and verdicts[0] is must_answer
@@ -785,12 +1056,17 @@ def test_live_rubric_discrimination() -> None:
 
     _check(not failures, "live rubric discrimination failed:\n  - " + "\n  - ".join(failures))
     print("ok: the live rubric separates deferral-shaped non-answers from real answers")
+    for report in known_open_risks:
+        print(f"  KNOWN OPEN RISK, measured but not asserted: {report}")
 
 
 def main() -> int:
     tests = [
         test_both_rubrics_state_every_shared_rule,
         test_both_tool_schemas_describe_the_disposition_case,
+        test_offline_verdict_requires_a_stated_value,
+        test_offline_judge_raises_on_a_malformed_payload,
+        test_offline_tool_schema_commits_the_values_before_the_verdict,
         test_non_answer_failures_are_structured_independently_of_reason,
         test_boot_warning_call_site_is_wired_to_the_widget_surface,
         test_live_rubric_discrimination,
