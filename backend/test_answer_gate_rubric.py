@@ -110,8 +110,9 @@ always-on layer and catches both rubric drift and an unwired prompt literal.
 
 Layers (the project convention — see CLAUDE.md "How to test"):
   * unit layer, ALWAYS runs, no network/keys/DB: rubric lockstep + rule presence,
-    executable structured judge-failure behavior, plus the boot warning's
-    call-site wiring in `main.py`.
+    the offline verdict's stated-value rule, malformed-payload raise and tool
+    field order, executable structured judge-failure behavior, plus the boot
+    warning's call-site wiring in `main.py`.
   * integration layer, SKIPS CLEANLY without keys: live discrimination on both
     implementations.
 
