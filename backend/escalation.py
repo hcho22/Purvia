@@ -929,7 +929,41 @@ def _unfaithful(tag: str) -> FaithfulnessDecision:
 # context needed to recognise when a grounded-looking restatement misses it.
 # -----------------------------------------------------------------------------
 
-_ANSWER_JUDGE_SYSTEM_PROMPT = (
+# ADR-0015 (the value-extraction mechanism, measured 2026-10-15): the single boolean
+# was a thin argmax on the adjacent-fact draft. On the verbatim e7-p3-10 triple the
+# `answers` token's P(true) read 0.22-0.44 across identical calls and sampling at
+# temperature 1 passed it 10 of 20, while temperature 0 happened to pass 0 of 40 -
+# a verdict that a serving-side wobble could flip, and that the erratum recorded
+# flipping 5 of 10. Making the judge commit to `asked_value` and `stated_value`
+# BEFORE it decides, and to `same_kind` (is the stated value the same kind of thing
+# as the asked one, and specific), moved that sample to 0 of 20 at temperature 1.
+# `same_kind` is not decoration: without it the extraction fields alone let
+# gpt-4o-mini count "10% to 80%" as the stated value of an exact-amount question
+# (3 of 8 at temperature 0, 7 of 8 at temperature 1); with it the same draft passed
+# 0 of 8 and 2 of 8. These two paragraphs are appended verbatim to the measured
+# rubric below, and the offline E7 mirror (`evals/retrieval/runner.py`) states the
+# same two paragraphs; they must move in LOCKSTEP (invariant 8).
+#
+# KNOWN REMAINING GAP, asserted as such in `backend/test_answer_gate_rubric.py`: a
+# value of the right kind stated for the WRONG BRANCH. Asked for the goodwill refund
+# cap once a case is escalated to a supervisor (`e7-p3-07`), a draft that states the
+# un-escalated 50% cap names a real, specific, same-kind value, so every rubric
+# measured on 2026-10-15 (the baseline, this one, and a same-case variant) passed it
+# (this one 8 of 8 at temperature 0). Nothing here claims to close it.
+_ANSWER_EXTRACTION_RULE = (
+    " Before you decide, commit to two fields: `asked_value`, the specific value "
+    "the QUESTION asks for, and `stated_value`, the specific value the ANSWER "
+    "actually hands the customer for that, quoted. If the ANSWER gives no such "
+    "value, `stated_value` is null and the ANSWER does not answer the QUESTION."
+)
+_ANSWER_KIND_RULE = (
+    " The value must be the SAME KIND of thing as the one asked for (an amount for "
+    "an amount, a duration for a duration, a yes/no for a yes/no) and must be "
+    "specific: a range, an estimate, 'varies', or a fact about who pays, when, or "
+    "where is not an exact amount. Set `same_kind` accordingly."
+)
+
+_ANSWER_JUDGE_BASE_PROMPT = (
     "You are a strict answer-completeness judge for an automated customer-support "
     "reply. You are given the customer's QUESTION, a draft ANSWER, and the "
     "RETRIEVED CONTEXT the answer was drafted from. Decide whether the ANSWER "
@@ -954,20 +988,53 @@ _ANSWER_JUDGE_SYSTEM_PROMPT = (
     "= not answered at all)."
 )
 
+_ANSWER_JUDGE_SYSTEM_PROMPT = (
+    _ANSWER_JUDGE_BASE_PROMPT + _ANSWER_EXTRACTION_RULE + _ANSWER_KIND_RULE
+)
+
 
 class AnswerJudgment(BaseModel):
     """Structured-output schema the answer-completeness judge returns per call.
 
-    Mirrors `FaithfulnessJudgment` — one boolean and one score for a single fast
-    round trip. The `[0,1]` bound on `score` is stated in the description and
-    enforced by clamping in `answer_gate`, not as a JSON-schema constraint, so
-    strict structured-output mode never rejects a slightly-out-of-range value.
-    Non-finite values are rejected during schema validation because they cannot
-    represent judge confidence and must follow the malformed-response path.
+    One single fast round trip. The judge fills the fields IN ORDER, so the two
+    extraction fields and `same_kind` are committed BEFORE the `answers` verdict
+    (ADR-0015; the order is load-bearing and pinned by
+    `backend/test_answer_gate_rubric.py`). The `[0,1]` bound on `score` is stated
+    in the description and enforced by clamping in `answer_gate`, not as a
+    JSON-schema constraint, so strict structured-output mode never rejects a
+    slightly-out-of-range value. Non-finite values are rejected during schema
+    validation because they cannot represent judge confidence and must follow the
+    malformed-response path.
     """
 
     model_config = ConfigDict(strict=True)
 
+    asked_value: str = Field(
+        ...,
+        description=(
+            "The specific value the QUESTION asks for (e.g. a fee amount, a "
+            "duration, a yes/no), in a few words."
+        ),
+    )
+    stated_value: str | None = Field(
+        ...,
+        description=(
+            "The specific value the ANSWER actually gives the customer for that, "
+            "quoted. null if the ANSWER only says the value is unavailable, "
+            "unknown, not provided, quoted per case, or at someone's discretion, "
+            "defers to a person, or gives only an adjacent fact."
+        ),
+    )
+    same_kind: bool = Field(
+        ...,
+        description=(
+            "True iff stated_value is the same KIND of thing as asked_value (an "
+            "amount for an amount, a duration for a duration, a yes/no for a "
+            "yes/no) AND is a specific value rather than a range, an estimate, "
+            "'varies', or a fact about who pays, when, or where. False if "
+            "stated_value is null."
+        ),
+    )
     answers: bool = Field(
         ...,
         description=(
@@ -998,8 +1065,9 @@ class AnswerDecision(BaseModel):
     `answers` is the bottom-line verdict the orchestrator (US-049) acts on:
     `True` ⇒ the (already-faithful) draft may auto-send; `False` ⇒ withhold it,
     then `judge_failed` selects current-turn deferral vs deliberate escalation. It
-    is `addressed AND score >= cutoff`, forced `False` on any judge failure
-    (fail-closed). `addressed` / `score` carry the raw judge output (score clamped
+    is `addressed AND a stated value of the asked kind AND score >= cutoff`
+    (ADR-0015), forced `False` on any judge failure (fail-closed). `addressed` /
+    `score` carry the raw judge output (score clamped
     to `[0,1]`; `0.0` on failure). `judge_failed` distinguishes a judge outage
     from an ordinary non-answer verdict so only the latter latches the
     conversation (issue #105). `reason` is a machine-stable tag for logging / eval
@@ -1028,15 +1096,19 @@ async def answer_gate(
     """Verify a drafted answer actually answers the question via ONE judge call.
 
     Makes exactly one `chat.completions.parse` structured-output call on the
-    runtime-judge client/model and returns `answers = addressed AND
-    score >= cutoff`. Any failure mode — SDK/API error, timeout, refusal, empty
-    choices, missing parsed payload — fails **closed**: `answers=False` and
-    `judge_failed=True` (defer this turn), never open. Compares the QUESTION
-    against the DRAFT, using `context` (the rendered retrieved chunks the draft
-    was written from) to check whether the ASKED slot was filled — a draft that
-    restates a fact adjacent to the question (who pays, when it is paid) instead
-    of the value asked for is a non-answer (issue #104-residual), not a pass.
-    Grounding is `faithfulness_gate`'s job, not this gate's.
+    runtime-judge client/model and returns `answers = addressed AND a stated
+    value of the asked kind AND score >= cutoff` (ADR-0015: the judge commits to
+    `asked_value`, `stated_value` and `same_kind` before it decides, and a verdict
+    of "answers" with no stated value, or a stated value of the wrong kind, is
+    self-contradictory and resolves to escalate). Any failure mode - SDK/API
+    error, timeout, refusal, empty choices, missing parsed payload - fails
+    **closed**: `answers=False` and `judge_failed=True` (defer this turn), never
+    open. Compares the QUESTION against the DRAFT, using `context` (the rendered
+    retrieved chunks the draft was written from) to check whether the ASKED slot
+    was filled - a draft that restates a fact adjacent to the question (who pays,
+    when it is paid) instead of the value asked for is a non-answer (issue
+    #104-residual), not a pass. Grounding is `faithfulness_gate`'s job, not this
+    gate's.
 
     Sampled at `JUDGE_TEMPERATURE` (default 0) - see `get_judge_temperature`.
     """
@@ -1074,11 +1146,22 @@ async def answer_gate(
         return _non_answer("judge_no_payload")
 
     score = max(0.0, min(1.0, judgment.score))
-    answers = judgment.answers and score >= cutoff
+    has_value = _has_stated_value(judgment.stated_value)
+    answers = (
+        judgment.answers and has_value and judgment.same_kind and score >= cutoff
+    )
     if answers:
         reason = "answers"
     elif not judgment.answers:
         reason = "non_answer: judge_unaddressed"
+    elif not has_value:
+        # The judge said "answers" yet named no value the customer holds: a
+        # self-contradictory verdict, resolved toward ESCALATION (ADR-0015).
+        reason = "non_answer: no_stated_value"
+    elif not judgment.same_kind:
+        # A value was named, but not the KIND asked for (who pays for an amount) or
+        # not a specific one (a range for an exact amount): still no answer.
+        reason = "non_answer: stated_value_wrong_kind"
     else:
         reason = f"non_answer: score {score:.4f} < cutoff {cutoff:.4f}"
     return AnswerDecision(
@@ -1087,6 +1170,21 @@ async def answer_gate(
         score=score,
         reason=reason,
     )
+
+
+def _has_stated_value(stated_value: str | None) -> bool:
+    """True iff the judge named a value the customer actually holds.
+
+    JSON null, an empty string and whitespace are "no value". So is the literal
+    string `null` (any case): structured-output models occasionally write the word
+    instead of the JSON token, which the 2026-10-15 measurement saw on rows the
+    judge had already marked as non-answers. That normalization can only move a
+    verdict toward escalation, never toward sending.
+    """
+    if stated_value is None:
+        return False
+    cleaned = stated_value.strip()
+    return bool(cleaned) and cleaned.lower() != "null"
 
 
 def _non_answer(tag: str) -> AnswerDecision:

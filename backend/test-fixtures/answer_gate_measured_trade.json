@@ -1,0 +1,407 @@
+{
+ "_about": "Measured-trade fixture for the runtime answer gate (ADR-0015). Every draft is real drafter output from the committed weekly E7 snapshots (2026-09-20 .. 2026-10-11) or from fresh drafts generated on 2026-10-15 for the phase-1 measurement, paired with the verbatim retrieved context for its question; 'constructed' rows are hand-written probes. expect: answers = a should-answer draft (no loss allowed), escalates = must not send, known_gap_answers = a KNOWN REMAINING GAP asserted as such (the gate sends it today; if it stops, update the ADR and this row). Contexts are stored once per question.",
+ "contexts": {
+  "e7-p2-01": "[1] # Warranty Terms\n\nAcme Co's product warranty terms by category. Warranty coverage is separate from the refund policy and applies after the 30-day refund window has closed.\n\n## Electronics\n\nElectronics carry a 12-month limited warranty against manufacturing defects. The warranty starts on the order's `shipped_at` date, not the `paid_at` date. Coverage includes:\n\n- Component failure under normal use.\n- Battery capacity falling below 70% of rated capacity within the warranty period.\n- Firmware-related issues that cannot be resolved by a factory reset.\n\nCoverage does not include physical damage, water damage (unless the product is rated IPX7 or higher), or damage from unauthorized modifications. The warranty is voided if the device has been opened by anyone other than an authorized Acme repair partner.\n\n## Apparel\n\nApparel carries a 90-day warranty against stitching defects, fabric defects, and dye-fastness issues. The warranty starts on the order's `shipped_at` date.\n\nApparel warranty claims do not cover wear-and-tear, fading from washing per the care label, or alterations performed by a third party. Customers who report a warranty issue within 90 days of `shipped_at` may choose between a free replacement (subject to stock) or a full refund credited to the original payment method.\n\n## Home Goods\n\nHome goods carry a 6-month warranty against manufacturing defects. The warranty starts on the order's `shipped_at` date and covers structural failure of joints, glassware breakage during normal household use, and fabric defects on upholstered items.\n\nGlassware warranty claims require a photo of the broken item; the customer is not required to return the broken piece (we ask that it be disposed of safely).\n\n## Books\n\nBooks carry a 30-day warranty against printing defects (missing pages, blurred ink, binding failure). Beyond 30 days, book warranty claims are at the discretion of customer service.\n\n## Food\n\nFood products do not carry a warranty in the traditional sense. Quality issues with food products (off-flavor, expired-on-arrival, packaging compromise) are handled as refunds under the standard refund policy regardless of the 30-day window.\n\n[2] ## Food\n\nFood products do not carry a warranty in the traditional sense. Quality issues with food products (off-flavor, expired-on-arrival, packaging compromise) are handled as refunds under the standard refund policy regardless of the 30-day window.\n\n## What about expedited replacement?\n\nA loyalty-tier customer at Gold or Platinum may request expedited warranty replacement; we ship the replacement before receiving the defective item back, provided the customer authorizes a hold on the original payment method. The hold is released when the defective item is received at our returns center.\n\nExpedited replacement is not available for the electronics category due to fraud risk; electronics warranty claims always require the defective unit to be received first.\n\n[3] The deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns 5–20 lbs; quoted per-case for returns over 20 lbs.\n\n## Receiving and Inspection\n\nReturns are received at our Ohio returns center, typically 4–7 business days after the customer drops the package. The receiving team performs an inspection: condition of product, completeness (all original parts, manuals, accessories), and match against the RMA.\n\nThe inspection outcome drives the refund settlement:\n\n- **Pass** (product in resaleable condition): full refund per policy.\n- **Partial pass** (product usable but not resaleable, e.g. opened software, worn apparel): partial refund at 50–80% of original price.\n- **Fail** (product damaged by the customer, incomplete, or wrong item returned): no refund; the customer is contacted to authorize return-to-customer at the customer's expense or disposal at the customer's option.\n\n## Return Volume Tracking\n\nThe returns center tracks return volume by SKU and surfaces SKUs with a return rate above 8% to the merchandising team for quality review. The return-rate metric is computed as returns received in the trailing 90 days divided by units sold in the same window.\n\nA SKU placed on quality review may be temporarily de-listed from the storefront pending investigation. De-listed SKUs do not affect existing orders or open returns.\n\n[4] Shipping fees are recorded in `orders.shipping` and tax in `orders.tax`. Neither contributes to gross revenue — they are pass-through to the carrier and tax authority respectively.\n\n## Category Notes\n\n**Electronics** (`ELE-*`) is our highest-AOV category. Most SKUs are priced between $40 and $200, and the category produces about 35% of total revenue despite being 20% of the SKU count. Electronics carry the longest warranty (12 months) and the strictest return-inspection process — a returned electronics item must include all original cables, manuals, and packaging to pass inspection.\n\n**Apparel** (`APP-*`) has the highest return rate, typically 12–15% on the trailing 90 days, driven by size and fit issues. The merchandising team has a standing instruction to flag any apparel SKU above 18% return rate for fit-guide review.\n\n**Home goods** (`HOM-*`) includes the most diverse product mix: glassware, lighting, textiles, organizers. Glassware has special return-shipping handling — see the Returns Process document.\n\n**Books** (`BOO-*`) is the lowest-margin category, typically 25–35% gross margin. Books are sold at fixed list price; books are never put on flash sale because publisher agreements prohibit it.\n\n**Food** (`FOO-*`) is the smallest category by SKU count but has the highest repeat-purchase rate. Subscription-style food orders (granola, coffee, tea) are handled outside this document — see the Subscription Operations runbook.\n\n## Discontinued Products\n\nA product moves to discontinued status when the supplier confirms it is no longer available. Discontinued products keep their row in the `products` table for revenue-reporting continuity; the `status` flag is set, the SKU is de-listed from the storefront, and the product disappears from all active sort orders.\n\nDiscontinued products may still appear on historical orders; reporting queries should not exclude discontinued products from revenue aggregations unless the question is specifically about active catalog performance.\n\n[5] # Shipping FAQ\n\nCommon questions about how Acme Co ships orders, what carriers we use, and what to expect after `shipped_at` is set on an order.\n\n## How long does standard shipping take?\n\nStandard shipping is 3–5 business days within the contiguous US. We dispatch from our Ohio fulfillment center; rural ZIP codes may add 1–2 days. Standard shipping is free for orders over $50 and is calculated at checkout for smaller orders.\n\nStandard shipping is not available to PO boxes; the cart will surface a carrier change at checkout if the address is a PO box.\n\n## How long does expedited shipping take?\n\nExpedited shipping is 1–2 business days within the contiguous US. Orders placed before 2 PM Eastern ship the same day; orders placed after 2 PM ship the next business day. Expedited shipping is never free and is not eligible for the loyalty-tier shipping discount.\n\n## How long does international shipping take?\n\nInternational shipping varies by destination. Most European and Asia-Pacific destinations receive orders within 7–14 business days; Latin American and Middle Eastern destinations may take 10–21 business days. Customs delays are common and are outside our control.\n\nInternational orders may incur import duties and taxes assessed by the destination country. These charges are the customer's responsibility and are collected by the carrier at delivery.\n\n## Which carriers do we use?\n\nStandard domestic shipping uses USPS or UPS Ground depending on package weight; expedited uses FedEx Express. International orders ship via DHL Express for most destinations and EMS for select countries.\n\nThe carrier choice is recorded on each order in the fulfillment system but is not exposed on the `orders` table. Customers receive the tracking number via email once `shipped_at` is set.\n\n## When does the shipped_at timestamp get updated?\n\n`shipped_at` is set when the carrier scans the package at our fulfillment center, not when the label is generated. There is typically a 2–6 hour gap between label generation and carrier pickup, especially on weekends and holidays.\n\nFor orders where `shipped_at` has been set but the tracking number shows no movement after 48 hours, contact customer service — the package may have been mis-scanned and requires investigation.",
+  "e7-p2-02": "[1] # Shipping FAQ\n\nCommon questions about how Acme Co ships orders, what carriers we use, and what to expect after `shipped_at` is set on an order.\n\n## How long does standard shipping take?\n\nStandard shipping is 3–5 business days within the contiguous US. We dispatch from our Ohio fulfillment center; rural ZIP codes may add 1–2 days. Standard shipping is free for orders over $50 and is calculated at checkout for smaller orders.\n\nStandard shipping is not available to PO boxes; the cart will surface a carrier change at checkout if the address is a PO box.\n\n## How long does expedited shipping take?\n\nExpedited shipping is 1–2 business days within the contiguous US. Orders placed before 2 PM Eastern ship the same day; orders placed after 2 PM ship the next business day. Expedited shipping is never free and is not eligible for the loyalty-tier shipping discount.\n\n## How long does international shipping take?\n\nInternational shipping varies by destination. Most European and Asia-Pacific destinations receive orders within 7–14 business days; Latin American and Middle Eastern destinations may take 10–21 business days. Customs delays are common and are outside our control.\n\nInternational orders may incur import duties and taxes assessed by the destination country. These charges are the customer's responsibility and are collected by the carrier at delivery.\n\n## Which carriers do we use?\n\nStandard domestic shipping uses USPS or UPS Ground depending on package weight; expedited uses FedEx Express. International orders ship via DHL Express for most destinations and EMS for select countries.\n\nThe carrier choice is recorded on each order in the fulfillment system but is not exposed on the `orders` table. Customers receive the tracking number via email once `shipped_at` is set.\n\n## When does the shipped_at timestamp get updated?\n\n`shipped_at` is set when the carrier scans the package at our fulfillment center, not when the label is generated. There is typically a 2–6 hour gap between label generation and carrier pickup, especially on weekends and holidays.\n\nFor orders where `shipped_at` has been set but the tracking number shows no movement after 48 hours, contact customer service — the package may have been mis-scanned and requires investigation.\n\n[2] # Returns Process\n\nThe mechanical steps for processing a return, distinct from the refund policy decision. A return is the physical movement of product back to Acme Co; a refund is the financial settlement. Most refunds are paired with a return, but not all.\n\n## Cancellation vs Return\n\nIf the order has not yet shipped (`shipped_at IS NULL`), the customer requests a cancellation rather than a return. Cancellations are free, instant, and refund the full order total. The cancellation cutoff is when the order enters the fulfillment-processing state — typically 2 to 4 hours after `paid_at` on weekdays and up to 24 hours on weekends.\n\nOnce `shipped_at` is set, cancellation is no longer available; the customer must initiate a return.\n\n## Return Authorization\n\nAll returns require a Return Merchandise Authorization (RMA) number issued by customer service. The customer cannot ship product back without an RMA — unauthorized returns are refused at the warehouse and shipped back to the customer at the customer's expense.\n\nThe RMA is generated through the customer portal or by emailing customer service. The RMA includes a pre-paid shipping label for US domestic returns; international returns are at the customer's expense unless the return is for a wrong-item-shipped or damaged-in-transit case.\n\n## Return Shipping\n\nUS domestic returns use USPS or UPS Ground depending on package weight. The customer drops the package at any USPS or UPS pickup point; no scheduled pickup is needed. The pre-paid label tracks the package; the customer should keep the tracking number.\n\nReturn shipping is free for the following cases:\n\n- Damaged in transit (Acme Co's fault via the carrier).\n- Wrong item shipped (Acme Co's fault).\n- Product defect (Acme Co's fault).\n\nReturn shipping is paid by the customer (deducted from the refund or charged to the original payment method) for:\n\n- Customer changed their mind.\n- Customer ordered the wrong size or color.\n- Customer no longer needs the item.\n\nThe deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns 5–20 lbs; quoted per-case for returns over 20 lbs.\n\n[3] For orders where `shipped_at` has been set but the tracking number shows no movement after 48 hours, contact customer service — the package may have been mis-scanned and requires investigation.\n\n## What happens on weekends and holidays?\n\nStandard and expedited shipping operate Monday through Friday only. Orders placed on Saturday or Sunday process on the following Monday. The fulfillment center observes ten US federal holidays per year; the published holiday calendar is available in the customer portal.\n\nInternational carriers operate on their own calendars; weekend processing varies by destination.\n\n[4] ## Food\n\nFood products do not carry a warranty in the traditional sense. Quality issues with food products (off-flavor, expired-on-arrival, packaging compromise) are handled as refunds under the standard refund policy regardless of the 30-day window.\n\n## What about expedited replacement?\n\nA loyalty-tier customer at Gold or Platinum may request expedited warranty replacement; we ship the replacement before receiving the defective item back, provided the customer authorizes a hold on the original payment method. The hold is released when the defective item is received at our returns center.\n\nExpedited replacement is not available for the electronics category due to fraud risk; electronics warranty claims always require the defective unit to be received first.\n\n[5] The deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns 5–20 lbs; quoted per-case for returns over 20 lbs.\n\n## Receiving and Inspection\n\nReturns are received at our Ohio returns center, typically 4–7 business days after the customer drops the package. The receiving team performs an inspection: condition of product, completeness (all original parts, manuals, accessories), and match against the RMA.\n\nThe inspection outcome drives the refund settlement:\n\n- **Pass** (product in resaleable condition): full refund per policy.\n- **Partial pass** (product usable but not resaleable, e.g. opened software, worn apparel): partial refund at 50–80% of original price.\n- **Fail** (product damaged by the customer, incomplete, or wrong item returned): no refund; the customer is contacted to authorize return-to-customer at the customer's expense or disposal at the customer's option.\n\n## Return Volume Tracking\n\nThe returns center tracks return volume by SKU and surfaces SKUs with a return rate above 8% to the merchandising team for quality review. The return-rate metric is computed as returns received in the trailing 90 days divided by units sold in the same window.\n\nA SKU placed on quality review may be temporarily de-listed from the storefront pending investigation. De-listed SKUs do not affect existing orders or open returns.",
+  "e7-p2-03": "[1] # Refund Policy\n\nThis document defines how Acme Co handles refunds for orders placed through our online store and customer support channels.\n\n## Eligibility Window\n\nCustomers may request a refund within 30 days of the order's `shipped_at` date. Orders that have not shipped follow the cancellation policy instead — see the Returns Process document for the cancellation cutoff and partial-shipment edge cases.\n\nRefund eligibility is independent of the order's `paid_at` date. A refund window that has already closed cannot be reopened by customer service except under the goodwill exception described below.\n\n## Full vs Partial Refunds\n\nA full refund returns the entire order `total` (including tax, shipping, and any applied discounts already debited). Full refunds are the default for damaged-in-transit, wrong-item-shipped, and product-defect cases.\n\nA partial refund returns a subset of the order `total`. Partial refunds are the default for customer-dissatisfied and delivery-delay cases; the refunded amount is typically 10% to 80% of the order total and is set at the agent's discretion within the published guardrails.\n\nThe `refunds.amount` field records the refunded value in the same currency as `orders.total`. Net revenue calculations subtract `refunds.amount` from gross revenue.\n\n## Goodwill Exception\n\nCustomer service may issue a goodwill refund outside the 30-day window when:\n\n- The order shipped through a third-party carrier that lost the package after delivery scan.\n- The customer can demonstrate that the product became defective within the first 90 days but the defect was not discoverable on receipt.\n- A loyalty-tier customer (Gold or Platinum) requests a refund within 60 days of `shipped_at`.\n\nGoodwill refunds are capped at 50% of the order total unless escalated to a supervisor. Document the goodwill reason in the `refunds.reason` field for auditability.\n\n## Refund Method\n\nRefunds are processed to the original payment method whenever possible. Card refunds typically settle in 5–7 business days; bank transfers in 3–5 business days. Store credit is offered as an alternative and is available immediately.\n\nRefunds cannot be split across multiple payment methods. If the customer paid with a combination of store credit and card, the refund returns to each method proportionally to the original split.\n\n[2] # Returns Process\n\nThe mechanical steps for processing a return, distinct from the refund policy decision. A return is the physical movement of product back to Acme Co; a refund is the financial settlement. Most refunds are paired with a return, but not all.\n\n## Cancellation vs Return\n\nIf the order has not yet shipped (`shipped_at IS NULL`), the customer requests a cancellation rather than a return. Cancellations are free, instant, and refund the full order total. The cancellation cutoff is when the order enters the fulfillment-processing state — typically 2 to 4 hours after `paid_at` on weekdays and up to 24 hours on weekends.\n\nOnce `shipped_at` is set, cancellation is no longer available; the customer must initiate a return.\n\n## Return Authorization\n\nAll returns require a Return Merchandise Authorization (RMA) number issued by customer service. The customer cannot ship product back without an RMA — unauthorized returns are refused at the warehouse and shipped back to the customer at the customer's expense.\n\nThe RMA is generated through the customer portal or by emailing customer service. The RMA includes a pre-paid shipping label for US domestic returns; international returns are at the customer's expense unless the return is for a wrong-item-shipped or damaged-in-transit case.\n\n## Return Shipping\n\nUS domestic returns use USPS or UPS Ground depending on package weight. The customer drops the package at any USPS or UPS pickup point; no scheduled pickup is needed. The pre-paid label tracks the package; the customer should keep the tracking number.\n\nReturn shipping is free for the following cases:\n\n- Damaged in transit (Acme Co's fault via the carrier).\n- Wrong item shipped (Acme Co's fault).\n- Product defect (Acme Co's fault).\n\nReturn shipping is paid by the customer (deducted from the refund or charged to the original payment method) for:\n\n- Customer changed their mind.\n- Customer ordered the wrong size or color.\n- Customer no longer needs the item.\n\nThe deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns 5–20 lbs; quoted per-case for returns over 20 lbs.\n\n[3] # Shipping FAQ\n\nCommon questions about how Acme Co ships orders, what carriers we use, and what to expect after `shipped_at` is set on an order.\n\n## How long does standard shipping take?\n\nStandard shipping is 3–5 business days within the contiguous US. We dispatch from our Ohio fulfillment center; rural ZIP codes may add 1–2 days. Standard shipping is free for orders over $50 and is calculated at checkout for smaller orders.\n\nStandard shipping is not available to PO boxes; the cart will surface a carrier change at checkout if the address is a PO box.\n\n## How long does expedited shipping take?\n\nExpedited shipping is 1–2 business days within the contiguous US. Orders placed before 2 PM Eastern ship the same day; orders placed after 2 PM ship the next business day. Expedited shipping is never free and is not eligible for the loyalty-tier shipping discount.\n\n## How long does international shipping take?\n\nInternational shipping varies by destination. Most European and Asia-Pacific destinations receive orders within 7–14 business days; Latin American and Middle Eastern destinations may take 10–21 business days. Customs delays are common and are outside our control.\n\nInternational orders may incur import duties and taxes assessed by the destination country. These charges are the customer's responsibility and are collected by the carrier at delivery.\n\n## Which carriers do we use?\n\nStandard domestic shipping uses USPS or UPS Ground depending on package weight; expedited uses FedEx Express. International orders ship via DHL Express for most destinations and EMS for select countries.\n\nThe carrier choice is recorded on each order in the fulfillment system but is not exposed on the `orders` table. Customers receive the tracking number via email once `shipped_at` is set.\n\n## When does the shipped_at timestamp get updated?\n\n`shipped_at` is set when the carrier scans the package at our fulfillment center, not when the label is generated. There is typically a 2–6 hour gap between label generation and carrier pickup, especially on weekends and holidays.\n\nFor orders where `shipped_at` has been set but the tracking number shows no movement after 48 hours, contact customer service — the package may have been mis-scanned and requires investigation.\n\n[4] # Warranty Terms\n\nAcme Co's product warranty terms by category. Warranty coverage is separate from the refund policy and applies after the 30-day refund window has closed.\n\n## Electronics\n\nElectronics carry a 12-month limited warranty against manufacturing defects. The warranty starts on the order's `shipped_at` date, not the `paid_at` date. Coverage includes:\n\n- Component failure under normal use.\n- Battery capacity falling below 70% of rated capacity within the warranty period.\n- Firmware-related issues that cannot be resolved by a factory reset.\n\nCoverage does not include physical damage, water damage (unless the product is rated IPX7 or higher), or damage from unauthorized modifications. The warranty is voided if the device has been opened by anyone other than an authorized Acme repair partner.\n\n## Apparel\n\nApparel carries a 90-day warranty against stitching defects, fabric defects, and dye-fastness issues. The warranty starts on the order's `shipped_at` date.\n\nApparel warranty claims do not cover wear-and-tear, fading from washing per the care label, or alterations performed by a third party. Customers who report a warranty issue within 90 days of `shipped_at` may choose between a free replacement (subject to stock) or a full refund credited to the original payment method.\n\n## Home Goods\n\nHome goods carry a 6-month warranty against manufacturing defects. The warranty starts on the order's `shipped_at` date and covers structural failure of joints, glassware breakage during normal household use, and fabric defects on upholstered items.\n\nGlassware warranty claims require a photo of the broken item; the customer is not required to return the broken piece (we ask that it be disposed of safely).\n\n## Books\n\nBooks carry a 30-day warranty against printing defects (missing pages, blurred ink, binding failure). Beyond 30 days, book warranty claims are at the discretion of customer service.\n\n## Food\n\nFood products do not carry a warranty in the traditional sense. Quality issues with food products (off-flavor, expired-on-arrival, packaging compromise) are handled as refunds under the standard refund policy regardless of the 30-day window.\n\n[5] ## Food\n\nFood products do not carry a warranty in the traditional sense. Quality issues with food products (off-flavor, expired-on-arrival, packaging compromise) are handled as refunds under the standard refund policy regardless of the 30-day window.\n\n## What about expedited replacement?\n\nA loyalty-tier customer at Gold or Platinum may request expedited warranty replacement; we ship the replacement before receiving the defective item back, provided the customer authorizes a hold on the original payment method. The hold is released when the defective item is received at our returns center.\n\nExpedited replacement is not available for the electronics category due to fraud risk; electronics warranty claims always require the defective unit to be received first.",
+  "e7-p2-04": "[1] # Returns Process\n\nThe mechanical steps for processing a return, distinct from the refund policy decision. A return is the physical movement of product back to Acme Co; a refund is the financial settlement. Most refunds are paired with a return, but not all.\n\n## Cancellation vs Return\n\nIf the order has not yet shipped (`shipped_at IS NULL`), the customer requests a cancellation rather than a return. Cancellations are free, instant, and refund the full order total. The cancellation cutoff is when the order enters the fulfillment-processing state — typically 2 to 4 hours after `paid_at` on weekdays and up to 24 hours on weekends.\n\nOnce `shipped_at` is set, cancellation is no longer available; the customer must initiate a return.\n\n## Return Authorization\n\nAll returns require a Return Merchandise Authorization (RMA) number issued by customer service. The customer cannot ship product back without an RMA — unauthorized returns are refused at the warehouse and shipped back to the customer at the customer's expense.\n\nThe RMA is generated through the customer portal or by emailing customer service. The RMA includes a pre-paid shipping label for US domestic returns; international returns are at the customer's expense unless the return is for a wrong-item-shipped or damaged-in-transit case.\n\n## Return Shipping\n\nUS domestic returns use USPS or UPS Ground depending on package weight. The customer drops the package at any USPS or UPS pickup point; no scheduled pickup is needed. The pre-paid label tracks the package; the customer should keep the tracking number.\n\nReturn shipping is free for the following cases:\n\n- Damaged in transit (Acme Co's fault via the carrier).\n- Wrong item shipped (Acme Co's fault).\n- Product defect (Acme Co's fault).\n\nReturn shipping is paid by the customer (deducted from the refund or charged to the original payment method) for:\n\n- Customer changed their mind.\n- Customer ordered the wrong size or color.\n- Customer no longer needs the item.\n\nThe deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns 5–20 lbs; quoted per-case for returns over 20 lbs.\n\n[2] The deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns 5–20 lbs; quoted per-case for returns over 20 lbs.\n\n## Receiving and Inspection\n\nReturns are received at our Ohio returns center, typically 4–7 business days after the customer drops the package. The receiving team performs an inspection: condition of product, completeness (all original parts, manuals, accessories), and match against the RMA.\n\nThe inspection outcome drives the refund settlement:\n\n- **Pass** (product in resaleable condition): full refund per policy.\n- **Partial pass** (product usable but not resaleable, e.g. opened software, worn apparel): partial refund at 50–80% of original price.\n- **Fail** (product damaged by the customer, incomplete, or wrong item returned): no refund; the customer is contacted to authorize return-to-customer at the customer's expense or disposal at the customer's option.\n\n## Return Volume Tracking\n\nThe returns center tracks return volume by SKU and surfaces SKUs with a return rate above 8% to the merchandising team for quality review. The return-rate metric is computed as returns received in the trailing 90 days divided by units sold in the same window.\n\nA SKU placed on quality review may be temporarily de-listed from the storefront pending investigation. De-listed SKUs do not affect existing orders or open returns.\n\n[3] # Refund Policy\n\nThis document defines how Acme Co handles refunds for orders placed through our online store and customer support channels.\n\n## Eligibility Window\n\nCustomers may request a refund within 30 days of the order's `shipped_at` date. Orders that have not shipped follow the cancellation policy instead — see the Returns Process document for the cancellation cutoff and partial-shipment edge cases.\n\nRefund eligibility is independent of the order's `paid_at` date. A refund window that has already closed cannot be reopened by customer service except under the goodwill exception described below.\n\n## Full vs Partial Refunds\n\nA full refund returns the entire order `total` (including tax, shipping, and any applied discounts already debited). Full refunds are the default for damaged-in-transit, wrong-item-shipped, and product-defect cases.\n\nA partial refund returns a subset of the order `total`. Partial refunds are the default for customer-dissatisfied and delivery-delay cases; the refunded amount is typically 10% to 80% of the order total and is set at the agent's discretion within the published guardrails.\n\nThe `refunds.amount` field records the refunded value in the same currency as `orders.total`. Net revenue calculations subtract `refunds.amount` from gross revenue.\n\n## Goodwill Exception\n\nCustomer service may issue a goodwill refund outside the 30-day window when:\n\n- The order shipped through a third-party carrier that lost the package after delivery scan.\n- The customer can demonstrate that the product became defective within the first 90 days but the defect was not discoverable on receipt.\n- A loyalty-tier customer (Gold or Platinum) requests a refund within 60 days of `shipped_at`.\n\nGoodwill refunds are capped at 50% of the order total unless escalated to a supervisor. Document the goodwill reason in the `refunds.reason` field for auditability.\n\n## Refund Method\n\nRefunds are processed to the original payment method whenever possible. Card refunds typically settle in 5–7 business days; bank transfers in 3–5 business days. Store credit is offered as an alternative and is available immediately.\n\nRefunds cannot be split across multiple payment methods. If the customer paid with a combination of store credit and card, the refund returns to each method proportionally to the original split.\n\n[4] Shipping fees are recorded in `orders.shipping` and tax in `orders.tax`. Neither contributes to gross revenue — they are pass-through to the carrier and tax authority respectively.\n\n## Category Notes\n\n**Electronics** (`ELE-*`) is our highest-AOV category. Most SKUs are priced between $40 and $200, and the category produces about 35% of total revenue despite being 20% of the SKU count. Electronics carry the longest warranty (12 months) and the strictest return-inspection process — a returned electronics item must include all original cables, manuals, and packaging to pass inspection.\n\n**Apparel** (`APP-*`) has the highest return rate, typically 12–15% on the trailing 90 days, driven by size and fit issues. The merchandising team has a standing instruction to flag any apparel SKU above 18% return rate for fit-guide review.\n\n**Home goods** (`HOM-*`) includes the most diverse product mix: glassware, lighting, textiles, organizers. Glassware has special return-shipping handling — see the Returns Process document.\n\n**Books** (`BOO-*`) is the lowest-margin category, typically 25–35% gross margin. Books are sold at fixed list price; books are never put on flash sale because publisher agreements prohibit it.\n\n**Food** (`FOO-*`) is the smallest category by SKU count but has the highest repeat-purchase rate. Subscription-style food orders (granola, coffee, tea) are handled outside this document — see the Subscription Operations runbook.\n\n## Discontinued Products\n\nA product moves to discontinued status when the supplier confirms it is no longer available. Discontinued products keep their row in the `products` table for revenue-reporting continuity; the `status` flag is set, the SKU is de-listed from the storefront, and the product disappears from all active sort orders.\n\nDiscontinued products may still appear on historical orders; reporting queries should not exclude discontinued products from revenue aggregations unless the question is specifically about active catalog performance.\n\n[5] Refunds cannot be split across multiple payment methods. If the customer paid with a combination of store credit and card, the refund returns to each method proportionally to the original split.\n\n## What Refunds Do Not Cover\n\nRefunds do not include the original shipping cost on orders shipped via expedited or international carriers, except for the damaged-in-transit and wrong-item-shipped cases. Restocking fees do not apply at Acme Co; we do not deduct from the refund amount for handling.\n\nGift cards are not refundable. Subscription-style orders follow the Loyalty Program cancellation rules, not this policy.",
+  "e7-p3-03": "[1] # Refund Policy\n\nThis document defines how Acme Co handles refunds for orders placed through our online store and customer support channels.\n\n## Eligibility Window\n\nCustomers may request a refund within 30 days of the order's `shipped_at` date. Orders that have not shipped follow the cancellation policy instead — see the Returns Process document for the cancellation cutoff and partial-shipment edge cases.\n\nRefund eligibility is independent of the order's `paid_at` date. A refund window that has already closed cannot be reopened by customer service except under the goodwill exception described below.\n\n## Full vs Partial Refunds\n\nA full refund returns the entire order `total` (including tax, shipping, and any applied discounts already debited). Full refunds are the default for damaged-in-transit, wrong-item-shipped, and product-defect cases.\n\nA partial refund returns a subset of the order `total`. Partial refunds are the default for customer-dissatisfied and delivery-delay cases; the refunded amount is typically 10% to 80% of the order total and is set at the agent's discretion within the published guardrails.\n\nThe `refunds.amount` field records the refunded value in the same currency as `orders.total`. Net revenue calculations subtract `refunds.amount` from gross revenue.\n\n## Goodwill Exception\n\nCustomer service may issue a goodwill refund outside the 30-day window when:\n\n- The order shipped through a third-party carrier that lost the package after delivery scan.\n- The customer can demonstrate that the product became defective within the first 90 days but the defect was not discoverable on receipt.\n- A loyalty-tier customer (Gold or Platinum) requests a refund within 60 days of `shipped_at`.\n\nGoodwill refunds are capped at 50% of the order total unless escalated to a supervisor. Document the goodwill reason in the `refunds.reason` field for auditability.\n\n## Refund Method\n\nRefunds are processed to the original payment method whenever possible. Card refunds typically settle in 5–7 business days; bank transfers in 3–5 business days. Store credit is offered as an alternative and is available immediately.\n\nRefunds cannot be split across multiple payment methods. If the customer paid with a combination of store credit and card, the refund returns to each method proportionally to the original split.\n\n[2] Refunds cannot be split across multiple payment methods. If the customer paid with a combination of store credit and card, the refund returns to each method proportionally to the original split.\n\n## What Refunds Do Not Cover\n\nRefunds do not include the original shipping cost on orders shipped via expedited or international carriers, except for the damaged-in-transit and wrong-item-shipped cases. Restocking fees do not apply at Acme Co; we do not deduct from the refund amount for handling.\n\nGift cards are not refundable. Subscription-style orders follow the Loyalty Program cancellation rules, not this policy.\n\n[3] The deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns 5–20 lbs; quoted per-case for returns over 20 lbs.\n\n## Receiving and Inspection\n\nReturns are received at our Ohio returns center, typically 4–7 business days after the customer drops the package. The receiving team performs an inspection: condition of product, completeness (all original parts, manuals, accessories), and match against the RMA.\n\nThe inspection outcome drives the refund settlement:\n\n- **Pass** (product in resaleable condition): full refund per policy.\n- **Partial pass** (product usable but not resaleable, e.g. opened software, worn apparel): partial refund at 50–80% of original price.\n- **Fail** (product damaged by the customer, incomplete, or wrong item returned): no refund; the customer is contacted to authorize return-to-customer at the customer's expense or disposal at the customer's option.\n\n## Return Volume Tracking\n\nThe returns center tracks return volume by SKU and surfaces SKUs with a return rate above 8% to the merchandising team for quality review. The return-rate metric is computed as returns received in the trailing 90 days divided by units sold in the same window.\n\nA SKU placed on quality review may be temporarily de-listed from the storefront pending investigation. De-listed SKUs do not affect existing orders or open returns.\n\n[4] # Returns Process\n\nThe mechanical steps for processing a return, distinct from the refund policy decision. A return is the physical movement of product back to Acme Co; a refund is the financial settlement. Most refunds are paired with a return, but not all.\n\n## Cancellation vs Return\n\nIf the order has not yet shipped (`shipped_at IS NULL`), the customer requests a cancellation rather than a return. Cancellations are free, instant, and refund the full order total. The cancellation cutoff is when the order enters the fulfillment-processing state — typically 2 to 4 hours after `paid_at` on weekdays and up to 24 hours on weekends.\n\nOnce `shipped_at` is set, cancellation is no longer available; the customer must initiate a return.\n\n## Return Authorization\n\nAll returns require a Return Merchandise Authorization (RMA) number issued by customer service. The customer cannot ship product back without an RMA — unauthorized returns are refused at the warehouse and shipped back to the customer at the customer's expense.\n\nThe RMA is generated through the customer portal or by emailing customer service. The RMA includes a pre-paid shipping label for US domestic returns; international returns are at the customer's expense unless the return is for a wrong-item-shipped or damaged-in-transit case.\n\n## Return Shipping\n\nUS domestic returns use USPS or UPS Ground depending on package weight. The customer drops the package at any USPS or UPS pickup point; no scheduled pickup is needed. The pre-paid label tracks the package; the customer should keep the tracking number.\n\nReturn shipping is free for the following cases:\n\n- Damaged in transit (Acme Co's fault via the carrier).\n- Wrong item shipped (Acme Co's fault).\n- Product defect (Acme Co's fault).\n\nReturn shipping is paid by the customer (deducted from the refund or charged to the original payment method) for:\n\n- Customer changed their mind.\n- Customer ordered the wrong size or color.\n- Customer no longer needs the item.\n\nThe deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns 5–20 lbs; quoted per-case for returns over 20 lbs.\n\n[5] ## Food\n\nFood products do not carry a warranty in the traditional sense. Quality issues with food products (off-flavor, expired-on-arrival, packaging compromise) are handled as refunds under the standard refund policy regardless of the 30-day window.\n\n## What about expedited replacement?\n\nA loyalty-tier customer at Gold or Platinum may request expedited warranty replacement; we ship the replacement before receiving the defective item back, provided the customer authorizes a hold on the original payment method. The hold is released when the defective item is received at our returns center.\n\nExpedited replacement is not available for the electronics category due to fraud risk; electronics warranty claims always require the defective unit to be received first.",
+  "e7-p3-07": "[1] # Refund Policy\n\nThis document defines how Acme Co handles refunds for orders placed through our online store and customer support channels.\n\n## Eligibility Window\n\nCustomers may request a refund within 30 days of the order's `shipped_at` date. Orders that have not shipped follow the cancellation policy instead — see the Returns Process document for the cancellation cutoff and partial-shipment edge cases.\n\nRefund eligibility is independent of the order's `paid_at` date. A refund window that has already closed cannot be reopened by customer service except under the goodwill exception described below.\n\n## Full vs Partial Refunds\n\nA full refund returns the entire order `total` (including tax, shipping, and any applied discounts already debited). Full refunds are the default for damaged-in-transit, wrong-item-shipped, and product-defect cases.\n\nA partial refund returns a subset of the order `total`. Partial refunds are the default for customer-dissatisfied and delivery-delay cases; the refunded amount is typically 10% to 80% of the order total and is set at the agent's discretion within the published guardrails.\n\nThe `refunds.amount` field records the refunded value in the same currency as `orders.total`. Net revenue calculations subtract `refunds.amount` from gross revenue.\n\n## Goodwill Exception\n\nCustomer service may issue a goodwill refund outside the 30-day window when:\n\n- The order shipped through a third-party carrier that lost the package after delivery scan.\n- The customer can demonstrate that the product became defective within the first 90 days but the defect was not discoverable on receipt.\n- A loyalty-tier customer (Gold or Platinum) requests a refund within 60 days of `shipped_at`.\n\nGoodwill refunds are capped at 50% of the order total unless escalated to a supervisor. Document the goodwill reason in the `refunds.reason` field for auditability.\n\n## Refund Method\n\nRefunds are processed to the original payment method whenever possible. Card refunds typically settle in 5–7 business days; bank transfers in 3–5 business days. Store credit is offered as an alternative and is available immediately.\n\nRefunds cannot be split across multiple payment methods. If the customer paid with a combination of store credit and card, the refund returns to each method proportionally to the original split.\n\n[2] # Customer Service Standard Operating Procedure\n\nThis SOP defines how Acme Co customer service agents handle inbound contacts, escalations, and special-case workflows.\n\n## Contact Channels\n\nAgents handle three channels: email (via the Zendesk-equivalent help desk), phone (queued through the unified contact center), and live chat (embedded in the customer portal). Email is the default channel for non-urgent contacts; phone is reserved for time-sensitive issues like delivery problems and active fraud reports.\n\nResponse-time targets:\n\n- **Phone**: Answered within 90 seconds 95% of the time during business hours (Mon–Fri 8 AM – 8 PM Eastern).\n- **Live chat**: First response within 60 seconds during business hours.\n- **Email**: First response within 4 business hours; full resolution within 24 business hours for routine issues.\n\n## Authentication\n\nBefore acting on a customer's behalf, agents must verify the customer's identity. For low-risk actions (looking up an order status, confirming a delivery address), name plus email match is sufficient. For account changes, refunds above $100, or any goodwill exception, the agent must also confirm the last four digits of the payment method on file or a recent order number.\n\nLoyalty-tier Platinum members on the dedicated line are pre-authenticated through caller-ID match plus a one-time code sent to the email on file.\n\n## Escalation Triggers\n\nEscalate to a supervisor when:\n\n- The customer requests a refund above $500 outside the 30-day window.\n- The customer has had three or more refunds in the trailing 6 months.\n- The customer mentions legal action, regulatory complaints, or threatens public disclosure.\n- The order shipped via expedited or international carrier and the customer is requesting full reimbursement including shipping.\n\nSupervisor decisions are logged in the customer record. Agents should not promise resolution timelines on escalated cases; the supervisor commits the timeline after review.\n\n## Tone and Phrasing\n\nAgents address customers by first name only after the customer has used a first name themselves. Use \"we\" and \"Acme Co\" rather than \"the company\" or \"they\"; ownership of the problem is part of the brand.\n\n[3] The deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns 5–20 lbs; quoted per-case for returns over 20 lbs.\n\n## Receiving and Inspection\n\nReturns are received at our Ohio returns center, typically 4–7 business days after the customer drops the package. The receiving team performs an inspection: condition of product, completeness (all original parts, manuals, accessories), and match against the RMA.\n\nThe inspection outcome drives the refund settlement:\n\n- **Pass** (product in resaleable condition): full refund per policy.\n- **Partial pass** (product usable but not resaleable, e.g. opened software, worn apparel): partial refund at 50–80% of original price.\n- **Fail** (product damaged by the customer, incomplete, or wrong item returned): no refund; the customer is contacted to authorize return-to-customer at the customer's expense or disposal at the customer's option.\n\n## Return Volume Tracking\n\nThe returns center tracks return volume by SKU and surfaces SKUs with a return rate above 8% to the merchandising team for quality review. The return-rate metric is computed as returns received in the trailing 90 days divided by units sold in the same window.\n\nA SKU placed on quality review may be temporarily de-listed from the storefront pending investigation. De-listed SKUs do not affect existing orders or open returns.\n\n[4] # Returns Process\n\nThe mechanical steps for processing a return, distinct from the refund policy decision. A return is the physical movement of product back to Acme Co; a refund is the financial settlement. Most refunds are paired with a return, but not all.\n\n## Cancellation vs Return\n\nIf the order has not yet shipped (`shipped_at IS NULL`), the customer requests a cancellation rather than a return. Cancellations are free, instant, and refund the full order total. The cancellation cutoff is when the order enters the fulfillment-processing state — typically 2 to 4 hours after `paid_at` on weekdays and up to 24 hours on weekends.\n\nOnce `shipped_at` is set, cancellation is no longer available; the customer must initiate a return.\n\n## Return Authorization\n\nAll returns require a Return Merchandise Authorization (RMA) number issued by customer service. The customer cannot ship product back without an RMA — unauthorized returns are refused at the warehouse and shipped back to the customer at the customer's expense.\n\nThe RMA is generated through the customer portal or by emailing customer service. The RMA includes a pre-paid shipping label for US domestic returns; international returns are at the customer's expense unless the return is for a wrong-item-shipped or damaged-in-transit case.\n\n## Return Shipping\n\nUS domestic returns use USPS or UPS Ground depending on package weight. The customer drops the package at any USPS or UPS pickup point; no scheduled pickup is needed. The pre-paid label tracks the package; the customer should keep the tracking number.\n\nReturn shipping is free for the following cases:\n\n- Damaged in transit (Acme Co's fault via the carrier).\n- Wrong item shipped (Acme Co's fault).\n- Product defect (Acme Co's fault).\n\nReturn shipping is paid by the customer (deducted from the refund or charged to the original payment method) for:\n\n- Customer changed their mind.\n- Customer ordered the wrong size or color.\n- Customer no longer needs the item.\n\nThe deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns 5–20 lbs; quoted per-case for returns over 20 lbs.\n\n[5] Refunds cannot be split across multiple payment methods. If the customer paid with a combination of store credit and card, the refund returns to each method proportionally to the original split.\n\n## What Refunds Do Not Cover\n\nRefunds do not include the original shipping cost on orders shipped via expedited or international carriers, except for the damaged-in-transit and wrong-item-shipped cases. Restocking fees do not apply at Acme Co; we do not deduct from the refund amount for handling.\n\nGift cards are not refundable. Subscription-style orders follow the Loyalty Program cancellation rules, not this policy.",
+  "e7-p3-10": "[1] # Returns Process\n\nThe mechanical steps for processing a return, distinct from the refund policy decision. A return is the physical movement of product back to Acme Co; a refund is the financial settlement. Most refunds are paired with a return, but not all.\n\n## Cancellation vs Return\n\nIf the order has not yet shipped (`shipped_at IS NULL`), the customer requests a cancellation rather than a return. Cancellations are free, instant, and refund the full order total. The cancellation cutoff is when the order enters the fulfillment-processing state — typically 2 to 4 hours after `paid_at` on weekdays and up to 24 hours on weekends.\n\nOnce `shipped_at` is set, cancellation is no longer available; the customer must initiate a return.\n\n## Return Authorization\n\nAll returns require a Return Merchandise Authorization (RMA) number issued by customer service. The customer cannot ship product back without an RMA — unauthorized returns are refused at the warehouse and shipped back to the customer at the customer's expense.\n\nThe RMA is generated through the customer portal or by emailing customer service. The RMA includes a pre-paid shipping label for US domestic returns; international returns are at the customer's expense unless the return is for a wrong-item-shipped or damaged-in-transit case.\n\n## Return Shipping\n\nUS domestic returns use USPS or UPS Ground depending on package weight. The customer drops the package at any USPS or UPS pickup point; no scheduled pickup is needed. The pre-paid label tracks the package; the customer should keep the tracking number.\n\nReturn shipping is free for the following cases:\n\n- Damaged in transit (Acme Co's fault via the carrier).\n- Wrong item shipped (Acme Co's fault).\n- Product defect (Acme Co's fault).\n\nReturn shipping is paid by the customer (deducted from the refund or charged to the original payment method) for:\n\n- Customer changed their mind.\n- Customer ordered the wrong size or color.\n- Customer no longer needs the item.\n\nThe deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns 5–20 lbs; quoted per-case for returns over 20 lbs.\n\n[2] Refunds cannot be split across multiple payment methods. If the customer paid with a combination of store credit and card, the refund returns to each method proportionally to the original split.\n\n## What Refunds Do Not Cover\n\nRefunds do not include the original shipping cost on orders shipped via expedited or international carriers, except for the damaged-in-transit and wrong-item-shipped cases. Restocking fees do not apply at Acme Co; we do not deduct from the refund amount for handling.\n\nGift cards are not refundable. Subscription-style orders follow the Loyalty Program cancellation rules, not this policy.\n\n[3] The deduction is $7.95 for standard returns under 5 lbs; $14.95 for returns 5–20 lbs; quoted per-case for returns over 20 lbs.\n\n## Receiving and Inspection\n\nReturns are received at our Ohio returns center, typically 4–7 business days after the customer drops the package. The receiving team performs an inspection: condition of product, completeness (all original parts, manuals, accessories), and match against the RMA.\n\nThe inspection outcome drives the refund settlement:\n\n- **Pass** (product in resaleable condition): full refund per policy.\n- **Partial pass** (product usable but not resaleable, e.g. opened software, worn apparel): partial refund at 50–80% of original price.\n- **Fail** (product damaged by the customer, incomplete, or wrong item returned): no refund; the customer is contacted to authorize return-to-customer at the customer's expense or disposal at the customer's option.\n\n## Return Volume Tracking\n\nThe returns center tracks return volume by SKU and surfaces SKUs with a return rate above 8% to the merchandising team for quality review. The return-rate metric is computed as returns received in the trailing 90 days divided by units sold in the same window.\n\nA SKU placed on quality review may be temporarily de-listed from the storefront pending investigation. De-listed SKUs do not affect existing orders or open returns.\n\n[4] # Shipping FAQ\n\nCommon questions about how Acme Co ships orders, what carriers we use, and what to expect after `shipped_at` is set on an order.\n\n## How long does standard shipping take?\n\nStandard shipping is 3–5 business days within the contiguous US. We dispatch from our Ohio fulfillment center; rural ZIP codes may add 1–2 days. Standard shipping is free for orders over $50 and is calculated at checkout for smaller orders.\n\nStandard shipping is not available to PO boxes; the cart will surface a carrier change at checkout if the address is a PO box.\n\n## How long does expedited shipping take?\n\nExpedited shipping is 1–2 business days within the contiguous US. Orders placed before 2 PM Eastern ship the same day; orders placed after 2 PM ship the next business day. Expedited shipping is never free and is not eligible for the loyalty-tier shipping discount.\n\n## How long does international shipping take?\n\nInternational shipping varies by destination. Most European and Asia-Pacific destinations receive orders within 7–14 business days; Latin American and Middle Eastern destinations may take 10–21 business days. Customs delays are common and are outside our control.\n\nInternational orders may incur import duties and taxes assessed by the destination country. These charges are the customer's responsibility and are collected by the carrier at delivery.\n\n## Which carriers do we use?\n\nStandard domestic shipping uses USPS or UPS Ground depending on package weight; expedited uses FedEx Express. International orders ship via DHL Express for most destinations and EMS for select countries.\n\nThe carrier choice is recorded on each order in the fulfillment system but is not exposed on the `orders` table. Customers receive the tracking number via email once `shipped_at` is set.\n\n## When does the shipped_at timestamp get updated?\n\n`shipped_at` is set when the carrier scans the package at our fulfillment center, not when the label is generated. There is typically a 2–6 hour gap between label generation and carrier pickup, especially on weekends and holidays.\n\nFor orders where `shipped_at` has been set but the tracking number shows no movement after 48 hours, contact customer service — the package may have been mis-scanned and requires investigation.\n\n[5] # Refund Policy\n\nThis document defines how Acme Co handles refunds for orders placed through our online store and customer support channels.\n\n## Eligibility Window\n\nCustomers may request a refund within 30 days of the order's `shipped_at` date. Orders that have not shipped follow the cancellation policy instead — see the Returns Process document for the cancellation cutoff and partial-shipment edge cases.\n\nRefund eligibility is independent of the order's `paid_at` date. A refund window that has already closed cannot be reopened by customer service except under the goodwill exception described below.\n\n## Full vs Partial Refunds\n\nA full refund returns the entire order `total` (including tax, shipping, and any applied discounts already debited). Full refunds are the default for damaged-in-transit, wrong-item-shipped, and product-defect cases.\n\nA partial refund returns a subset of the order `total`. Partial refunds are the default for customer-dissatisfied and delivery-delay cases; the refunded amount is typically 10% to 80% of the order total and is set at the agent's discretion within the published guardrails.\n\nThe `refunds.amount` field records the refunded value in the same currency as `orders.total`. Net revenue calculations subtract `refunds.amount` from gross revenue.\n\n## Goodwill Exception\n\nCustomer service may issue a goodwill refund outside the 30-day window when:\n\n- The order shipped through a third-party carrier that lost the package after delivery scan.\n- The customer can demonstrate that the product became defective within the first 90 days but the defect was not discoverable on receipt.\n- A loyalty-tier customer (Gold or Platinum) requests a refund within 60 days of `shipped_at`.\n\nGoodwill refunds are capped at 50% of the order total unless escalated to a supervisor. Document the goodwill reason in the `refunds.reason` field for auditability.\n\n## Refund Method\n\nRefunds are processed to the original payment method whenever possible. Card refunds typically settle in 5–7 business days; bank transfers in 3–5 business days. Store credit is offered as an alternative and is available immediately.\n\nRefunds cannot be split across multiple payment methods. If the customer paid with a combination of store credit and card, the refund returns to each method proportionally to the original split."
+ },
+ "rows": [
+  {
+   "id": "e7-p2-01#1",
+   "population": "answerable",
+   "qid": "e7-p2-01",
+   "question": "How long is the electronics warranty?",
+   "draft": "The electronics warranty is 12 months against manufacturing defects, starting on the order's `shipped_at` date.",
+   "expect": "answers"
+  },
+  {
+   "id": "e7-p2-02#1",
+   "population": "answerable",
+   "qid": "e7-p2-02",
+   "question": "How long does standard domestic shipping take?",
+   "draft": "Standard domestic shipping takes 3–5 business days within the contiguous US. It may take an additional 1–2 days for rural ZIP codes.",
+   "expect": "answers"
+  },
+  {
+   "id": "e7-p2-03#1",
+   "population": "answerable",
+   "qid": "e7-p2-03",
+   "question": "Within how many days of the shipped_at date can I request a refund?",
+   "draft": "You can request a refund within 30 days of the order's `shipped_at` date.",
+   "expect": "answers"
+  },
+  {
+   "id": "e7-p2-04#1",
+   "population": "answerable",
+   "qid": "e7-p2-04",
+   "question": "What is the return shipping fee for an item between 5 and 20 pounds that I changed my mind about?",
+   "draft": "The return shipping fee for an item between 5 and 20 pounds that you changed your mind about is $14.95.",
+   "expect": "answers"
+  },
+  {
+   "id": "e7-p2-01#2",
+   "population": "answerable",
+   "qid": "e7-p2-01",
+   "question": "How long is the electronics warranty?",
+   "draft": "The electronics warranty is a 12-month limited warranty against manufacturing defects, starting on the order's `shipped_at` date.",
+   "expect": "answers"
+  },
+  {
+   "id": "e7-p2-02#2",
+   "population": "answerable",
+   "qid": "e7-p2-02",
+   "question": "How long does standard domestic shipping take?",
+   "draft": "Standard domestic shipping takes 3–5 business days within the contiguous US. Rural ZIP codes may add 1–2 days.",
+   "expect": "answers"
+  },
+  {
+   "id": "e7-p2-03#2",
+   "population": "answerable",
+   "qid": "e7-p2-03",
+   "question": "Within how many days of the shipped_at date can I request a refund?",
+   "draft": "You may request a refund within 30 days of the order's `shipped_at` date.",
+   "expect": "answers"
+  },
+  {
+   "id": "e7-p2-04#2",
+   "population": "answerable",
+   "qid": "e7-p2-04",
+   "question": "What is the return shipping fee for an item between 5 and 20 pounds that I changed my mind about?",
+   "draft": "The return shipping fee for an item between 5 and 20 pounds that you changed your mind about is $14.95, and this amount will be deducted from your refund or charged to your original payment method.",
+   "expect": "answers"
+  },
+  {
+   "id": "e7-p2-01#3",
+   "population": "answerable",
+   "qid": "e7-p2-01",
+   "question": "How long is the electronics warranty?",
+   "draft": "The electronics warranty is a 12-month limited warranty against manufacturing defects. It starts on the order's `shipped_at` date.",
+   "expect": "answers"
+  },
+  {
+   "id": "e7-p2-02#3",
+   "population": "answerable",
+   "qid": "e7-p2-02",
+   "question": "How long does standard domestic shipping take?",
+   "draft": "Standard domestic shipping takes 3–5 business days within the contiguous US. Please note that rural ZIP codes may add 1–2 days.",
+   "expect": "answers"
+  },
+  {
+   "id": "e7-p2-04#3",
+   "population": "answerable",
+   "qid": "e7-p2-04",
+   "question": "What is the return shipping fee for an item between 5 and 20 pounds that I changed my mind about?",
+   "draft": "The return shipping fee for an item between 5 and 20 pounds that you changed your mind about is $14.95, which will be deducted from the refund or charged to the original payment method.",
+   "expect": "answers"
+  },
+  {
+   "id": "e7-p2-01#4",
+   "population": "answerable",
+   "qid": "e7-p2-01",
+   "question": "How long is the electronics warranty?",
+   "draft": "The electronics carry a 12-month limited warranty against manufacturing defects, which starts on the order's `shipped_at` date.",
+   "expect": "answers"
+  },
+  {
+   "id": "e7-p2-01#5",
+   "population": "answerable",
+   "qid": "e7-p2-01",
+   "question": "How long is the electronics warranty?",
+   "draft": "Electronics carry a 12-month limited warranty against manufacturing defects, starting on the order's `shipped_at` date.",
+   "expect": "answers"
+  },
+  {
+   "id": "e7-p2-02#4",
+   "population": "answerable",
+   "qid": "e7-p2-02",
+   "question": "How long does standard domestic shipping take?",
+   "draft": "Standard domestic shipping takes 3–5 business days within the contiguous US. However, rural ZIP codes may add 1–2 days.",
+   "expect": "answers"
+  },
+  {
+   "id": "e7-p2-02#5",
+   "population": "answerable",
+   "qid": "e7-p2-02",
+   "question": "How long does standard domestic shipping take?",
+   "draft": "Standard domestic shipping takes 3–5 business days within the contiguous US. However, rural ZIP codes may add 1–2 days to the shipping time.",
+   "expect": "answers"
+  },
+  {
+   "id": "e7-p2-02#6",
+   "population": "answerable",
+   "qid": "e7-p2-02",
+   "question": "How long does standard domestic shipping take?",
+   "draft": "Standard domestic shipping takes 3–5 business days within the contiguous US. Rural ZIP codes may add 1–2 days. Standard shipping is free for orders over $50.",
+   "expect": "answers"
+  },
+  {
+   "id": "e7-p2-02#7",
+   "population": "answerable",
+   "qid": "e7-p2-02",
+   "question": "How long does standard domestic shipping take?",
+   "draft": "Standard shipping is 3–5 business days within the contiguous US. Rural ZIP codes may add 1–2 days.",
+   "expect": "answers"
+  },
+  {
+   "id": "e7-p2-04#4",
+   "population": "answerable",
+   "qid": "e7-p2-04",
+   "question": "What is the return shipping fee for an item between 5 and 20 pounds that I changed my mind about?",
+   "draft": "The return shipping fee for an item between 5 and 20 pounds that you changed your mind about is $14.95, and this fee will be deducted from your refund or charged to your original payment method.",
+   "expect": "answers"
+  },
+  {
+   "id": "e7-p2-04#5",
+   "population": "answerable",
+   "qid": "e7-p2-04",
+   "question": "What is the return shipping fee for an item between 5 and 20 pounds that I changed my mind about?",
+   "draft": "The return shipping fee for an item between 5 and 20 pounds that you changed your mind about is $14.95, which will be deducted from your refund or charged to your original payment method.",
+   "expect": "answers"
+  },
+  {
+   "id": "e7-p3-10#1",
+   "population": "adjacent_fact",
+   "qid": "e7-p3-10",
+   "question": "What is the return shipping fee for an international return?",
+   "draft": "For international returns, the return shipping is at the customer's expense, unless the return is for a wrong-item-shipped or damaged-in-transit case.",
+   "expect": "escalates"
+  },
+  {
+   "id": "e7-p3-10#2",
+   "population": "adjacent_fact",
+   "qid": "e7-p3-10",
+   "question": "What is the return shipping fee for an international return?",
+   "draft": "The context specifies that international returns are at the customer's expense unless the return is for a wrong item shipped or damaged in transit. Therefore, there is no set return shipping fee mentioned for international returns since it varies based on the reason for the return.",
+   "expect": "escalates"
+  },
+  {
+   "id": "e7-p3-10#3",
+   "population": "adjacent_fact",
+   "qid": "e7-p3-10",
+   "question": "What is the return shipping fee for an international return?",
+   "draft": "The context states that international returns are at the customer's expense unless the return is for a wrong-item-shipped or damaged-in-transit case. However, it does not specify a fee amount for international returns. Therefore, I don't have that specific information.",
+   "expect": "escalates"
+  },
+  {
+   "id": "e7-p3-10#4",
+   "population": "adjacent_fact",
+   "qid": "e7-p3-10",
+   "question": "What is the return shipping fee for an international return?",
+   "draft": "International returns are at the customer's expense unless the return is for a wrong-item-shipped or damaged-in-transit case. The specific return shipping fee is not provided in the context.",
+   "expect": "escalates"
+  },
+  {
+   "id": "e7-p3-10#5",
+   "population": "adjacent_fact",
+   "qid": "e7-p3-10",
+   "question": "What is the return shipping fee for an international return?",
+   "draft": "For international returns, the shipping cost is at the customer's expense unless the return is for a wrong item shipped or damaged in transit. The specific return shipping fee for international returns is not provided in the context.",
+   "expect": "escalates"
+  },
+  {
+   "id": "e7-p3-10#6",
+   "population": "adjacent_fact",
+   "qid": "e7-p3-10",
+   "question": "What is the return shipping fee for an international return?",
+   "draft": "For international returns, the shipping cost is at the customer's expense unless the return is for a wrong item shipped or damaged in transit. I don't have specific details on the exact amount for international return shipping fees.",
+   "expect": "escalates"
+  },
+  {
+   "id": "e7-p3-10#7",
+   "population": "adjacent_fact",
+   "qid": "e7-p3-10",
+   "question": "What is the return shipping fee for an international return?",
+   "draft": "The context states that international returns are at the customer's expense unless the return is for a wrong-item-shipped or damaged-in-transit case. However, it does not specify the exact return shipping fee for international returns in general.",
+   "expect": "escalates"
+  },
+  {
+   "id": "e7-p3-10#8",
+   "population": "adjacent_fact",
+   "qid": "e7-p3-10",
+   "question": "What is the return shipping fee for an international return?",
+   "draft": "The context states that international returns are at the customer's expense unless the return is for a wrong-item-shipped or damaged-in-transit case. However, it does not specify a concrete shipping fee for international returns. Therefore, I don't have that information.",
+   "expect": "escalates"
+  },
+  {
+   "id": "e7-p3-10#9",
+   "population": "adjacent_fact",
+   "qid": "e7-p3-10",
+   "question": "What is the return shipping fee for an international return?",
+   "draft": "The context states that international returns are at the customer's expense unless the return is for a wrong item shipped or damaged in transit. Therefore, I do not have a specific return shipping fee for international returns.",
+   "expect": "escalates"
+  },
+  {
+   "id": "e7-p3-10#10",
+   "population": "adjacent_fact",
+   "qid": "e7-p3-10",
+   "question": "What is the return shipping fee for an international return?",
+   "draft": "For international returns, the shipping is at the customer's expense unless the return is for a wrong-item-shipped or damaged-in-transit case. The context does not specify the exact fee for international returns.",
+   "expect": "escalates"
+  },
+  {
+   "id": "e7-p3-10#11",
+   "population": "adjacent_fact",
+   "qid": "e7-p3-10",
+   "question": "What is the return shipping fee for an international return?",
+   "draft": "The context does not provide specific information about return shipping fees for international returns, other than stating that international returns are at the customer's expense unless the return is for a wrong-item-shipped or damaged-in-transit case. Therefore, I don't have that information.",
+   "expect": "escalates"
+  },
+  {
+   "id": "e7-p3-10#12",
+   "population": "adjacent_fact",
+   "qid": "e7-p3-10",
+   "question": "What is the return shipping fee for an international return?",
+   "draft": "International returns are at the customer's expense unless the return is for a wrong-item-shipped or damaged-in-transit case. The context does not specify a standard fee for international returns.",
+   "expect": "escalates"
+  },
+  {
+   "id": "e7-p3-10#13",
+   "population": "adjacent_fact",
+   "qid": "e7-p3-10",
+   "question": "What is the return shipping fee for an international return?",
+   "draft": "The context states that international returns are at the customer's expense unless the return is for a wrong item shipped or damaged in transit. Therefore, I don't have specific information on the exact shipping fee for international returns.",
+   "expect": "escalates"
+  },
+  {
+   "id": "e7-p3-10#14",
+   "population": "adjacent_fact",
+   "qid": "e7-p3-10",
+   "question": "What is the return shipping fee for an international return?",
+   "draft": "The context states that international returns are at the customer's expense unless the return is for a wrong-item-shipped or damaged-in-transit case. However, it does not provide a specific return shipping fee for international returns.",
+   "expect": "escalates"
+  },
+  {
+   "id": "e7-p3-10#15",
+   "population": "adjacent_fact",
+   "qid": "e7-p3-10",
+   "question": "What is the return shipping fee for an international return?",
+   "draft": "The context states that international returns are at the customer's expense, unless the return is for a wrong-item-shipped or damaged-in-transit case. However, it does not specify a specific return shipping fee for general international returns.",
+   "expect": "escalates"
+  },
+  {
+   "id": "e7-p3-10#16",
+   "population": "adjacent_fact",
+   "qid": "e7-p3-10",
+   "question": "What is the return shipping fee for an international return?",
+   "draft": "The context states that international returns are at the customer's expense unless the return is for a wrong-item-shipped or damaged-in-transit case. However, it does not specify a return shipping fee for international returns. Therefore, I don't have that information.",
+   "expect": "escalates"
+  },
+  {
+   "id": "e7-p3-10#17",
+   "population": "adjacent_fact",
+   "qid": "e7-p3-10",
+   "question": "What is the return shipping fee for an international return?",
+   "draft": "Return shipping for international returns is at the customer's expense unless the return is for a wrong item shipped or a product damaged in transit.",
+   "expect": "escalates"
+  },
+  {
+   "id": "e7-p3-10#18",
+   "population": "adjacent_fact",
+   "qid": "e7-p3-10",
+   "question": "What is the return shipping fee for an international return?",
+   "draft": "The context states that \"international returns are at the customer's expense\" unless the return is for a wrong-item-shipped or damaged-in-transit case. Therefore, there is no specific fee mentioned for international returns as it varies depending on the situation.",
+   "expect": "escalates"
+  },
+  {
+   "id": "e7-p3-10#19",
+   "population": "adjacent_fact",
+   "qid": "e7-p3-10",
+   "question": "What is the return shipping fee for an international return?",
+   "draft": "The context states that international returns are at the customer's expense unless the return is for a wrong-item-shipped or damaged-in-transit case. However, it does not provide a specific return shipping fee amount for international returns. Therefore, I don't have that information.",
+   "expect": "escalates"
+  },
+  {
+   "id": "e7-p3-10#20",
+   "population": "adjacent_fact",
+   "qid": "e7-p3-10",
+   "question": "What is the return shipping fee for an international return?",
+   "draft": "The context states that international returns are at the customer's expense unless the return is for a wrong-item-shipped or damaged-in-transit case. However, the specific fee for international return shipping is not provided.",
+   "expect": "escalates"
+  },
+  {
+   "id": "e7-p3-10#21",
+   "population": "adjacent_fact",
+   "qid": "e7-p3-10",
+   "question": "What is the return shipping fee for an international return?",
+   "draft": "The context states that international returns are at the customer's expense unless the return is for a wrong-item-shipped or damaged-in-transit case. Therefore, there is no specified fee for international returns in general because the cost would depend on the specific circumstances of the return.",
+   "expect": "escalates"
+  },
+  {
+   "id": "e7-p3-10#22",
+   "population": "adjacent_fact",
+   "qid": "e7-p3-10",
+   "question": "What is the return shipping fee for an international return?",
+   "draft": "For international returns, the shipping is at the customer's expense unless the return is for a wrong item shipped or damaged in transit. The context does not specify the exact fee for standard international returns.",
+   "expect": "escalates"
+  },
+  {
+   "id": "e7-p3-10#23",
+   "population": "adjacent_fact",
+   "qid": "e7-p3-10",
+   "question": "What is the return shipping fee for an international return?",
+   "draft": "The context states that international returns are at the customer's expense unless the return is for a wrong item shipped or damaged in transit. Therefore, I don't have specific information on the return shipping fee for international returns.",
+   "expect": "escalates"
+  },
+  {
+   "id": "e7-p3-10#24",
+   "population": "adjacent_fact",
+   "qid": "e7-p3-10",
+   "question": "What is the return shipping fee for an international return?",
+   "draft": "For international returns, the shipping cost is at the customer's expense unless the return is for a wrong item shipped or damaged in transit.",
+   "expect": "escalates"
+  },
+  {
+   "id": "e7-p3-07#1",
+   "population": "wrong_branch_disclaimed",
+   "qid": "e7-p3-07",
+   "question": "What is the goodwill refund cap once the case is escalated to a supervisor?",
+   "draft": "The goodwill refund cap is not specified in the provided context once the case is escalated to a supervisor. I don't have that information.",
+   "expect": "escalates"
+  },
+  {
+   "id": "e7-p3-07#2",
+   "population": "wrong_branch_disclaimed",
+   "qid": "e7-p3-07",
+   "question": "What is the goodwill refund cap once the case is escalated to a supervisor?",
+   "draft": "The goodwill refund cap is 50% of the order total unless it is escalated to a supervisor. The context does not specify what the cap would be once escalated.",
+   "expect": "escalates"
+  },
+  {
+   "id": "e7-p3-07#3",
+   "population": "wrong_branch_disclaimed",
+   "qid": "e7-p3-07",
+   "question": "What is the goodwill refund cap once the case is escalated to a supervisor?",
+   "draft": "The goodwill refund cap is 50% of the order total unless it is escalated to a supervisor. The context does not specify a different cap once a case is escalated.",
+   "expect": "escalates"
+  },
+  {
+   "id": "e7-p3-07#4",
+   "population": "wrong_branch_disclaimed",
+   "qid": "e7-p3-07",
+   "question": "What is the goodwill refund cap once the case is escalated to a supervisor?",
+   "draft": "The context does not provide information on the goodwill refund cap once the case is escalated to a supervisor.",
+   "expect": "escalates"
+  },
+  {
+   "id": "e7-p3-07 wrong-branch",
+   "population": "known_gap",
+   "qid": "e7-p3-07",
+   "question": "What is the goodwill refund cap once the case is escalated to a supervisor?",
+   "draft": "The goodwill refund cap is 50% of the order total, but it can be escalated to a supervisor for further consideration.",
+   "expect": "known_gap_answers"
+  },
+  {
+   "id": "e7-p3-03 range (constructed)",
+   "population": "range",
+   "qid": "e7-p3-03",
+   "question": "If my delivery is delayed past the estimated date, exactly what refund amount am I owed?",
+   "draft": "For a delivery delay, you would typically receive a partial refund of 10% to 80% of the order total.",
+   "expect": "escalates",
+   "constructed": true
+  }
+ ]
+}

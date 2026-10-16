@@ -222,7 +222,13 @@ class _FakeJudge:
         from escalation import AnswerJudgment, FaithfulnessJudgment
 
         faithful = FaithfulnessJudgment(supported=supported, score=score)
-        answer = AnswerJudgment(answers=True, score=0.95)
+        answer = AnswerJudgment(
+            asked_value="the policy detail asked for",
+            stated_value="the policy detail stated",
+            same_kind=True,
+            answers=True,
+            score=0.95,
+        )
         self.chat = types.SimpleNamespace(
             completions=_JudgeCompletions(faithful, answer)
         )
