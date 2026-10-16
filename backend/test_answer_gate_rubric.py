@@ -54,8 +54,9 @@ cells, field order, the lockstep rules, the offline mirror carrying the same
 fields); the live layer pins what it CONCLUDES, on both implementations:
 `_CASES` (hand-written and real-context rows, three reps, unanimous) and
 `answer_gate_measured_trade.json` (the measured trade: 19 should-answer drafts that
-must still send, the 24 distinct `e7-p3-10` drafts that must not, and the one
-KNOWN REMAINING GAP below).
+must still send, the 24 distinct `e7-p3-10` drafts that must not, a constructed
+who-pays answer to a who-pays question that must send next to a constructed range
+for an exact-amount question that must not, and the one KNOWN REMAINING GAP below).
 
 THE KNOWN REMAINING GAP, asserted as such
 -----------------------------------------
@@ -126,9 +127,10 @@ What that costs, stated plainly:
     implementation it runs on: the exemption that used to cover the RUNTIME half of
     the real-context `e7-p3-10` row was removed in the change that made the gate
     extract the asked and stated value (ADR-0015), as its own text required. The
-    offline half of this layer is NOT measured by that change: it was validated with
-    OpenAI calls only, so the first hand run with both keys, and the first weekly,
-    is the Claude judge's first measurement of the `same_kind` field. The pin removes the
+    offline half of this layer has not been run on that change: the Claude judge's
+    `same_kind` was measured only on the measured trade's should-answer rows (20 of
+    20 answered, ADR-0015), so the first hand run with both keys is this layer's
+    first offline measurement. The pin removes the
     SAMPLER, which is best-effort rather than a guarantee — no `seed` is passed —
     so a split can still come from the provider rather than from the rubric. It
     fails the test either way, because both causes need looking at and neither
@@ -158,6 +160,7 @@ import asyncio
 import contextlib
 import json
 import os
+import re
 import sys
 import types
 from pathlib import Path
@@ -420,23 +423,75 @@ def test_both_tool_schemas_describe_the_disposition_case() -> None:
                 f"{what} must describe the issue-#104 disposition case "
                 f"(missing {fragment!r}): {description!r}",
             )
-    for what, description in (
+    print("ok: both tool schemas describe the disposition case")
+
+
+# The two halves of the ADR-0015 kind condition, as the rule states them.
+_KIND_PAIRS = "(an amount for an amount, a duration for a duration, a yes/no for a yes/no)"
+_NOT_AN_EXACT_AMOUNT = (
+    "a range, an estimate, 'varies', or a fact about who pays, when, or where"
+)
+
+
+def _sentence_stating(text: str, fragment: str) -> str:
+    sentences = [s for s in re.split(r"(?<=[.?!])\s+", text) if fragment in s]
+    _check(
+        len(sentences) == 1,
+        f"want exactly one sentence stating {fragment!r}, got {sentences!r}",
+    )
+    return sentences[0]
+
+
+def test_same_kind_field_and_kind_rule_state_the_same_condition() -> None:
+    """The `same_kind` field description and the kind rule state ONE condition.
+
+    The judge reads both in the same call: the rule in the prompt, the description
+    in the schema it fills. The condition is that the stated value is the same kind
+    as the one asked, and only where an EXACT AMOUNT is asked must it also be a
+    specific amount rather than a range, an estimate, 'varies', or a fact about who
+    pays, when, or where. A description that drops the exact-amount scope tells the
+    judge that a who-pays answer is never the same kind, so a faithful "the customer
+    pays" for "who pays?" escalates and latches the conversation. Checked on the
+    emitted prompt and schema of both implementations, so a reworded literal on
+    either side fails here.
+    """
+    runtime_call = _capture_runtime_call()
+    offline_call = _capture_offline_call()
+    texts = (
         (
-            "runtime AnswerJudgment.same_kind",
-            runtime_schema.model_fields["same_kind"].description or "",
+            "runtime kind rule (emitted system prompt)",
+            "\n".join(message["content"] for message in runtime_call["messages"]),
         ),
         (
-            "offline submit_answering.same_kind",
-            offline_tool["input_schema"]["properties"]["same_kind"]["description"],
+            "runtime AnswerJudgment.same_kind (emitted schema)",
+            runtime_call["response_format"].model_json_schema()["properties"][
+                "same_kind"
+            ]["description"],
         ),
-    ):
-        for fragment in ("KIND of thing", "range", "specific value", "who pays"):
-            _check(
-                fragment in description,
-                f"{what} must describe the ADR-0015 kind rule "
-                f"(missing {fragment!r}): {description!r}",
-            )
-    print("ok: both tool schemas describe the disposition case and the kind rule")
+        (
+            "offline kind rule (emitted prompt)",
+            "\n".join(message["content"] for message in offline_call["messages"]),
+        ),
+        (
+            "offline submit_answering.same_kind (emitted tool schema)",
+            offline_call["tools"][0]["input_schema"]["properties"]["same_kind"][
+                "description"
+            ],
+        ),
+    )
+    for what, text in texts:
+        _check(
+            _KIND_PAIRS in text,
+            f"{what} must state the same-kind pairs {_KIND_PAIRS!r}: {text!r}",
+        )
+        exclusion = _sentence_stating(text, _NOT_AN_EXACT_AMOUNT)
+        _check(
+            "exact amount" in exclusion,
+            f"{what} states the range/who-pays exclusion without scoping it to an "
+            f"exact amount, which is not the condition the kind rule states: "
+            f"{exclusion!r}",
+        )
+    print("ok: the same_kind field and the kind rule state the same condition on both sides")
 
 
 class _ScriptedAnthropicMessages:
@@ -1107,12 +1162,12 @@ def test_measured_trade_fixture_is_well_formed() -> None:
     _check(len(ids) == len(set(ids)), "measured-trade row ids must be unique")
     for r in rows:
         _check(r["question"].strip() and r["draft"].strip(), f"{r['id']}: empty question or draft")
-    answers = [r for r in rows if r["expect"] == "answers"]
+    answers = [r for r in rows if r["expect"] == "answers" and not r.get("constructed")]
     gap = [r for r in rows if r["expect"] == "known_gap_answers"]
-    p310 = [r for r in rows if r["qid"] == "e7-p3-10"]
+    p310 = [r for r in rows if r["qid"] == "e7-p3-10" and not r.get("constructed")]
     _check(
         len(answers) == _TRADE_N_ANSWERS,
-        f"want {_TRADE_N_ANSWERS} should-answer rows (the 'no loss' side of the "
+        f"want {_TRADE_N_ANSWERS} real should-answer rows (the 'no loss' side of the "
         f"trade), got {len(answers)}",
     )
     _check(
@@ -1143,9 +1198,18 @@ def test_measured_trade_fixture_is_well_formed() -> None:
         "the constructed range draft (the shape the stated-value mechanism alone "
         "mishandles) must be in the trade",
     )
+    _check(
+        any(
+            r["population"] == "who_pays" and r["expect"] == "answers" and r.get("constructed")
+            for r in rows
+        ),
+        "the constructed who-pays answer to a who-pays question (the case the "
+        "exact-amount scope of `same_kind` exists for) must be in the trade, "
+        "expected to send",
+    )
     print(
         f"ok: the measured-trade fixture holds {len(answers)} should-answer, "
-        f"{len(p310)} e7-p3-10, 1 known-gap and the range rows"
+        f"{len(p310)} e7-p3-10, 1 known-gap, the range and the who-pays rows"
     )
 
 
@@ -1241,11 +1305,13 @@ def test_live_rubric_discrimination() -> None:
 def test_live_measured_trade() -> None:
     """The measured trade of ADR-0015, held on the live judges (one pass, T=0).
 
-    * every `answers` row (19 real should-answer drafts from the gold P2 questions)
-      must still SEND: the mechanism may not cost a deflection it did not cost on
-      2026-10-15 (0 of 19, and 0 of 8 on the hand-written answerable rows);
+    * every `answers` row (19 real should-answer drafts from the gold P2 questions,
+      and a constructed who-pays answer to a who-pays question) must still SEND:
+      the mechanism may not cost a deflection it did not cost on 2026-10-15 (0 of
+      19, and 0 of 8 on the hand-written answerable rows);
     * every `escalates` row (the 24 distinct `e7-p3-10` drafts, the disclaimed
-      `e7-p3-07` drafts and a constructed bare range draft) must NOT send;
+      `e7-p3-07` drafts and a constructed bare range draft for an exact-amount
+      question) must NOT send;
     * the `known_gap_answers` row is the `e7-p3-07` wrong-branch draft: the gate
       sends it TODAY and this test asserts that it still does, so the gap cannot
       close or widen unnoticed (see the module docstring). Runtime half only.
@@ -1291,7 +1357,7 @@ def test_live_measured_trade() -> None:
                     false_escalate += 1
                     failures.append(
                         f"[{impl_name}] {row['id']}: a should-answer draft was withheld "
-                        "- the stricter verdict cost a deflection (ADR-0015 measured 0 of 19)"
+                        "- the stricter verdict cost a deflection (ADR-0015 measured none withheld)"
                     )
                 elif row["expect"] == "escalates" and answers:
                     false_resolve += 1
@@ -1331,6 +1397,7 @@ def main() -> int:
     tests = [
         test_both_rubrics_state_every_shared_rule,
         test_both_tool_schemas_describe_the_disposition_case,
+        test_same_kind_field_and_kind_rule_state_the_same_condition,
         test_offline_verdict_requires_a_stated_value,
         test_offline_judge_raises_on_a_malformed_payload,
         test_offline_tool_schema_commits_the_values_before_the_verdict,

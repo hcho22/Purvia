@@ -65,22 +65,37 @@ A passes the range draft 0 of 8 at temperature 0 and 2 of 8 at temperature 1, so
 
 ## Final-head re-measure (2026-10-16)
 
-The same measurement was repeated once on the committed implementation, using the repository's real `answer_gate` and `faithfulness_gate` and the committed live tests.
-It used 299 OpenAI calls and no Anthropic calls, and every run was valid (no failed judge call).
+The same measurement was repeated on the committed implementation, using the repository's real `answer_gate` and `faithfulness_gate` and the committed live tests.
+It ran twice, each time through a copy of the weekly workflow with its publish, issue and commit steps removed, from a throwaway branch that has since been deleted.
+The first run used 299 OpenAI calls.
+Review then found that the `same_kind` field description excluded a range, an estimate, 'varies' and a who-pays, when or where fact for every question, while the kind rule in the prompt excludes them only where an exact amount is asked.
+Read literally, that description would escalate a faithful who-pays answer to a who-pays question.
+Both descriptions, runtime and offline, now state the rule's condition, and a constructed who-pays answer to a who-pays question was added to the measured trade as a row that must send.
+The second run measured that final head with 298 OpenAI calls and no Anthropic calls, and every call was valid (no failed judge call).
 
-| Measure on the committed gate | Result | Phase-1 candidate A |
-|---|---|---|
-| `e7-p3-10` verbatim triple, temperature 0 | 0 of 20 passed | 0 of 20 |
-| same triple, temperature 1 (margin proxy) | 0 of 20 passed | 0 of 20 (old gate: 10 of 20) |
-| 85 stored triples: should-escalate drafts sent | 1 of 66 (the `e7-p3-07` known gap) | 1 of 66 |
-| 85 stored triples: should-answer drafts withheld | 0 of 19 | 0 of 19 |
-| live rubric layer, runtime half (16 cases, 3 reps, unanimous) | all pass | not run |
-| live measured-trade test, runtime half (49 rows) | false-escalate 0 of 19, false-resolve 0 of 29, known gap still sends | not run |
-| judge latency per reply (p50 faithfulness + answer) | 1.33 s | 1.40 s |
-| judge cost per reply | $0.00078 | $0.00076 |
+| Measure on the committed gate | Second run (final head) | First run | Phase-1 candidate A |
+|---|---|---|---|
+| `e7-p3-10` verbatim triple, temperature 0 | 0 of 20 passed | 0 of 20 | 0 of 20 |
+| same triple, temperature 1 (margin proxy) | 0 of 20 passed | 0 of 20 | 0 of 20 (old gate: 10 of 20) |
+| 85 stored triples: should-escalate drafts sent | 1 of 66 (the `e7-p3-07` known gap) | 1 of 66 | 1 of 66 |
+| 85 stored triples: should-answer drafts withheld | 0 of 19 | 0 of 19 | 0 of 19 |
+| live rubric layer, runtime half (16 cases, 3 reps, unanimous) | all pass | all pass | not run |
+| live measured-trade test, runtime half | 50 rows: false-escalate 0 of 20 (the who-pays row sent), false-resolve 0 of 29, known gap still sends | 49 rows: 0 of 19, 0 of 29, still sends | not run |
+| judge latency per reply (p50 faithfulness + answer) | 1.44 s | 1.33 s | 1.40 s |
+| judge cost per reply | $0.00078 | $0.00078 | $0.00076 |
 
-Against the old gate's $0.00071 and 1.26 s, the committed gate costs about $0.00007 and 0.07 s more per reply that reaches the answer gate.
-The offline (Claude) half of the live layer was not run, as above.
+All 85 stored triples had the same outcome in both runs.
+In the second run the unchanged faithfulness gate stopped two should-escalate drafts that the answer gate had stopped in the first, so it made 160 replay calls instead of 162.
+The latency difference is runner noise: the mean tokens per call differ by under 5 input and 1 output.
+Against the old gate's $0.00071 and 1.26 s, the committed gate costs about $0.00007 and 0.07 to 0.18 s more per reply that reaches the answer gate.
+
+### The offline (Claude) half, on the should-answer rows
+
+The second run also measured the offline judge (`claude-haiku-4-5`) on the final head, for the should-answer rows only, with 28 Anthropic calls.
+
+- One weekly-path run of the P2 leg with the parity leg (`e7_runner --include-p2 --include-parity`, 8 Anthropic calls): the offline judge auto-resolved all 4 P2 rows, and the parity leg passed 4 of 4, with no mismatch and nothing unmeasured, `e7-p2-02` ("3-5 business days") included.
+- The 20 should-answer rows of the measured trade through the real `judge_answering` (20 Anthropic calls): 20 of 20 answered, each with `same_kind` true. That includes the 7 `e7-p2-02` range drafts and the who-pays row, and matches the runtime gate, which sends all 20.
+- The should-escalate side of the offline judge and the offline half of the live rubric layer were not run.
 
 ## Decision
 
@@ -91,6 +106,8 @@ The offline (Claude) half of the live layer was not run, as above.
 2. **Adopt candidate A in the runtime gate.**
    `AnswerJudgment` gains `asked_value`, `stated_value` and `same_kind`, in that order, ahead of `answers` and `score`.
    The system prompt gains the two paragraphs measured here, word for word, appended to the existing rubric.
+   The `same_kind` field description states the kind rule's own condition: the stated value is the same kind as the one asked, and only where an exact amount is asked must it also be a specific amount rather than a range, an estimate, 'varies', or a fact about who pays, when, or where.
+   `test_same_kind_field_and_kind_rule_state_the_same_condition` holds the emitted rule and both emitted field descriptions to that condition.
    The verdict is `answers AND a stated value AND same_kind AND score >= cutoff`.
    A judge that says "answers" but names no value, or a value of the wrong kind, is self-contradictory and escalates.
    The literal string `null` counts as no value (a model writing the word instead of the JSON token), which can only move a verdict toward escalation.
@@ -102,11 +119,17 @@ The offline (Claude) half of the live layer was not run, as above.
 
 ## Consequences
 
-- **Cost and latency:** about $0.00005 to $0.00007 and 0.07 to 0.14 s more per reply that reaches the answer gate (more input and about 26 more output tokens per call; phase 1 measured the higher figures, the committed gate the lower).
+- **Cost and latency:** about $0.00005 to $0.00007 and 0.07 to 0.18 s more per reply that reaches the answer gate (more input and about 26 more output tokens per call; the latency spread across phase 1 and the two final-head runs is runner noise at the same token counts).
 - **A thinner margin removed, not a certainty:** the temperature-1 sample on the `e7-p3-10` triple went from 10 of 20 passing to 0 of 20. That is a proxy for how little serving noise it takes to flip the verdict, not a production rate.
-- **A is weaker than the status quo on one shape:** the bare range draft at temperature 1 (2 of 8 against 0 of 8). Accepted, because the `e7-p3-10` shape has been seen failing in practice and the range shape has not.
+- **A is weaker than the status quo on one shape:** the bare range draft at temperature 1 (2 of 8 against 0 of 8, measured in phase 1 before the field-description fix; the final head's temperature-0 trade run still withholds it). Accepted, because the `e7-p3-10` shape has been seen failing in practice and the range shape has not.
 - **Known remaining gap, asserted as such:** a value of the right kind stated for the wrong branch. `e7-p3-07` asks for the goodwill refund cap once a case is escalated to a supervisor, and a draft stating the un-escalated 50% names a real, specific, same-kind value. Every rubric measured passed it (the status quo in the replay and 4 of 10 at temperature 1, A 8 of 8 at temperature 0, A3 8 of 8). `backend/test_answer_gate_rubric.py` holds that draft as `known_gap_answers` and asserts the runtime gate still sends it, so the gap turns the live layer red the day it changes and must then be re-recorded here.
-- **The offline half is unmeasured.** The change was validated with OpenAI calls only, so the Claude judge's reading of `same_kind` is first measured by the first hand run of the live layer with both keys, and by the first weekly after the merge. `same_kind` can only lower the offline false-resolve rate and raise the offline false-escalate rate, which is advisory, not a pinned gate.
+- **The offline half is measured on the should-answer rows only.**
+  `same_kind` can only move the offline verdict toward escalation.
+  The weekly's parity leg is a pinned gate: any offline/runtime disagreement fails the run and files the gate-finding issue.
+  So a Claude reading of `same_kind` that withheld a should-answer draft would turn the weekly red, not just raise an advisory false-escalate rate.
+  On the final head it did not: parity 4 of 4 on the P2 leg and 20 of 20 stored should-answer drafts answered (above).
+  On the should-escalate rows `same_kind` can only lower the offline false-resolve rate, but a row the runtime gate sends and the offline judge now escalates would still be a parity mismatch.
+  That side was not run on Claude, so the first weekly after the merge, or a hand run of the live layer with both keys, is its first measurement.
 - **The temperature-0 pin stays.** Nothing here un-pins invariant 8's sampler pin; the ADR-0013 trade that would have relaxed it is not taken.
 - **Deploy:** buyers get this only through a backend deploy. There is no new environment variable, model change or migration, and nothing to do to existing `JUDGE_*` configuration. Rollback is reverting the change and redeploying.
 

@@ -1030,9 +1030,9 @@ class AnswerJudgment(BaseModel):
         description=(
             "True iff stated_value is the same KIND of thing as asked_value (an "
             "amount for an amount, a duration for a duration, a yes/no for a "
-            "yes/no) AND is a specific value rather than a range, an estimate, "
-            "'varies', or a fact about who pays, when, or where. False if "
-            "stated_value is null."
+            "yes/no). Only where an exact amount is asked must it also be a "
+            "specific amount rather than a range, an estimate, 'varies', or a "
+            "fact about who pays, when, or where. False if stated_value is null."
         ),
     )
     answers: bool = Field(

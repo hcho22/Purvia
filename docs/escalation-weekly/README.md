@@ -26,7 +26,7 @@ What did not change, and is recorded as a known gap rather than fixed: a value o
 The live rubric layer holds that draft and asserts the gate still sends it.
 
 Also measured in the same pass, and not adopted: gpt-5-mini, the ADR-0013 candidate, sent 15 of 66 should-escalate drafts and passed the `e7-p3-10` draft 40 of 40 times.
-For the weekly: the first run after this merges is the first measurement of `same_kind` on the Claude judge, which was not run for this change.
+For the weekly: `same_kind` was measured on the Claude judge for the should-answer rows only (parity 4 of 4 on one P2 run, 20 of 20 stored should-answer drafts answered), so a P2 DISAGREE is not expected from it; the first run after this merges is its first measurement on the should-escalate rows.
 A week where `e7-p3-10` still reads DISAGREE now means a real divergence to investigate, not the thin margin described above.
 
 ### 2026-09-20 to 2026-10-11 - the `false-resolve 18-27%` breaches measured the offline judge, not the pipeline (issue #163)

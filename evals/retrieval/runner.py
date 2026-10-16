@@ -909,10 +909,12 @@ async def judge_answer(
 # mirror carries `same_kind` too, because a mirror that is looser than the gate it
 # measures reports the wrong weekly number. `same_kind` can only turn an "answers"
 # into "does not answer", so it can lower the offline false-resolve rate and raise
-# the offline false-escalate rate, never the reverse. It has NOT been measured on the
-# Claude judge: the change that added it was validated with OpenAI calls only, so the
-# first weekly after it merges is that field's first measurement, and a payload that
-# lacks a boolean `same_kind` RAISES (UNMEASURED) rather than scoring.
+# the offline false-escalate rate, never the reverse, and the parity leg fails the
+# weekly on any disagreement with the runtime gate. On Claude it has been measured on
+# the should-answer rows only (ADR-0015: parity 4 of 4 on the P2 leg, 20 of 20 stored
+# should-answer drafts answered); the first weekly after it merges is its first
+# measurement on the should-escalate rows. A payload that lacks a boolean `same_kind`
+# RAISES (UNMEASURED) rather than scoring.
 # Not every parity mismatch in those weeks was this judge. The fourth on 2026-09-20,
 # e7-p3-10, was the RUNTIME gate passing an adjacent-fact draft this judge rejected
 # ("international returns are at the customer's expense": who pays, not how much).
@@ -998,9 +1000,10 @@ ANSWER_JUDGE_TOOL = {
                 "description": (
                     "True iff stated_value is the same KIND of thing as "
                     "asked_value (an amount for an amount, a duration for a "
-                    "duration, a yes/no for a yes/no) AND is a specific value "
-                    "rather than a range, an estimate, 'varies', or a fact about "
-                    "who pays, when, or where. False if stated_value is null."
+                    "duration, a yes/no for a yes/no). Only where an exact "
+                    "amount is asked must it also be a specific amount rather "
+                    "than a range, an estimate, 'varies', or a fact about who "
+                    "pays, when, or where. False if stated_value is null."
                 ),
             },
             "answers": {
