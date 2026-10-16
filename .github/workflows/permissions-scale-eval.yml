@@ -1,13 +1,13 @@
-# US-043: weekly permissions-scale benchmark.
+# US-043: monthly permissions-scale benchmark.
 #
 # Runs the wikipedia 10k-chunk corpus + the ef_search sweep across three
 # permission selectivities (50% / 10% / 1%). The eval is the empirical
 # backing for the HNSW selectivity story in docs/permissions-aware-rag.md
 # (US-044). Comment + dashboard rather than blocking PR check — the
 # runtime (~3 min seed + ~3 min eval) and the OpenAI embedding cost
-# (~$0.10 per seed) make it a weekly job, not a per-PR one. The inputs — a
+# (~$0.10 per seed) make it a scheduled job, not a per-PR one. The inputs — a
 # fixed deterministic corpus and pinned models — don't change between runs
-# and per-PR CI already catches code regressions, so a weekly cadence
+# and per-PR CI already catches code regressions, so a monthly cadence
 # suffices; the `docs/permissions-scale-nightly/` path is retained to keep
 # the dated snapshot history.
 #
@@ -16,19 +16,18 @@
 # below the floor configured in scale_gold.yaml::recall_floor. The floor
 # is intentionally loose at v0 (0.10) — the recall *collapse* is the
 # whole point of the eval, so the alarm is "we still retrieve something",
-# not "we retrieve everything". Tighten once three weekly runs have
+# not "we retrieve everything". Tighten once three monthly runs have
 # completed and a stable baseline is visible (PRD open question).
 #
 
-name: Permissions scale eval (weekly)
+name: Permissions scale eval (monthly)
 
 on:
   schedule:
-    # Weekly, Wednesday 03:00 UTC — staggered an hour past the retrieval-eval
-    # weekly so the two don't compete for the same Supabase docker stack on
-    # the GitHub-hosted runner, and offset from the Sunday RAGAS/Escalation
-    # weeklies so the suite runs twice a week.
-    - cron: '0 3 * * 3'
+    # Monthly, 1st of the month 03:00 UTC - staggered an hour past the retrieval-eval
+    # so the two don't compete for the same Supabase docker stack on the
+    # GitHub-hosted runner; RAGAS (04:00) and Escalation (06:00) follow the same day.
+    - cron: '0 3 1 * *'
   workflow_dispatch:
 
 permissions:
@@ -246,7 +245,7 @@ jobs:
             exit 1
           fi
           BODY=$(printf '%s\n' \
-            "Automated docs-only eval snapshot from the \`Permissions scale eval (weekly)\` workflow (run ${GITHUB_RUN_ID})." \
+            "Automated docs-only eval snapshot from the \`Permissions scale eval (monthly)\` workflow (run ${GITHUB_RUN_ID})." \
             '' \
             'Publishes the permissions-scale receipts under `docs/permissions-scale-nightly/` via an auto-merging PR instead of a direct `git push` to `main`, so the required security-gate checks on `main` are satisfied - a docs-only PR trips them as skipped=pass.' \
             '' \
@@ -280,7 +279,7 @@ jobs:
           # Resolve open issues via the REST issues endpoint, NOT `gh issue list
           # --label`: the GraphQL search index it queries is only eventually
           # consistent and has silently dropped freshly-labelled issues (see the
-          # weekly workflows' harness-failure steps), which would wedge a false
+          # monthly workflows' harness-failure steps), which would wedge a false
           # alarm open. `?labels=` filters the primary store and is strongly
           # consistent; drop anything with a `pull_request` key (a PR is an issue
           # in this API) so a same-labelled PR is never mistaken for the finding.
@@ -300,7 +299,7 @@ jobs:
               gh issue create --label "${LABEL}" \
                 --title "Permissions-scale nightly: snapshot failed to publish to main" \
                 --body "$(printf '%s\n' \
-                  "The \`Permissions scale eval (weekly)\` publish step failed, so today's snapshot was NOT published to \`main\`." \
+                  "The \`Permissions scale eval (monthly)\` publish step failed, so today's snapshot was NOT published to \`main\`." \
                   "" \
                   "The most common cause is a failed mint of the eval-publish GitHub App token that \`gh pr create\` authenticates with - missing or invalid \`EVAL_PUBLISH_APP_ID\` / \`EVAL_PUBLISH_APP_PRIVATE_KEY\` repo secrets. Check the publish step's log for the \`::error::\` line naming the cause." \
                   "" \
@@ -350,7 +349,7 @@ jobs:
         run: |
           # REST issues endpoint, not `gh issue list --label` (the GraphQL search
           # index is only eventually consistent and has silently dropped freshly-
-          # labelled issues; see the weekly workflows' harness-failure steps). Drop
+          # labelled issues; see the monthly workflows' harness-failure steps). Drop
           # PRs.
           open_issue_numbers() {
             gh api --paginate "repos/${GITHUB_REPOSITORY}/issues?labels=$1&state=open&per_page=100" \
@@ -377,7 +376,7 @@ jobs:
               gh issue create --label "${LABEL}" \
                 --title "Permissions-scale nightly: harness aborted before publishing a snapshot" \
                 --body "$(printf '%s\n' \
-                  "The \`Permissions scale eval (weekly)\` job failed BEFORE the eval produced a publishable snapshot, so the publish step was a no-op and the 'Alarm on stranded eval publish' step saw a success and filed nothing." \
+                  "The \`Permissions scale eval (monthly)\` job failed BEFORE the eval produced a publishable snapshot, so the publish step was a no-op and the 'Alarm on stranded eval publish' step saw a success and filed nothing." \
                   "" \
                   "The most common cause is a failed mint of the eval-publish GitHub App token - missing or invalid \`EVAL_PUBLISH_APP_ID\` / \`EVAL_PUBLISH_APP_PRIVATE_KEY\` repo secrets - but any setup abort (supabase start, pip install, the seed step, or the timeout kill) lands here too. Check the earliest failing step's log." \
                   "" \

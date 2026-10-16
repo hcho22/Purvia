@@ -1,7 +1,7 @@
-# US-008: weekly RAGAS-eval workflow. Runs the four canonical RAGAS metrics
+# US-008: monthly RAGAS-eval workflow. Runs the four canonical RAGAS metrics
 # (Faithfulness, Answer Relevancy, Context Precision, Context Recall) over the
-# 60-question golden set on the two hybrid pre_filter cells, on a weekly
-# schedule (Sundays 04:00 UTC) and on manual `workflow_dispatch`. It keeps its
+# 60-question golden set on the two hybrid pre_filter cells, on a monthly
+# schedule (the 1st of the month, 04:00 UTC) and on manual `workflow_dispatch`. It keeps its
 # own concurrency group and snapshot directory so it never tangles with the
 # daily nightly retrieval workflow.
 #
@@ -15,17 +15,17 @@
 # own deduped `ragas-weekly-harness-failure` issue rather than going quiet; see
 # the snapshot check below for why that state has to exist.
 
-name: RAGAS eval (weekly)
+name: RAGAS eval (monthly)
 
 on:
   schedule:
-    # 04:00 UTC Sundays — off-peak vs the daily nightly's 02:00 UTC so the two
-    # never compete for the same Supabase docker stack.
-    - cron: '0 4 * * 0'
+    # 04:00 UTC on the 1st of each month - an hour after the permissions-scale eval
+    # (03:00 UTC) so the two never compete for the same Supabase docker stack.
+    - cron: '0 4 1 * *'
   workflow_dispatch:
 
 permissions:
-  # contents: write — commit the weekly snapshot to docs/ragas-weekly/.
+  # contents: write — commit the monthly snapshot to docs/ragas-weekly/.
   # issues: write — file / close gate-finding issues.
   contents: write
   issues: write
@@ -36,7 +36,7 @@ concurrency:
 
 jobs:
   weekly-ragas:
-    name: Weekly RAGAS sweep
+    name: Monthly RAGAS sweep
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -44,7 +44,7 @@ jobs:
       - name: Checkout main
         uses: actions/checkout@v4
         with:
-          # Need the full token to push the weekly snapshot back.
+          # Need the full token to push the monthly snapshot back.
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python 3.11
@@ -153,7 +153,7 @@ jobs:
             set_output "present=false"
             set_output "exit_desc=${EXIT_DESC} without writing a structurally valid, non-empty RAGAS snapshot"
             set_output "log_hint=the runner/snapshot-validation log names the empty or missing RAGAS surface"
-            echo "::error title=RAGAS weekly UNMEASURED::The runner ${EXIT_DESC} without writing a structurally valid, non-empty RAGAS snapshot, so no gate was evaluated this week. This is not a red gate finding; nothing was measured."
+            echo "::error title=RAGAS weekly UNMEASURED::The runner ${EXIT_DESC} without writing a structurally valid, non-empty RAGAS snapshot, so no gate was evaluated this run. This is not a red gate finding; nothing was measured."
           fi
 
       # Mint the eval-publish App token immediately before publishing, NOT at job
@@ -210,7 +210,7 @@ jobs:
           # Record the branch for the 'Alarm on stranded eval publish' step so a
           # failure below names the exact branch the snapshot is stranded on.
           echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
-          git commit -m "chore(evals): weekly RAGAS eval ${DATE}"
+          git commit -m "chore(evals): monthly RAGAS eval ${DATE}"
           # Push the commit to a fresh remote branch and rewind local main (below),
           # leaving the checkout clean.
           git push origin "HEAD:refs/heads/${BRANCH}"
@@ -221,18 +221,18 @@ jobs:
           # legible cause instead; the 'Alarm on stranded eval publish' step turns
           # it into a visible issue.
           if [ -z "${GH_TOKEN}" ]; then
-            echo "::error title=RAGAS weekly snapshot NOT published - eval-publish App token is empty::The ${DATE} RAGAS snapshot was committed and pushed to \`${BRANCH}\` but no auto-merging PR was opened, so it is stranded there, unpublished to main. Ensure the EVAL_PUBLISH_APP_ID / EVAL_PUBLISH_APP_PRIVATE_KEY repo secrets (the eval-publish GitHub App) are set and valid, then re-run."
+            echo "::error title=RAGAS monthly snapshot NOT published - eval-publish App token is empty::The ${DATE} RAGAS snapshot was committed and pushed to \`${BRANCH}\` but no auto-merging PR was opened, so it is stranded there, unpublished to main. Ensure the EVAL_PUBLISH_APP_ID / EVAL_PUBLISH_APP_PRIVATE_KEY repo secrets (the eval-publish GitHub App) are set and valid, then re-run."
             exit 1
           fi
           # shellcheck disable=SC2016  # Markdown backticks stay literal here.
           BODY=$(printf '%s\n' \
-            "Automated docs-only eval snapshot from the \`RAGAS eval (weekly)\` workflow (run ${GITHUB_RUN_ID})." \
+            "Automated docs-only eval snapshot from the \`RAGAS eval (monthly)\` workflow (run ${GITHUB_RUN_ID})." \
             '' \
-            'Publishes the weekly RAGAS receipts under `docs/ragas-weekly/` via an auto-merging PR instead of a direct `git push` to `main`, so the required security-gate checks on `main` are satisfied - a docs-only PR trips them as skipped=pass.' \
+            'Publishes the monthly RAGAS receipts under `docs/ragas-weekly/` via an auto-merging PR instead of a direct `git push` to `main`, so the required security-gate checks on `main` are satisfied - a docs-only PR trips them as skipped=pass.' \
             '' \
             'Opened with the eval-publish GitHub App installation token so the required check workflows run; a PR opened with the default `GITHUB_TOKEN` would not trigger them. Auto-merge (squash) is enabled and it merges once checks pass.')
           PR_URL=$(gh pr create --base main --head "$BRANCH" \
-            --title "chore(evals): weekly RAGAS eval ${DATE}" \
+            --title "chore(evals): monthly RAGAS eval ${DATE}" \
             --body "${BODY}")
           gh pr merge --auto --squash --delete-branch "$PR_URL"
           echo "opened auto-merging PR: ${PR_URL}"
@@ -266,7 +266,7 @@ jobs:
           }
           LABEL=ragas-weekly-publish-failure
           gh label create "${LABEL}" --color B60205 \
-            --description "RAGAS weekly snapshot failed to publish to main" --force || true
+            --description "RAGAS monthly snapshot failed to publish to main" --force || true
           if [ "${PUBLISH_OUTCOME}" = "failure" ]; then
             # A transient gh blip yields empty here, so err toward filing a
             # possibly-duplicate (self-healing) issue rather than leaving the alarm
@@ -276,7 +276,7 @@ jobs:
               gh issue create --label "${LABEL}" \
                 --title "RAGAS weekly: snapshot failed to publish to main" \
                 --body "$(printf '%s\n' \
-                  "The \`RAGAS eval (weekly)\` publish step failed, so this week's snapshot was produced but NOT published to \`main\`." \
+                  "The \`RAGAS eval (monthly)\` publish step failed, so this run's snapshot was produced but NOT published to \`main\`." \
                   "" \
                   "The most common cause is a failed mint of the eval-publish GitHub App token that \`gh pr create\` authenticates with - missing or invalid \`EVAL_PUBLISH_APP_ID\` / \`EVAL_PUBLISH_APP_PRIVATE_KEY\` repo secrets. Check the publish step's log for the \`::error::\` line naming the cause." \
                   "" \
@@ -349,9 +349,9 @@ jobs:
               gh issue create --label "${HARNESS_LABEL}" \
                 --title "RAGAS weekly: no snapshot produced — the gates are UNMEASURED" \
                 --body "$(printf '%s\n' \
-                  "The weekly RAGAS runner ${EXIT_DESC}." \
+                  "The monthly RAGAS runner ${EXIT_DESC}." \
                   "" \
-                  "**No gate was evaluated this week.** This is not a green run and not a red one - it is an unmeasured one, and every RAGAS number the repo reports is as old as the last run that did produce a snapshot." \
+                  "**No gate was evaluated this run.** This is not a green run and not a red one - it is an unmeasured one, and every RAGAS number the repo reports is as old as the last run that did produce a snapshot." \
                   "" \
                   "Nothing was published to \`docs/ragas-weekly/\`, so the newest file there is stale and must not be read as current." \
                   "" \
@@ -414,7 +414,7 @@ jobs:
             for tag in coverage-pipeline-failure coverage-operational-failure; do
               for num in $(open_issue_numbers "${tag}" || true); do
                 gh issue close "${num}" \
-                  --comment "Auto-closed: the scheduled weekly RAGAS run was green (no ${tag})."
+                  --comment "Auto-closed: the scheduled monthly RAGAS run was green (no ${tag})."
                 echo "auto-closed issue #${num} (${tag})"
               done
             done

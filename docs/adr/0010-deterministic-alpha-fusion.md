@@ -64,7 +64,7 @@ wired. This ADR records the decision US-116 makes when it wires them into
   queries (error codes, config keys pasted from logs) are exactly where the widget
   most needs the lexical leg up. The coupling is safe because it is guarded on
   four sides — the [0.3, 0.7] clamp (cosine list can't be starved), the per-PR
-  E7 P1a/P1b escalation tripwire, the weekly LLM-judged escalation sweep, and the
+  E7 P1a/P1b escalation tripwire, the scheduled (monthly) LLM-judged escalation sweep, and the
   `HYBRID_FUSION_ALPHA=0.5` pin. Adaptive fusion changes *which* grounded chunks
   surface, not *whether* the gate fires; the gate's own thresholds are unchanged.
 

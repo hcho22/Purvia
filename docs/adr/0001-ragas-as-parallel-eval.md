@@ -31,7 +31,7 @@ custom Claude judge — explicitly **not** as a replacement.
   ground from independent angles — different judge models, different prompting
   techniques, different metric definitions.
 - The configuration is locked: `gpt-4o-mini` judge; hybrid mode only; the two
-  `pre_filter` cells only; weekly paid scoring (never on the PR fast path); NaN
+  `pre_filter` cells only; scheduled (monthly) paid scoring (never on the PR fast path); NaN
   scores recorded with a reason and reported as two means (`mean_strict`,
   `mean_available`); fixed operational gates vs rolling-median score gates;
   cross-family corroboration required for a red Faithfulness / Answer Relevancy
@@ -51,7 +51,7 @@ custom Claude judge — explicitly **not** as a replacement.
 
 ## Consequences
 
-- A weekly time series of RAGAS snapshots is committed to
+- A time series of RAGAS snapshots is committed to
   `docs/ragas-weekly/<DATE>.{json,md}`, giving the drift and score-regression
   gates the rolling history they compare against. Only historical metric blocks
   with complete coverage and zero provider errors enter a baseline, and the
@@ -61,7 +61,7 @@ custom Claude judge — explicitly **not** as a replacement.
   rejects any new structurally empty snapshot before publication.
 - Cost is accepted and bounded: approximately 1,440 `gpt-4o-mini` calls per
   weekly run (60 questions × two cells × four metrics × roughly three calls),
-  kept down by the hybrid-only, weekly-not-nightly scoping.
+  kept down by the hybrid-only, scheduled-not-nightly scoping.
 - Same-family bias is accepted — the RAGAS judge shares a model family with the
   answer generator. Independence is preserved by keeping the cross-family
   Claude judge as the headline signal.
@@ -69,7 +69,7 @@ custom Claude judge — explicitly **not** as a replacement.
   reading runner source — the stated goal of the integration.
 - PR CI performs an import-only check of the complete pinned RAGAS/LangChain
   stack without credentials or evaluator calls. Paid, non-deterministic RAGAS
-  scoring remains weekly and never blocks a PR.
+  scoring remains scheduled (monthly) and never blocks a PR.
 
 ## Alternatives considered and rejected
 
@@ -84,7 +84,7 @@ custom Claude judge — explicitly **not** as a replacement.
   degenerate or already covered by the security and recall trade-off tables;
   scoring them adds cost, not signal.
 - **σ-based (standard-deviation) regression thresholds.** Rejected — σ is
-  unstable on a 4-point rolling window; a couple of quiet weeks shrink it and
+  unstable on a 4-point rolling window; a couple of quiet runs shrink it and
   turn ordinary noise into false alerts.
 - **%-based (relative) regression thresholds.** Rejected — a fixed percentage
   misleads near the 0 and 1 score boundaries, where the same relative drop is a
