@@ -746,10 +746,10 @@ def warn_if_judge_rejects_reasoning_effort(*, support_configured: bool) -> None:
         "status='escalated' because the DB transition is one-way. Remedy IF it "
         "refuses: "
         "unset JUDGE_REASONING_EFFORT, or point JUDGE_MODEL at a reasoning model that "
-        "accepts it (the ADR-0013 config pairs JUDGE_REASONING_EFFORT=minimal with "
-        "JUDGE_MODEL=gpt-5-mini). Best-effort and known names only - a reasoning "
-        "deployment under any other name gets a spurious warning here, so confirm the "
-        "model before acting.",
+        "accepts it (read ADR-0015 first: it measured the ADR-0013 gpt-5-mini pairing "
+        "worse than the shipped gpt-4o-mini gate and did not adopt it). Best-effort "
+        "and known names only - a reasoning deployment under any other name gets a "
+        "spurious warning here, so confirm the model before acting.",
         get_judge_reasoning_effort(),
         model,
     )
