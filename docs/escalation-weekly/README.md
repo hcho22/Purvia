@@ -7,6 +7,23 @@ The full treatment of what the snapshots contain and which numbers are pinned li
 
 ## Errata
 
+### 2026-09-20 to 2026-10-11 - the `false-resolve 18-27%` breaches measured the offline judge, not the pipeline (issue #163)
+
+The `2026-09-20`, `2026-09-27`, `2026-10-04` and `2026-10-11` snapshots read false-resolve 27% (3/11), 18% (2/11), 18% (2/11) and 27% (3/11), the ceiling gate reads BREACH, and the parity leg reads DISAGREE.
+The rows that auto-resolved are `e7-p3-01`, `e7-p3-05` and `e7-p3-09` (two of the three in the middle two weeks).
+Their drafts were a bare "I don't have that information." (jewelry warranty, Diamond tier) and "quoted on a per-case basis" (over-20-lbs return fee).
+The runtime gate rejected every one of them in the same snapshots.
+The OFFLINE Claude answer judge was the outlier, and it was deterministic: replaying the captured inputs, 5 of 5 identical calls said `answers=true` on each of the three rows.
+
+What started it: PR #156 (merged 2026-09-15) began showing that judge the retrieved context.
+Before it the same drafts were scored `answers=false` in every weekly from 2026-08-09 to 2026-09-13.
+With the context in view, a forced single-boolean tool call graded the draft's truth against the context and counted an accurate deferral as an answer.
+What exposed it: only the next weekly, because the LLM-judged legs are not per-PR and the live rubric layer used one-section hand-written contexts that never looked like ground truth.
+What a buyer saw: nothing wrong from these rows. The shipped pipeline, run end to end with only the runtime gates, escalated every P3 question in every run (0 false-resolves in 55 runs, 5 per question) and answered every P2 question (0 false-escalates in 20).
+
+Fixed forward from the next weekly run onward (these snapshots are kept as the record): `runner.judge_answering` now has the judge name the asked value and the stated value before it decides, and the verdict requires a non-empty stated value.
+See `docs/evals.md` § 6.
+
 ### 2026-07-31 - the main leg's `false-resolve 100% (3/3)` was an eval artifact, not a live pipeline breach (issue #96)
 
 The `2026-07-31.md` main leg (τ_sim=0.4) reads **false-resolve 100% (3/3)** and the ceiling gate reads **BREACH**, and the erratum immediately below calls that breach "manifestly measured."
