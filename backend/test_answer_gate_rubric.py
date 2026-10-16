@@ -106,6 +106,7 @@ from __future__ import annotations
 
 import ast
 import asyncio
+import json
 import os
 import sys
 import types
@@ -123,7 +124,7 @@ from escalation import (  # noqa: E402
     get_judge_model,
     get_judge_temperature,
 )
-from evals.retrieval.runner import judge_answering  # noqa: E402
+from evals.retrieval.runner import ANSWER_JUDGE_TOOL, judge_answering  # noqa: E402
 
 # How many times each live case is judged. Every case must come back UNANIMOUS.
 _REPS = 3
@@ -234,7 +235,13 @@ class _RecordingAnthropicMessages:
     async def create(self, **kwargs: Any) -> Any:
         self.calls.append(kwargs)
         block = types.SimpleNamespace(
-            type="tool_use", name="submit_answering", input={"answers": True}
+            type="tool_use",
+            name="submit_answering",
+            input={
+                "asked_value": "the fee amount",
+                "stated_value": "the customer pays",
+                "answers": True,
+            },
         )
         return types.SimpleNamespace(content=[block])
 
@@ -347,6 +354,130 @@ def test_both_tool_schemas_describe_the_disposition_case() -> None:
                 f"(missing {fragment!r}): {description!r}",
             )
     print("ok: both tool schemas describe the disposition case")
+
+
+class _ScriptedAnthropicMessages:
+    """Returns one scripted `submit_answering` payload, whatever it is asked."""
+
+    def __init__(self, payload: dict[str, Any]) -> None:
+        self.payload = payload
+
+    async def create(self, **kwargs: Any) -> Any:
+        block = types.SimpleNamespace(
+            type="tool_use", name="submit_answering", input=self.payload
+        )
+        return types.SimpleNamespace(content=[block])
+
+
+def _offline_verdict(payload: dict[str, Any]) -> bool:
+    client = types.SimpleNamespace(messages=_ScriptedAnthropicMessages(payload))
+    return asyncio.run(
+        judge_answering(client, _PROMPT_QUESTION, _PROMPT_CONTEXT, _PROMPT_DRAFT)
+    )
+
+
+def test_offline_verdict_requires_a_stated_value() -> None:
+    """The offline verdict is `answers AND the judge named the value it gave`.
+
+    This is the 2026-09-20 .. 2026-10-11 weekly breach, pinned WITHOUT a model: a
+    bare-boolean judge shown the retrieved context graded the draft's truth instead
+    of whether it answers, and returned `answers=true` for an accurate "I don't have
+    that information". The judge must now commit to `stated_value` first, and a
+    verdict of "answers" with no stated value is self-contradictory, so it resolves
+    toward ESCALATION. Every cell here is a verdict the weekly P3 leg turns into a
+    false-resolve if it comes back True.
+    """
+    asked = "the return shipping fee for a return over 20 lbs"
+    cases = [
+        # (payload, expected verdict, why)
+        (
+            {"asked_value": asked, "stated_value": "$14.95", "answers": True},
+            True,
+            "a real value was stated and the judge says it answers",
+        ),
+        (
+            {"asked_value": asked, "stated_value": None, "answers": True},
+            False,
+            "THE BREACH: the judge said it answers but named no value the customer holds",
+        ),
+        (
+            {"asked_value": asked, "stated_value": "", "answers": True},
+            False,
+            "an empty stated value is no value",
+        ),
+        (
+            {"asked_value": asked, "stated_value": "   ", "answers": True},
+            False,
+            "a whitespace-only stated value is no value",
+        ),
+        (
+            {"asked_value": asked, "answers": True},
+            False,
+            "a payload that omits stated_value entirely fails toward escalation",
+        ),
+        (
+            {"asked_value": asked, "stated_value": 14.95, "answers": True},
+            False,
+            "a non-string stated value is malformed and fails toward escalation",
+        ),
+        (
+            {"asked_value": asked, "stated_value": "$14.95", "answers": False},
+            False,
+            "a stated value never overrides an explicit non-answer verdict",
+        ),
+        (
+            {"asked_value": asked, "stated_value": None, "answers": False},
+            False,
+            "a plain deferral stays a non-answer",
+        ),
+    ]
+    for payload, expected, why in cases:
+        got = _offline_verdict(payload)
+        _check(
+            got is expected,
+            f"offline verdict for {payload!r} was {got!r}, want {expected!r} - {why}",
+        )
+    print(f"ok: the offline verdict requires a stated value ({len(cases)} cells)")
+
+
+def test_offline_tool_schema_commits_the_values_before_the_verdict() -> None:
+    """The extraction fields exist, are required, and come BEFORE `answers`.
+
+    The model fills a tool payload in property order, so `asked_value` and
+    `stated_value` being committed first is the mechanism, not decoration; moving
+    `answers` up (or dropping a field from `required`) silently reverts the judge
+    to the bare boolean that read an accurate deferral as an answer.
+    """
+    schema = ANSWER_JUDGE_TOOL["input_schema"]
+    order = list(schema["properties"])
+    _check(
+        order == ["asked_value", "stated_value", "answers"],
+        f"offline tool properties must be ordered asked_value, stated_value, "
+        f"answers (verdict LAST), got {order!r}",
+    )
+    _check(
+        set(schema["required"]) == {"asked_value", "stated_value", "answers"},
+        f"offline tool must REQUIRE all three fields, got {schema['required']!r}",
+    )
+    stated = schema["properties"]["stated_value"]
+    _check(
+        stated["type"] == ["string", "null"],
+        f"stated_value must be nullable (null is how the judge says 'none'), "
+        f"got {stated['type']!r}",
+    )
+    for fragment in (
+        "unavailable",
+        "not provided",
+        "quoted per case",
+        "someone's discretion",
+        "adjacent fact",
+    ):
+        _check(
+            fragment in stated["description"],
+            f"stated_value must say when to return null (missing {fragment!r}): "
+            f"{stated['description']!r}",
+        )
+    print("ok: the offline tool commits asked_value and stated_value before the verdict")
 
 
 def test_non_answer_failures_are_structured_independently_of_reason() -> None:
@@ -594,6 +725,39 @@ _CASES: list[tuple[str, str, str, str, bool, str]] = [
 ]
 
 
+# The three rows the OFFLINE judge wrongly passed (answers=true 5/5) in the weekly
+# sweeps of 2026-09-20 .. 2026-10-11 while the runtime gate rejected them 5/5. They
+# carry the REAL retrieved context (8-10 KB, every warranty category / the whole
+# returns section / the whole tier list), taken verbatim from an unmodified-main run:
+# the hand-written slices above are short enough that the judge never saw a context
+# it could mistake for ground truth, which is why this layer passed through PR #156
+# and the failure surfaced only in the next weekly. All three must NOT answer.
+_REAL_CONTEXT_ROWS = json.loads(
+    (ROOT / "backend" / "test-fixtures" / "e7_offline_answer_judge_rows.json").read_text(
+        encoding="utf-8"
+    )
+)["rows"]
+_REAL_CONTEXT_WHY = {
+    "e7-p3-01": "an accurate 'I don't have that information' is still a non-answer; "
+    "the real warranty context lists every category but jewelry",
+    "e7-p3-05": "the corpus's own answer is a deferral ('quoted per-case'); "
+    "reporting it accurately leaves the customer with no fee",
+    "e7-p3-09": "an accurate 'I don't have that information' is still a non-answer; "
+    "the real context lists four tiers and no Diamond",
+}
+_CASES.extend(
+    (
+        f"{row['id']} REAL retrieved context",
+        row["question"],
+        row["draft"],
+        row["context"],
+        False,
+        _REAL_CONTEXT_WHY[row["id"]],
+    )
+    for row in _REAL_CONTEXT_ROWS
+)
+
+
 def _cost_note(n_impls: int) -> str:
     """The live layer's call count, DERIVED from the table rather than restated.
 
@@ -791,6 +955,8 @@ def main() -> int:
     tests = [
         test_both_rubrics_state_every_shared_rule,
         test_both_tool_schemas_describe_the_disposition_case,
+        test_offline_verdict_requires_a_stated_value,
+        test_offline_tool_schema_commits_the_values_before_the_verdict,
         test_non_answer_failures_are_structured_independently_of_reason,
         test_boot_warning_call_site_is_wired_to_the_widget_surface,
         test_live_rubric_discrimination,

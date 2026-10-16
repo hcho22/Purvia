@@ -877,6 +877,31 @@ async def judge_answer(
 # replays identical question/draft/context inputs and pins agreement. Its offline
 # `_SHARED_RULES` check invokes both judge entry points and inspects their emitted
 # prompts; the live cases and parity result remain the behavioral contract.
+#
+# THE VERDICT IS NOT A BARE BOOLEAN (the 2026-09-20 .. 2026-10-11 weekly breach).
+# Once this judge was shown the retrieved context (the issue-#104-residual widening
+# above), a forced single-boolean tool call let it grade the draft's TRUTH against
+# that context instead of whether it ANSWERS: an accurate "I don't have that
+# information" (jewelry / Diamond tier) or an accurate "quoted on a per-case basis"
+# read as responsive, so `answers=true` came back 5/5 on drafts the runtime gate
+# rejects 5/5, and the weekly false-resolve rate read 27% (3/11) for a pipeline whose
+# shipped gates escalated every one of those rows end to end. Restating the rule in
+# the prompt barely moved it (the rule was already there), and asking for free-text
+# reasoning first made it worse: it reasoned itself INTO "the answer is accurate, so
+# it answers". What worked: make the judge name, before it decides, the value the
+# QUESTION asks for (`asked_value`) and the value the ANSWER actually hands the
+# customer (`stated_value`, null for a deferral / "quoted per case" / discretion /
+# adjacent fact), and make that field binding in code - the verdict is `answers AND
+# stated_value is non-empty`, so a self-contradictory "answers=true, stated_value=
+# null" fails toward ESCALATION (the safe direction).
+# Replayed on captured and freshly drafted (question, context, draft) tuples, the
+# bare-boolean judge was wrong on 38 of 280 verdicts, every one in the false-resolve
+# direction; this shape was wrong on 0 of 300 with no false-escalate on the answerable
+# rows. Do NOT port the extraction fields to the runtime gate: gpt-4o-mini counts
+# "10% to 80%" as a stated value for the exact-amount question (e7-p3-03), and the
+# same replay measured 49 wrong of 500 there.
+ANSWER_JUDGE_MAX_TOKENS = 400
+
 ANSWER_JUDGE_PROMPT_TEMPLATE = (
     "You are a strict answer-completeness judge for an automated customer-support "
     "reply. You are given the customer's QUESTION, a draft ANSWER, and the "
@@ -910,6 +935,26 @@ ANSWER_JUDGE_TOOL = {
     "input_schema": {
         "type": "object",
         "properties": {
+            # Property ORDER is load-bearing: the model fills these in order, so the
+            # two extraction fields are committed BEFORE the verdict. Keep `answers`
+            # last (pinned by backend/test_answer_gate_rubric).
+            "asked_value": {
+                "type": "string",
+                "description": (
+                    "The specific value the QUESTION asks for (e.g. a fee amount, "
+                    "a duration, a yes/no), in a few words."
+                ),
+            },
+            "stated_value": {
+                "type": ["string", "null"],
+                "description": (
+                    "The specific value the ANSWER actually gives the customer for "
+                    "that, quoted. null if the ANSWER only says the value is "
+                    "unavailable, unknown, not provided, quoted per case, or at "
+                    "someone's discretion, defers to a person, or gives only an "
+                    "adjacent fact."
+                ),
+            },
             "answers": {
                 "type": "boolean",
                 "description": (
@@ -924,7 +969,7 @@ ANSWER_JUDGE_TOOL = {
                 ),
             },
         },
-        "required": ["answers"],
+        "required": ["asked_value", "stated_value", "answers"],
     },
 }
 
@@ -938,15 +983,21 @@ async def judge_answering(
     """Score whether `answer` actually answers `question` via Claude. Returns a bool.
 
     The OFFLINE cross-family mirror of the runtime `escalation.answer_gate` (issue
-    #97): tool-use rather than freeform JSON guarantees a schema-validated boolean.
+    #97): tool-use rather than freeform JSON guarantees a schema-validated payload.
     Receives the QUESTION, the DRAFT, and the RETRIEVED CONTEXT the draft was
     written from, so it can check the ASKED slot was filled (issue #104-residual);
     it is still not a grounding check, which is `judge_answer`'s concern, exactly
     as the runtime answer gate keeps the two dimensions orthogonal.
+
+    The verdict is `answers AND stated_value is a non-empty string`: the judge must
+    commit to the value the ANSWER actually gives before it decides, and a verdict
+    of "answers" with no stated value is self-contradictory, so it resolves to
+    False (escalate). See the block comment above `ANSWER_JUDGE_MAX_TOKENS` for
+    why a bare boolean is not enough.
     """
     response = await anthropic_client.messages.create(
         model=JUDGE_MODEL,
-        max_tokens=JUDGE_MAX_TOKENS,
+        max_tokens=ANSWER_JUDGE_MAX_TOKENS,
         temperature=0,
         tools=[ANSWER_JUDGE_TOOL],
         tool_choice={"type": "tool", "name": "submit_answering"},
@@ -964,7 +1015,9 @@ async def judge_answering(
             getattr(block, "type", None) == "tool_use"
             and block.name == "submit_answering"
         ):
-            return bool(block.input["answers"])
+            stated_value = block.input.get("stated_value")
+            states_a_value = isinstance(stated_value, str) and bool(stated_value.strip())
+            return bool(block.input["answers"]) and states_a_value
     raise RuntimeError("judge response did not contain submit_answering tool_use block")
 
 
