@@ -189,6 +189,11 @@ jobs:
               # invariant 10). The edit that breaks that scoping is a main.py-only
               # edit, which without this entry would run no guard at all.
               - 'backend/main.py'
+              # test_ragas_scoring checks that the weekly RAGAS constraints still
+              # satisfy every requirement file the weekly installs with them, so a
+              # bump in either side must re-run it before Sunday's install fails.
+              - 'backend/requirements.txt'
+              - 'evals/retrieval/constraints-ragas-weekly.txt'
               - '.github/workflows/retrieval-eval.yml'
 
   # Invariant 12 ("measured nothing must never be reportable as a measurement")

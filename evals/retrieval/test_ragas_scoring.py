@@ -62,6 +62,13 @@ from evals.retrieval.validate_ragas_snapshot import (  # noqa: E402
 )
 
 REQUIREMENTS = ROOT / "evals" / "retrieval" / "requirements-ragas.txt"
+CONSTRAINTS = ROOT / "evals" / "retrieval" / "constraints-ragas-weekly.txt"
+# Every file the weekly installs under CONSTRAINTS, directly or through `-r`.
+CONSTRAINED_REQUIREMENTS = (
+    ROOT / "backend" / "requirements.txt",
+    ROOT / "evals" / "retrieval" / "requirements.txt",
+    REQUIREMENTS,
+)
 PINNED_RAGAS_STACK = {
     "ragas": "0.4.3",
     "langchain": "0.3.25",
@@ -509,14 +516,20 @@ def _snapshot_publishability_check() -> None:
     print("  snapshot: only non-empty rows + both complete cells are publishable")
 
 
-def _dependency_contract_check() -> None:
-    requirements: dict[str, list[Requirement]] = {}
-    for raw in REQUIREMENTS.read_text(encoding="utf-8").splitlines():
+def _parse_requirements(text: str) -> list[Requirement]:
+    parsed = []
+    for raw in text.splitlines():
         line = raw.split("#", 1)[0].strip()
         if line and not line.startswith("-"):
-            requirement = Requirement(line)
-            canonical_name = canonicalize_name(requirement.name)
-            requirements.setdefault(canonical_name, []).append(requirement)
+            parsed.append(Requirement(line))
+    return parsed
+
+
+def _dependency_contract_check() -> None:
+    requirements: dict[str, list[Requirement]] = {}
+    for requirement in _parse_requirements(REQUIREMENTS.read_text(encoding="utf-8")):
+        canonical_name = canonicalize_name(requirement.name)
+        requirements.setdefault(canonical_name, []).append(requirement)
 
     for package_name, pinned_version in PINNED_RAGAS_STACK.items():
         declared = requirements.get(package_name, [])
@@ -570,32 +583,66 @@ class _PreflightReached(Exception):
     pass
 
 
-def _numpy_pin_check() -> None:
-    """The RAGAS stack must import under the backend's own NumPy pin.
+def _constraint_pins(constraints_text: str) -> dict[str, str]:
+    pins: dict[str, str] = {}
+    for requirement in _parse_requirements(constraints_text):
+        specifiers = list(requirement.specifier)
+        assert len(specifiers) == 1 and specifiers[0].operator == "==", (
+            f"constraints-ragas-weekly.txt must pin exact versions; got {requirement}"
+        )
+        name = canonicalize_name(requirement.name)
+        assert name not in pins, (
+            f"constraints-ragas-weekly.txt pins {name} twice ({pins[name]} and "
+            f"{specifiers[0].version}); pip rejects that as unsatisfiable"
+        )
+        pins[name] = specifiers[0].version
+    return pins
 
-    backend/requirements.txt pins numpy<2 (torch under docling) and the weekly
-    installs it together with the RAGAS stack. A guard env that resolved a
-    newer NumPy would pass while the weekly breaks (the 2026-10-11 pyarrow 26
-    failure), so the guard asserts it runs under the same pin.
+
+def _constraint_conflicts(constraints_text: str, requirement_texts: dict[str, str]) -> list[str]:
+    pins = _constraint_pins(constraints_text)
+    conflicts = []
+    for label, text in requirement_texts.items():
+        for requirement in _parse_requirements(text):
+            pinned = pins.get(canonicalize_name(requirement.name))
+            if pinned is not None and not requirement.specifier.contains(
+                pinned, prereleases=True
+            ):
+                conflicts.append(
+                    f"{label} requires {requirement.name}{requirement.specifier} but "
+                    f"constraints-ragas-weekly.txt pins {requirement.name}=={pinned}"
+                )
+    return conflicts
+
+
+def _constraints_satisfiable_check() -> None:
+    """The weekly's constraints must stay installable with its requirement files.
+
+    The weekly installs backend/requirements.txt and evals/retrieval/requirements.txt
+    under constraints-ragas-weekly.txt. A pin outside any direct specifier (an
+    in-repo bump of anthropic or fastapi, numpy>=2 in the backend) makes that
+    install ResolutionImpossible on Sunday and the week UNMEASURED, while every
+    unconstrained install stays green.
     """
-    backend_reqs = (ROOT / "backend" / "requirements.txt").read_text(encoding="utf-8")
-    numpy_pins = []
-    for raw in backend_reqs.splitlines():
-        line = raw.split("#", 1)[0].strip()
-        if line and canonicalize_name(Requirement(line).name) == "numpy":
-            numpy_pins.append(Requirement(line))
-    assert numpy_pins, "backend/requirements.txt no longer pins numpy; update this guard"
-    if importlib.util.find_spec("ragas") is not None:
-        from importlib.metadata import version
+    constraints = CONSTRAINTS.read_text(encoding="utf-8")
+    requirement_texts = {
+        path.relative_to(ROOT).as_posix(): path.read_text(encoding="utf-8")
+        for path in CONSTRAINED_REQUIREMENTS
+    }
+    conflicts = _constraint_conflicts(constraints, requirement_texts)
+    assert not conflicts, (
+        "constraints-ragas-weekly.txt no longer satisfies the requirement files the "
+        "weekly installs with it:\n  " + "\n  ".join(conflicts)
+    )
 
-        installed = version("numpy")
-        for pin in numpy_pins:
-            assert pin.specifier.contains(installed), (
-                f"installed numpy {installed} violates backend pin {pin}; the RAGAS "
-                "guard must run under the backend's numpy pin or it cannot catch "
-                "a transitive dependency that needs a newer NumPy"
-            )
-    print("  numpy pin: RAGAS stack is checked under the backend numpy pin")
+    pinned_anthropic = _constraint_pins(constraints)["anthropic"]
+    bumped = dict(requirement_texts)
+    bumped["evals/retrieval/requirements.txt"] += f"\nanthropic>{pinned_anthropic}\n"
+    assert _constraint_conflicts(constraints, bumped) == [
+        f"evals/retrieval/requirements.txt requires anthropic>{pinned_anthropic} but "
+        f"constraints-ragas-weekly.txt pins anthropic=={pinned_anthropic}"
+    ], "a requirement bump past a constraint pin was not reported as a conflict"
+    print("  constraints: every weekly pin satisfies every direct requirement specifier")
 
 
 async def _preflight_check() -> None:
@@ -679,7 +726,7 @@ async def amain() -> int:
     _history_baseline_eligibility_check()
     _snapshot_publishability_check()
     _dependency_contract_check()
-    _numpy_pin_check()
+    _constraints_satisfiable_check()
     await _preflight_check()
     print("\nPASS: RAGAS scoring emits real-shaped rows and cannot pass empty")
     return 0
