@@ -260,7 +260,8 @@ selector falls back so a single-model setup sets only `OPENAI_MODEL`.
 > determinism.
 
 > **`JUDGE_REASONING_EFFORT` - the reasoning-model judge knob (ADR-0013).** A
-> reasoning-model judge (`gpt-5-mini`, adopted per ADR-0013) is latency-viable on
+> reasoning-model judge (`gpt-5-mini`, chosen in ADR-0013 and then measured worse
+> and NOT adopted, see ADR-0015) is latency-viable on
 > the inline reply path only at `reasoning_effort=minimal`; the two gates now read
 > `JUDGE_REASONING_EFFORT` from env and splat it into their one judge call. The
 > default is **omit**, not a value: unset **or** blank sends no `reasoning_effort`
@@ -279,13 +280,16 @@ selector falls back so a single-model setup sets only `OPENAI_MODEL`.
 > before that fix remain irreversibly escalated. It is the same widget-scoped
 > best-effort name heuristic, wrong in both directions (a reasoning model under an
 > unrecognised name gets a spurious warning), so **verify before changing config**.
-> **The adopted
-> `gpt-5-mini` judge config is `JUDGE_MODEL=gpt-5-mini` + `JUDGE_TEMPERATURE=none`
-> + `JUDGE_REASONING_EFFORT=minimal`.** `JUDGE_TEMPERATURE=none` is mandatory there
-> (`gpt-5-mini` 400s on any temperature); the boot warning above **correctly**
-> fires for `gpt-5-mini` until you set it, and that config **deliberately** relaxes
-> invariant 8's temperature-0 determinism pin as a quality trade (halving the
-> dangerous false-resolve rate). See ADR-0013 for the full rationale and evidence.
+> **Do not set the ADR-0013 `gpt-5-mini` config on this evidence.** ADR-0013's
+> config was `JUDGE_MODEL=gpt-5-mini` + `JUDGE_TEMPERATURE=none` +
+> `JUDGE_REASONING_EFFORT=minimal` (`JUDGE_TEMPERATURE=none` is mandatory for it,
+> since `gpt-5-mini` 400s on any temperature, and it deliberately relaxes invariant
+> 8's temperature-0 pin). ADR-0015 re-measured it on 2026-10-15 against the current
+> rubric: it sent 15 of 66 should-escalate drafts against 1 of 66 for the shipped
+> `gpt-4o-mini` gate, and passed the `e7-p3-10` draft 40 of 40 times. The knob and
+> the boot warning stay (they are correct for any reasoning judge you choose to
+> run), but treat any other judge model as unmeasured until you have run the live
+> rubric layer and the measured-trade test against it.
 
 Rerankers (`COHERE_RERANK_MODEL` / `VOYAGE_RERANK_MODEL`) are a **separate
 provider axis** (dedicated rerank endpoints) and are not part of this surface.

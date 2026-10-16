@@ -7,6 +7,28 @@ The full treatment of what the snapshots contain and which numbers are pinned li
 
 ## Errata
 
+### 2026-10-16 - the `e7-p3-10` open product risk: re-measured, and closed in the verdict (ADR-0015)
+
+The 2026-09-20 to 2026-10-11 erratum below ends with an OPEN PRODUCT RISK: the runtime gate (gpt-4o-mini, temperature 0) passing the `e7-p3-10` adjacent-fact draft about half the time on a replay.
+On 2026-10-15 that triple was replayed again through the real `answer_gate` on GitHub Actions: 0 of 20 passed, then 0 of 20 again, with the judge's score at 0.0 every time (model `gpt-4o-mini-2024-07-18`).
+The 5 of 10 did not reproduce at temperature 0, and the risk is still real.
+The `answers` token's probability of true on that triple read 0.22, 0.27 and 0.44 across three identical calls, and sampling the unchanged request at temperature 1 passed it 10 of 20.
+That is a verdict decided by a margin as small as the serving noise, so a run that leaks and a run that does not can both be honest measurements.
+
+What changed: the runtime gate now makes the judge commit to `asked_value`, `stated_value` and `same_kind` before it decides, as the offline judge already did, and the verdict requires a stated value of the asked kind (ADR-0015).
+On that triple the temperature-1 sample moved from 10 of 20 passing to 0 of 20.
+Across 85 real and fresh drafts it sent 1 of 66 should-escalate drafts and withheld 0 of 19 should-answer drafts, the same as the old gate.
+The offline mirror carries `same_kind` too.
+The `_RUNTIME_KNOWN_OPEN_RISK` exemption described below is removed, and `e7-p3-10` is asserted on both implementations.
+
+What did not change, and is recorded as a known gap rather than fixed: a value of the right kind stated for the wrong branch.
+`e7-p3-07` asks for the goodwill refund cap once a case is escalated to a supervisor; a draft stating the un-escalated 50% cap passed the old gate and passes the new one.
+The live rubric layer holds that draft and asserts the gate still sends it.
+
+Also measured in the same pass, and not adopted: gpt-5-mini, the ADR-0013 candidate, sent 15 of 66 should-escalate drafts and passed the `e7-p3-10` draft 40 of 40 times.
+For the weekly: the first run after this merges is the first measurement of `same_kind` on the Claude judge, which was not run for this change.
+A week where `e7-p3-10` still reads DISAGREE now means a real divergence to investigate, not the thin margin described above.
+
 ### 2026-09-20 to 2026-10-11 - the `false-resolve 18-27%` breaches measured the offline judge, not the pipeline (issue #163)
 
 The `2026-09-20`, `2026-09-27`, `2026-10-04` and `2026-10-11` snapshots read false-resolve 27% (3/11), 18% (2/11), 18% (2/11) and 27% (3/11), the ceiling gate reads BREACH, and the parity leg reads DISAGREE.

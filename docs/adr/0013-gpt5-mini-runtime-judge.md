@@ -1,8 +1,14 @@
 # ADR 0013: gpt-5-mini runtime deflection-gate judge, and the `reasoning_effort` knob
 
-- **Status:** Accepted
+- **Status:** Accepted on 2026-08-21; the **model decision is NOT adopted** (superseded by ADR-0015 on 2026-10-16). The `JUDGE_REASONING_EFFORT` knob this ADR shipped stays.
 - **Date:** 2026-08-21
 - **On:** ADR-0006 (model-role separation), ADR-0003 (deterministic escalate-vs-answer control flow), ADR-0012 (Luna answerer, judges unchanged)
+
+> **Update 2026-10-16 (ADR-0015).** The cutover this ADR left to an operator was never made, and re-measuring on 2026-10-15
+> against the current rubric reversed the premise: `gpt-5-mini` at `reasoning_effort=minimal` sent 15 of 66 should-escalate
+> drafts against 1 of 66 for `gpt-4o-mini`, passed the `e7-p3-10` adjacent-fact draft 40 of 40 times, and cost about 1.8x
+> more per reply. Do not set the configuration below on the strength of this ADR. The text that follows is kept as the
+> record of what was decided and why at the time.
 
 ## Context
 
