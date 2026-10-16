@@ -47,10 +47,12 @@ quoted case-by-case / at someone's discretion / decided by staff / unpublished
 right for the two E7 rows it was built from, which both ask for a value the
 corpus defers. It is wrong for a question whose correct answer genuinely IS the
 policy or the disposition — "Who decides a book warranty claim after 30 days?"
-is fully answered by "customer service, at their discretion", yet the rubric
-reads that draft as a deferral and escalates it.
+is fully answered by "customer service, at their discretion", yet the clause,
+read literally, calls that draft a deferral, and both judges escalated it when
+the clause was written.
 
-The last row of `_CASES` pins that shape. It was pinned at escalate (answers=False)
+The `_CASES` row labelled "FORMER KNOWN LIMITATION: the disposition IS the
+requested information" pins that shape. It was pinned at escalate (answers=False)
 when the clause was written, measured 5/5 stable then. A live run on 2026-10-15
 found BOTH judges answering it (3/3 each, and the pre-fix offline judge too), with
 neither rubric nor `backend/escalation.py` changed since: the models moved under
@@ -83,9 +85,10 @@ What that costs, stated plainly:
     to temperature 0 (issue #104's other half) - the live layer neutralizes the
     ambient `JUDGE_MODEL` / `JUDGE_TEMPERATURE` exactly as the unit layer does, so
     a developer shell cannot un-pin the run the failure message describes as
-    pinned - each case is asserted UNANIMOUS over `_REPS` calls, and every case in
-    the table was measured stable at 5/5
-    during the investigation, except one: the RUNTIME half of the real-context
+    pinned - each case is asserted UNANIMOUS over `_REPS` calls. The original
+    rows were measured stable at 5/5 during the issue-#104 investigation; the
+    FORMER KNOWN LIMITATION row's current expectation was measured 3/3 on
+    2026-10-15. One row is not asserted: the RUNTIME half of the real-context
     `e7-p3-10` row (`_RUNTIME_KNOWN_OPEN_RISK`) let that triple through 5 of 10
     times on 2026-10-15. That one row on that one implementation is reported as a
     KNOWN OPEN RISK and not asserted, so the layer is not red on a product defect
@@ -440,7 +443,8 @@ def test_offline_verdict_requires_a_stated_value() -> None:
 
 
 def test_offline_judge_raises_on_a_malformed_payload() -> None:
-    """A payload that breaks the tool schema is no verdict at all, so it RAISES.
+    """A payload with no boolean `answers` or no string-or-null `stated_value`
+    is no verdict at all, so it RAISES. `asked_value` is not validated.
 
     Scoring it False would read as the answer leg correctly escalating a P3 row,
     and if the runtime gate also said False the parity leg would record agreement:
@@ -933,10 +937,10 @@ def test_live_rubric_discrimination() -> None:
             else:
                 ac = anthropic.AsyncAnthropic(api_key=anthropic_key)
 
-                # The offline mirror RAISES on a failed call or a payload that
-                # breaks its tool schema rather than failing closed, so it cannot
-                # silently report a dead judge as a verdict and never needs a
-                # failure tag.
+                # The offline mirror RAISES on a failed call or a payload with no
+                # boolean `answers` or no string-or-null `stated_value` rather
+                # than failing closed, so it cannot silently report a dead judge
+                # as a verdict and never needs a failure tag.
                 async def offline(
                     question: str, context: str, draft: str
                 ) -> tuple[bool, bool]:

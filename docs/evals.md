@@ -274,16 +274,18 @@ The P2/P3 legs mirror the runtime deflection pipeline's **two** content gates (`
 
 **The offline answer verdict is not a bare boolean (issue #163).**
 From the 2026-09-20 weekly onward the P3 leg read false-resolve 18-27% while `e7-p3-01`, `e7-p3-05` and `e7-p3-09` auto-resolved, and the parity leg showed the runtime gate rejecting all three.
-The shipped pipeline was not leaking on those three rows: run end to end with only the runtime gates it escalated every P3 question in every run (0 false-resolves in 55 runs) and answered every P2 question (0 false-escalates in 20).
+The shipped pipeline was not leaking on those three rows: run end to end with only the runtime gates in a 2026-10-15 sweep of 5 runs per question, it escalated every P3 question in every run (0 false-resolves in 55 runs) and answered every P2 question (0 false-escalates in 20).
 The offline Haiku judge was the outlier.
 Once it was shown the retrieved context (PR #156) a forced single-boolean call let it grade the draft's truth against that context, so an accurate "I don't have that information" or an accurate "quoted on a per-case basis" read as an answer.
 Restating the rule in the prompt barely moved it, and free-text reasoning first made it worse.
 `runner.judge_answering` now has the judge commit to `asked_value` and `stated_value` before it decides, and the verdict is `answers AND stated_value is non-empty`.
-A payload that breaks that tool schema raises, so the run is UNMEASURED instead of scoring a malformed reply as a correct escalation.
+A payload with no boolean `answers` or no string-or-null `stated_value` raises, so the run is UNMEASURED instead of scoring a malformed reply as a correct escalation; `asked_value` is not validated.
 Do not drop those fields, and do not port them to the runtime `answer_gate`: gpt-4o-mini counts "10% to 80%" as a stated value for the exact-amount question and regressed there.
 The runtime gate has an **open product risk** of its own, not fixed by this change.
 The fourth 2026-09-20 parity mismatch, `e7-p3-10`, was the runtime gate passing the adjacent-fact draft "international returns are at the customer's expense" for a question that asked how much the fee is.
-The question escalated 35 of 35 times in the 2026-10-15 end-to-end runs, but replaying that verbatim triple through the runtime `answer_gate` 10 times (gpt-4o-mini, temperature 0, default cutoff) let it through 5 of 10, and 7 of the 18 distinct `e7-p3-10` drafts across the committed snapshots and replays have exactly that no-disclaimer shape.
+The question escalated 35 of 35 times across the 2026-10-15 end-to-end runs on that one question (a larger set than the 5 it got in the 55-run sweep above), but replaying that verbatim triple through the runtime `answer_gate` 10 times (gpt-4o-mini, temperature 0, default cutoff) let it through 5 of 10, and 7 of the 18 distinct `e7-p3-10` drafts across the committed snapshots and replays have exactly that no-disclaimer shape.
+While that risk is open the weekly can still go red on it: a week whose drafter writes that no-disclaimer shape for `e7-p3-10` gets an offline escalate and, about half the time, a runtime pass, so the parity leg reads DISAGREE on that row (offline `answers=false`, runtime `answers=true`), the runner exits 1 and the gate-finding issue fires again.
+That red is this open risk surfacing, not a regression of the offline-judge fix, and it does not move the false-resolve rate, which the offline judge scores.
 The full record is the issue-#163 erratum in `docs/escalation-weekly/README.md`.
 `backend/test_answer_gate_rubric.py` pins the mechanism with no model (verdict cells, malformed payloads, field order) and the live layer carries all four 2026-09-20 mismatch rows with their verbatim retrieved contexts (`backend/test-fixtures/e7_offline_answer_judge_rows.json`); the runtime half of `e7-p3-10` is reported as a KNOWN OPEN RISK rather than asserted.
 

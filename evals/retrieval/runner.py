@@ -1000,9 +1000,10 @@ async def judge_answering(
     commit to the value the ANSWER actually gives before it decides, and a verdict
     of "answers" with no stated value is self-contradictory, so it resolves to
     False (escalate). See the block comment above `ANSWER_JUDGE_MAX_TOKENS` for
-    why a bare boolean is not enough. A payload that breaks the tool schema (no
-    boolean `answers`, no string-or-null `stated_value`) RAISES, so the run is
-    UNMEASURED rather than scoring a malformed reply as a correct escalation.
+    why a bare boolean is not enough. A payload with no boolean `answers` or no
+    string-or-null `stated_value` RAISES, so the run is UNMEASURED rather than
+    scoring a malformed reply as a correct escalation. `asked_value` is not
+    validated.
     """
     response = await anthropic_client.messages.create(
         model=JUDGE_MODEL,
