@@ -166,6 +166,13 @@ jobs:
               # is the load-bearing trigger: a future migration that re-opens the
               # F1/F2/F3 holes this test guards fails BEFORE merge.
               - 'backend/test_sec_rls_hardening.py'
+              - 'backend/test_keyword_stem_tolerance.py'
+              # The stem-tolerance test also executes its rollback script and loads
+              # the seeded corpus and the golden set, which its q40 precondition
+              # depends on.
+              - 'supabase/rollbacks/**'
+              - 'db_seed/corpus/**'
+              - 'evals/retrieval/retrieval_gold.yaml'
               - '.github/workflows/retrieval-eval.yml'
             guards:
               - 'evals/retrieval/**'
@@ -188,6 +195,11 @@ jobs:
               # invariant 10). The edit that breaks that scoping is a main.py-only
               # edit, which without this entry would run no guard at all.
               - 'backend/main.py'
+              # test_ragas_scoring checks that the weekly RAGAS constraints still
+              # satisfy every requirement file the weekly installs with them, so a
+              # bump in either side must re-run it before Sunday's install fails.
+              - 'backend/requirements.txt'
+              - 'evals/retrieval/constraints-ragas-weekly.txt'
               - '.github/workflows/retrieval-eval.yml'
 
   # Invariant 12 ("measured nothing must never be reportable as a measurement")
@@ -269,6 +281,7 @@ jobs:
           cache-dependency-path: |
             evals/retrieval/requirements-ci.txt
             evals/retrieval/requirements-ragas.txt
+            evals/retrieval/constraints-ragas-weekly.txt
 
       - name: Install Python deps
         run: |
@@ -299,7 +312,12 @@ jobs:
 
       - name: Validate pinned RAGAS runtime imports
         run: |
-          pip install -r evals/retrieval/requirements-ragas.txt
+          # Resolve the RAGAS stack under the same constraints the weekly installs
+          # with, so this step imports the versions the weekly will run. Without
+          # them it resolved the newest NumPy and passed while the weekly's
+          # pyarrow 26 + numpy<2 import crashed (2026-10-11).
+          pip install -c evals/retrieval/constraints-ragas-weekly.txt \
+            -r evals/retrieval/requirements-ragas.txt
           RAGAS_RUNTIME_REQUIRED=1 python -m evals.retrieval.test_ragas_scoring
 
   retrieval-eval:
@@ -631,3 +649,18 @@ jobs:
             exit 1
           fi
           python -m backend.test_sec_rls_hardening
+
+      - name: Run keyword stem-prefix tier regression (deterministic - may block)
+        env:
+          DATABASE_URL: ${{ env.DB_URL }}
+        run: |
+          # ADR-0014: q40 x partial viewer returns zero rows on the ADR-0009
+          # function and the gold chunk after the migration; the old rows are an
+          # exact prefix of the new rows for the whole golden set; visibility is
+          # unchanged. Runs in one rolled-back transaction on this job's stack.
+          # Same anti-silent-skip preflight as the RLS-hardening step above.
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "::error::DATABASE_URL is empty - the keyword stem-prefix regression would clean-skip and pass while testing nothing."
+            exit 1
+          fi
+          python -m backend.test_keyword_stem_tolerance

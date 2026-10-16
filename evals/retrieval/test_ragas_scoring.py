@@ -43,6 +43,7 @@ from evals.retrieval.ragas import (  # noqa: E402
     RagasScoringError,
     _RagasRuntime,
     build_ragas_section,
+    preflight_ragas_runtime,
     score_with_ragas,
 )
 from evals.retrieval.ragas_gates import (  # noqa: E402
@@ -61,6 +62,13 @@ from evals.retrieval.validate_ragas_snapshot import (  # noqa: E402
 )
 
 REQUIREMENTS = ROOT / "evals" / "retrieval" / "requirements-ragas.txt"
+CONSTRAINTS = ROOT / "evals" / "retrieval" / "constraints-ragas-weekly.txt"
+# Every file the weekly installs under CONSTRAINTS, directly or through `-r`.
+CONSTRAINED_REQUIREMENTS = (
+    ROOT / "backend" / "requirements.txt",
+    ROOT / "evals" / "retrieval" / "requirements.txt",
+    REQUIREMENTS,
+)
 PINNED_RAGAS_STACK = {
     "ragas": "0.4.3",
     "langchain": "0.3.25",
@@ -70,6 +78,10 @@ PINNED_RAGAS_STACK = {
     "langchain-text-splitters": "0.3.8",
     "langsmith": "0.2.10",
     "pydantic": "2.10.4",
+    # Transitive via ragas -> datasets; pyarrow 26 needs NumPy 2 while the
+    # backend pins numpy<2, so these must stay exact (see requirements-ragas.txt).
+    "datasets": "5.0.1",
+    "pyarrow": "25.0.1",
 }
 
 
@@ -504,14 +516,20 @@ def _snapshot_publishability_check() -> None:
     print("  snapshot: only non-empty rows + both complete cells are publishable")
 
 
-def _dependency_contract_check() -> None:
-    requirements: dict[str, list[Requirement]] = {}
-    for raw in REQUIREMENTS.read_text(encoding="utf-8").splitlines():
+def _parse_requirements(text: str) -> list[Requirement]:
+    parsed = []
+    for raw in text.splitlines():
         line = raw.split("#", 1)[0].strip()
         if line and not line.startswith("-"):
-            requirement = Requirement(line)
-            canonical_name = canonicalize_name(requirement.name)
-            requirements.setdefault(canonical_name, []).append(requirement)
+            parsed.append(Requirement(line))
+    return parsed
+
+
+def _dependency_contract_check() -> None:
+    requirements: dict[str, list[Requirement]] = {}
+    for requirement in _parse_requirements(REQUIREMENTS.read_text(encoding="utf-8")):
+        canonical_name = canonicalize_name(requirement.name)
+        requirements.setdefault(canonical_name, []).append(requirement)
 
     for package_name, pinned_version in PINNED_RAGAS_STACK.items():
         declared = requirements.get(package_name, [])
@@ -561,6 +579,145 @@ def _dependency_contract_check() -> None:
         print("  dependency: exact compatibility set declared (import skipped)")
 
 
+class _PreflightReached(Exception):
+    pass
+
+
+def _constraint_pins(constraints_text: str) -> dict[str, str]:
+    pins: dict[str, str] = {}
+    for requirement in _parse_requirements(constraints_text):
+        specifiers = list(requirement.specifier)
+        assert len(specifiers) == 1 and specifiers[0].operator == "==", (
+            f"constraints-ragas-weekly.txt must pin exact versions; got {requirement}"
+        )
+        name = canonicalize_name(requirement.name)
+        assert name not in pins, (
+            f"constraints-ragas-weekly.txt pins {name} twice ({pins[name]} and "
+            f"{specifiers[0].version}); pip rejects that as unsatisfiable"
+        )
+        pins[name] = specifiers[0].version
+    return pins
+
+
+def _constraint_conflicts(constraints_text: str, requirement_texts: dict[str, str]) -> list[str]:
+    pins = _constraint_pins(constraints_text)
+    conflicts = []
+    for label, text in requirement_texts.items():
+        for requirement in _parse_requirements(text):
+            pinned = pins.get(canonicalize_name(requirement.name))
+            if pinned is not None and not requirement.specifier.contains(
+                pinned, prereleases=True
+            ):
+                conflicts.append(
+                    f"{label} requires {requirement.name}{requirement.specifier} but "
+                    f"constraints-ragas-weekly.txt pins {requirement.name}=={pinned}"
+                )
+    return conflicts
+
+
+def _constraints_satisfiable_check() -> None:
+    """The weekly's constraints must stay installable with its requirement files.
+
+    The weekly installs backend/requirements.txt and evals/retrieval/requirements.txt
+    under constraints-ragas-weekly.txt. A pin outside any direct specifier (an
+    in-repo bump of anthropic or fastapi, numpy>=2 in the backend) makes that
+    install ResolutionImpossible on Sunday and the week UNMEASURED, while every
+    unconstrained install stays green.
+    """
+    constraints = CONSTRAINTS.read_text(encoding="utf-8")
+    requirement_texts = {
+        path.relative_to(ROOT).as_posix(): path.read_text(encoding="utf-8")
+        for path in CONSTRAINED_REQUIREMENTS
+    }
+    conflicts = _constraint_conflicts(constraints, requirement_texts)
+    assert not conflicts, (
+        "constraints-ragas-weekly.txt no longer satisfies the requirement files the "
+        "weekly installs with it:\n  " + "\n  ".join(conflicts)
+    )
+
+    pinned_anthropic = _constraint_pins(constraints)["anthropic"]
+    bumped = dict(requirement_texts)
+    bumped["evals/retrieval/requirements.txt"] += f"\nanthropic>{pinned_anthropic}\n"
+    assert _constraint_conflicts(constraints, bumped) == [
+        f"evals/retrieval/requirements.txt requires anthropic>{pinned_anthropic} but "
+        f"constraints-ragas-weekly.txt pins anthropic=={pinned_anthropic}"
+    ], "a requirement bump past a constraint pin was not reported as a conflict"
+    print("  constraints: every weekly pin satisfies every direct requirement specifier")
+
+
+async def _preflight_check() -> None:
+    """A broken RAGAS install must fail before any paid retrieval/generation."""
+    original = ragas_mod._load_ragas_runtime
+
+    def _boom() -> None:
+        raise RuntimeError("pyarrow requires NumPy 2.0 or newer")
+
+    ragas_mod._load_ragas_runtime = _boom  # type: ignore[assignment]
+    try:
+        try:
+            preflight_ragas_runtime()
+        except RuntimeError as e:
+            assert "NumPy 2.0" in str(e), f"preflight swallowed the cause: {e}"
+        else:
+            raise AssertionError("preflight passed with a broken RAGAS runtime")
+    finally:
+        ragas_mod._load_ragas_runtime = original  # type: ignore[assignment]
+
+    # The import error text must reach the operator, not just "install ragas".
+    saved = sys.modules.get("instructor.core.exceptions", ...)
+    sys.modules["instructor.core.exceptions"] = None  # type: ignore[assignment]
+    try:
+        try:
+            ragas_mod._load_ragas_runtime()
+        except RuntimeError as e:
+            assert "ImportError" in str(e) or "ModuleNotFoundError" in str(e), (
+                f"load error dropped the underlying ImportError: {e}"
+            )
+        else:
+            raise AssertionError("_load_ragas_runtime ignored a broken import")
+    finally:
+        if saved is ...:
+            sys.modules.pop("instructor.core.exceptions", None)
+        else:
+            sys.modules["instructor.core.exceptions"] = saved
+
+    # Ordering: the runner must call the preflight before it touches the DB,
+    # the corpus, or any model provider, so a dead install costs seconds.
+    from evals.retrieval import runner as runner_mod
+
+    def _reached() -> None:
+        raise _PreflightReached
+
+    env_patch = {
+        "SUPABASE_URL": "http://127.0.0.1:1",
+        "SUPABASE_SERVICE_ROLE_KEY": "x",
+        "OPENAI_API_KEY": "x",
+        "DATABASE_URL": "postgresql://invalid.invalid:1/none",
+    }
+    saved_env = {k: os.environ.get(k) for k in env_patch}
+    saved_argv = sys.argv
+    saved_pre = runner_mod.preflight_ragas_runtime
+    os.environ.update(env_patch)
+    sys.argv = ["runner", "--include-generation", "--include-ragas", "--mode", "hybrid", "--viewers", "partial"]
+    runner_mod.preflight_ragas_runtime = _reached  # type: ignore[assignment]
+    try:
+        try:
+            await runner_mod.amain()
+        except _PreflightReached:
+            pass
+        else:
+            raise AssertionError("runner never reached the RAGAS preflight")
+    finally:
+        runner_mod.preflight_ragas_runtime = saved_pre  # type: ignore[assignment]
+        sys.argv = saved_argv
+        for k, v in saved_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+    print("  preflight: broken RAGAS install fails before any paid call, cause named")
+
+
 async def amain() -> int:
     print("RAGAS scoring regression guard (offline deterministic doubles):")
     await _mapping_partial_and_error_check()
@@ -569,6 +726,8 @@ async def amain() -> int:
     _history_baseline_eligibility_check()
     _snapshot_publishability_check()
     _dependency_contract_check()
+    _constraints_satisfiable_check()
+    await _preflight_check()
     print("\nPASS: RAGAS scoring emits real-shaped rows and cannot pass empty")
     return 0
 
